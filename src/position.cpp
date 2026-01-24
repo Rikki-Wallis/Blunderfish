@@ -13,28 +13,28 @@ enum SideFlags {
 
 void Side::set_can_castle_kingside(bool value) {
     if (value) {
-        metadata |= SIDE_FLAG_CAN_CASTLE_KINGSIDE;
+        flags |= SIDE_FLAG_CAN_CASTLE_KINGSIDE;
     }
     else {
-        metadata &= ~SIDE_FLAG_CAN_CASTLE_KINGSIDE;
+        flags &= ~SIDE_FLAG_CAN_CASTLE_KINGSIDE;
     }
 }
 
 void Side::set_can_castle_queenside(bool value) {
     if (value) {
-        metadata |= SIDE_FLAG_CAN_CASTLE_QUEENSIDE;
+        flags |= SIDE_FLAG_CAN_CASTLE_QUEENSIDE;
     }
     else {
-        metadata &= ~SIDE_FLAG_CAN_CASTLE_QUEENSIDE;
+        flags &= ~SIDE_FLAG_CAN_CASTLE_QUEENSIDE;
     }
 }
 
 bool Side::can_castle_kingside() const {
-    return (metadata & SIDE_FLAG_CAN_CASTLE_KINGSIDE) != 0;
+    return (flags & SIDE_FLAG_CAN_CASTLE_KINGSIDE) != 0;
 }
 
 bool Side::can_castle_queenside() const {
-    return (metadata & SIDE_FLAG_CAN_CASTLE_QUEENSIDE) != 0;
+    return (flags & SIDE_FLAG_CAN_CASTLE_QUEENSIDE) != 0;
 }
 
 void Position::display(bool display_metadata) const {
@@ -90,8 +90,8 @@ void Position::display(bool display_metadata) const {
             }
         }
 
-        if (en_passant_sq) {
-            int sq = *en_passant_sq;
+        if (en_passant_sq != NULL_SQUARE) {
+            int sq = en_passant_sq;
             int rank = sq / 8;
             char file = (sq % 8) + 'a';
             print("En passant possible on {}{}.\n", file, rank);

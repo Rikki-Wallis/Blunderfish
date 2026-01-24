@@ -16,7 +16,7 @@ struct Side {
     uint64_t bishops;
     uint64_t queens;
     uint64_t king;
-    int metadata;
+    int flags;
 
     void set_can_castle_kingside(bool);
     void set_can_castle_queenside(bool);
@@ -25,10 +25,12 @@ struct Side {
     bool can_castle_queenside() const;
 };
 
+constexpr int NULL_SQUARE = 0xffffffff;
+
 struct Position {
     Side sides[2];
     int to_move;
-    std::optional<int> en_passant_sq;
+    int en_passant_sq = NULL_SQUARE;
 
     void display(bool display_metadata=false) const;
     static std::optional<Position> decode_fen_string(const std::string& fen);
