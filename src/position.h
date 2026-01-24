@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <optional>
 
 enum {
     WHITE,
@@ -22,5 +23,5 @@ struct Position {
     int to_move;
 
     void display() const;
-    static Position decode_fen_string(const std::string& fen);
+    static std::optional<Position> decode_fen_string(const std::string& fen);
 };
