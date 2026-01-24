@@ -2,44 +2,44 @@
 #include <cctype>
 
 #include "position.h"
-#include <iostream>
+#include "common.h"
 
 void Position::display() const {
     for (int rank=7; rank>=0; --rank) 
     {   
-        std::cout << rank+1 << "|";
+        print("{}|", rank+1);
 
         for (int file = 0; file < 8; ++file) 
         {
             int sq = rank * 8 + file;
-            uint64_t piece = '.';
+            const char* piece = ".";
             uint64_t mask = (uint64_t)1 << sq;
 
-            if (sides[WHITE].pawns & mask) piece = 'P';
-            else if (sides[WHITE].rooks & mask) piece = 'R';
-            else if (sides[WHITE].knights & mask) piece = 'N';
-            else if (sides[WHITE].bishops & mask) piece = 'B';
-            else if (sides[WHITE].king & mask) piece = 'K';
-            else if (sides[WHITE].queens & mask) piece = 'Q';
+            if (sides[WHITE].pawns & mask) piece = "♟";
+            else if (sides[WHITE].rooks & mask) piece = "♜";
+            else if (sides[WHITE].knights & mask) piece = "♞";
+            else if (sides[WHITE].bishops & mask) piece = "♝";
+            else if (sides[WHITE].king & mask) piece = "♚";
+            else if (sides[WHITE].queens & mask) piece = "♛";
 
-            if (sides[BLACK].pawns & mask) piece = 'p';
-            else if (sides[BLACK].rooks & mask) piece = 'r';
-            else if (sides[BLACK].knights & mask) piece = 'n';
-            else if (sides[BLACK].bishops & mask) piece = 'b';
-            else if (sides[BLACK].king & mask) piece = '♔';
-            else if (sides[BLACK].queens & mask) piece = 'q';
+            if (sides[BLACK].pawns & mask) piece = "♙";
+            else if (sides[BLACK].rooks & mask) piece = "♖";
+            else if (sides[BLACK].knights & mask) piece = "♘";
+            else if (sides[BLACK].bishops & mask) piece = "♗";
+            else if (sides[BLACK].king & mask) piece = "♔";
+            else if (sides[BLACK].queens & mask) piece = "♕";
 
-            std::cout << piece << ' ';
+            print("{} ", piece);
 
         }
 
-        std::cout << "\n";
+        print("\n");
     }
 
-    std::cout << "  ---------------\n";
-    std::cout << "  a b c d e f g h\n";
+    print("  ---------------\n");
+    print("  a b c d e f g h\n");
 
-    std::cout << "To move: " << (to_move == WHITE ? "white" : "black") << "\n";
+    print("To move: {}\n", to_move == WHITE ? "white" : "black");
 }
 
 std::optional<Position> Position::decode_fen_string(const std::string& fen) {
