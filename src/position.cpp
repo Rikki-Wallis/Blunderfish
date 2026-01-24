@@ -4,7 +4,40 @@
 #include "position.h"
 #include "common.h"
 
-void Position::display() const {
+enum SideFlags {
+    SIDE_FLAG_NONE = 0,
+    SIDE_FLAG_CAN_CASTLE_KINGSIDE  = (1 << 0),
+    SIDE_FLAG_CAN_CASTLE_QUEENSIDE = (1 << 1),
+};
+
+
+void Side::set_can_castle_kingside(bool value) {
+    if (value) {
+        metadata |= SIDE_FLAG_CAN_CASTLE_KINGSIDE;
+    }
+    else {
+        metadata &= ~SIDE_FLAG_CAN_CASTLE_KINGSIDE;
+    }
+}
+
+void Side::set_can_castle_queenside(bool value) {
+    if (value) {
+        metadata |= SIDE_FLAG_CAN_CASTLE_QUEENSIDE;
+    }
+    else {
+        metadata &= ~SIDE_FLAG_CAN_CASTLE_QUEENSIDE;
+    }
+}
+
+bool Side::can_castle_kingside() const {
+    return (metadata & SIDE_FLAG_CAN_CASTLE_KINGSIDE) != 0;
+}
+
+bool Side::can_castle_queenside() const {
+    return (metadata & SIDE_FLAG_CAN_CASTLE_QUEENSIDE) != 0;
+}
+
+void Position::display(bool display_metadata) const {
     for (int rank=7; rank>=0; --rank) 
     {   
         print("{}|", rank+1);
@@ -39,11 +72,37 @@ void Position::display() const {
     print("  ---------------\n");
     print("  a b c d e f g h\n");
 
+    if (display_metadata) {
+        for (int side = 0; side < 2; ++side) {
+            const char* name_table[] = {
+                "White",
+                "Black"
+            };
+
+            const char* name = name_table[side];
+
+            if (sides[side].can_castle_kingside()) {
+                print("{} can castle kingside.\n", name);
+            }
+
+            if (sides[side].can_castle_queenside()) {
+                print("{} can castle queenside.\n", name);
+            }
+        }
+
+        if (en_passant_sq) {
+            int sq = *en_passant_sq;
+            int rank = sq / 8;
+            char file = (sq % 8) + 'a';
+            print("En passant possible on {}{}.\n", file, rank);
+        }
+    }
+
     print("To move: {}\n", to_move == WHITE ? "white" : "black");
 }
 
 std::optional<Position> Position::decode_fen_string(const std::string& fen) {
-    size_t cur = 0;
+    size_t cursor = 0;
 
     auto set_piece = [](uint64_t* bb, size_t rank, size_t file) {
         size_t index = rank * 8 + file;
@@ -51,29 +110,35 @@ std::optional<Position> Position::decode_fen_string(const std::string& fen) {
     };
 
     auto skip_whitespace = [&]() {
-        while (cur < fen.size() && isspace(fen[cur])) {
-            cur++;
+        while (cursor < fen.size() && isspace(fen[cursor])) {
+            cursor++;
         }
     };
 
     auto next = [&]() {
-        return fen[cur++];
+        return fen[cursor++];
+    };
+    
+    auto peek = [&]() {
+        return fen[cursor];
     };
 
     Position pos = {};
+
+    // Piece placement
 
     skip_whitespace();
     
     for (int rank = 7; rank >= 0; --rank) {
         if (rank < 7) {
-            if (cur >= fen.size()) return std::nullopt;
+            if (cursor >= fen.size()) return std::nullopt;
             if (next() != '/') return std::nullopt;
         }
 
         size_t file = 0;
 
         while (file < 8) {
-            if (cur >= fen.size()) return std::nullopt;
+            if (cursor >= fen.size()) return std::nullopt;
             char c = next();
 
             int side = isupper(c) == 0;
@@ -127,8 +192,10 @@ std::optional<Position> Position::decode_fen_string(const std::string& fen) {
         }
     }
 
+    // To move
+
     skip_whitespace();
-    if (cur >= fen.size()) return std::nullopt;
+    if (cursor >= fen.size()) return std::nullopt;
 
     switch (next()) {
         default:
@@ -139,6 +206,56 @@ std::optional<Position> Position::decode_fen_string(const std::string& fen) {
         case 'b': 
             pos.to_move = BLACK;
             break;
+    }
+
+    // Castling ability
+
+    skip_whitespace();
+    if (cursor >= fen.size()) return std::nullopt;
+
+    if (peek() != '-') {
+        while (cursor < fen.size() && !isspace(peek())) {
+            char c = next();
+
+            int side = isupper(c) == 0;
+
+            switch(c) {
+                default:
+                    return std::nullopt;
+
+                case 'k':
+                case 'K':
+                    pos.sides[side].set_can_castle_kingside(true);
+                    break;
+                case 'q':
+                case 'Q':
+                    pos.sides[side].set_can_castle_queenside(true);
+                    break;
+            }
+        }
+    }
+    else {
+        next();
+    }
+
+    // En passant square
+
+    skip_whitespace();
+    if (cursor >= fen.size()) return std::nullopt;
+
+    if (peek() != '-') {
+        int file = next() - 'a';
+        if (cursor >= fen.size()) return std::nullopt;
+
+        int rank = next() - '0'; 
+        if (rank > 7 || rank < 0) {
+            return std::nullopt;
+        }
+
+        pos.en_passant_sq = rank * 8 + file;
+    }
+    else {
+        next();
     }
 
     return pos;
