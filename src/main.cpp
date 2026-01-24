@@ -7,6 +7,7 @@ int main() {
 
     auto maybe_pos = Position::decode_fen_string(start_fen);
     if (!maybe_pos) {
+        printf("Invalid FEN string.\n");
         return 1;
     }
 
