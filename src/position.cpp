@@ -38,7 +38,7 @@ bool Side::can_castle_queenside() const {
 }
 
 uint64_t Side::all() const {
-    return pawns | rooks | knights | bishops | queens | king;
+    return bb[PIECE_PAWN] | bb[PIECE_ROOK] | bb[PIECE_KNIGHT] | bb[PIECE_BISHOP] | bb[PIECE_QUEEN] | bb[PIECE_KING];
 }
 
 void Position::display(bool display_metadata) const {
@@ -50,21 +50,21 @@ void Position::display(bool display_metadata) const {
         {
             int sq = rank * 8 + file;
             const char* piece = ".";
-            uint64_t mask = (uint64_t)1 << sq;
+            uint64_t mask = sq_to_bb(sq);
 
-            if (sides[WHITE].pawns & mask) piece = "♟";
-            else if (sides[WHITE].rooks & mask) piece = "♜";
-            else if (sides[WHITE].knights & mask) piece = "♞";
-            else if (sides[WHITE].bishops & mask) piece = "♝";
-            else if (sides[WHITE].king & mask) piece = "♚";
-            else if (sides[WHITE].queens & mask) piece = "♛";
+            if      (sides[WHITE].bb[PIECE_PAWN]   & mask) piece = "♟";
+            else if (sides[WHITE].bb[PIECE_ROOK]   & mask) piece = "♜";
+            else if (sides[WHITE].bb[PIECE_KNIGHT] & mask) piece = "♞";
+            else if (sides[WHITE].bb[PIECE_BISHOP] & mask) piece = "♝";
+            else if (sides[WHITE].bb[PIECE_KING]   & mask) piece = "♚";
+            else if (sides[WHITE].bb[PIECE_QUEEN]  & mask) piece = "♛";
 
-            if (sides[BLACK].pawns & mask) piece = "♙";
-            else if (sides[BLACK].rooks & mask) piece = "♖";
-            else if (sides[BLACK].knights & mask) piece = "♘";
-            else if (sides[BLACK].bishops & mask) piece = "♗";
-            else if (sides[BLACK].king & mask) piece = "♔";
-            else if (sides[BLACK].queens & mask) piece = "♕";
+            if      (sides[BLACK].bb[PIECE_PAWN]   & mask) piece = "♙";
+            else if (sides[BLACK].bb[PIECE_ROOK]   & mask) piece = "♖";
+            else if (sides[BLACK].bb[PIECE_KNIGHT] & mask) piece = "♘";
+            else if (sides[BLACK].bb[PIECE_BISHOP] & mask) piece = "♗";
+            else if (sides[BLACK].bb[PIECE_KING]   & mask) piece = "♔";
+            else if (sides[BLACK].bb[PIECE_QUEEN]  & mask) piece = "♕";
 
             print("{} ", piece);
 
@@ -108,9 +108,12 @@ void Position::display(bool display_metadata) const {
 std::optional<Position> Position::decode_fen_string(const std::string& fen) {
     size_t cursor = 0;
 
-    auto set_piece = [](uint64_t* bb, size_t rank, size_t file) {
+    Position pos = {};
+
+    auto set_piece = [&](int side, Piece piece, size_t rank, size_t file) {
         size_t index = rank * 8 + file;
-        *bb |= (uint64_t)1 << index;
+        pos.sides[side].bb[piece] |= sq_to_bb(index);
+        pos.piece_at[index] = piece; 
     };
 
     auto skip_whitespace = [&]() {
@@ -126,8 +129,6 @@ std::optional<Position> Position::decode_fen_string(const std::string& fen) {
     auto peek = [&]() {
         return fen[cursor];
     };
-
-    Position pos = {};
 
     // Piece placement
 
@@ -153,32 +154,32 @@ std::optional<Position> Position::decode_fen_string(const std::string& fen) {
 
                 case 'p':
                 case 'P':
-                    set_piece(&pos.sides[side].pawns, rank, file);
+                    set_piece(side, PIECE_PAWN, rank, file);
                     file++;
                     break;
                 case 'r':
                 case 'R':
-                    set_piece(&pos.sides[side].rooks, rank, file);
+                    set_piece(side, PIECE_ROOK, rank, file);
                     file++;
                     break;
                 case 'n':
                 case 'N':
-                    set_piece(&pos.sides[side].knights, rank, file);
+                    set_piece(side, PIECE_KNIGHT, rank, file);
                     file++;
                     break;
                 case 'b':
                 case 'B':
-                    set_piece(&pos.sides[side].bishops, rank, file);
+                    set_piece(side, PIECE_BISHOP, rank, file);
                     file++;
                     break;
                 case 'q':
                 case 'Q':
-                    set_piece(&pos.sides[side].queens, rank, file);
+                    set_piece(side, PIECE_QUEEN, rank, file);
                     file++;
                     break;
                 case 'k':
                 case 'K':
-                    set_piece(&pos.sides[side].king, rank, file);
+                    set_piece(side, PIECE_KING, rank, file);
                     file++;
                     break;
 
@@ -263,4 +264,8 @@ std::optional<Position> Position::decode_fen_string(const std::string& fen) {
     }
 
     return pos;
+}
+
+uint64_t Position::all_pieces() const {
+    return sides[0].all() | sides[1].all();
 }

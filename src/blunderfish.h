@@ -39,14 +39,14 @@ enum Piece {
     NUM_PIECE_TYPES
 };
 
-static const char* piece_alg[NUM_PIECE_TYPES] = {
+static const char* piece_alg_table[NUM_PIECE_TYPES] = {
     "uninitialized",
     "",
-    "r",
-    "n",
-    "b",
-    "q",
-    "k",
+    "R",
+    "N",
+    "B",
+    "Q",
+    "K",
 };
 
 struct Move {
@@ -57,12 +57,7 @@ struct Move {
 };
 
 struct Side {
-    uint64_t pawns;
-    uint64_t rooks;
-    uint64_t knights;
-    uint64_t bishops;
-    uint64_t queens;
-    uint64_t king;
+    uint64_t bb[NUM_PIECE_TYPES];
     int flags;
 
     void set_can_castle_kingside(bool);
@@ -80,6 +75,7 @@ struct Position {
     Side sides[2];
     int to_move;
     int en_passant_sq = NULL_SQUARE;
+    uint8_t piece_at[64];
 
     void display(bool display_metadata=false) const;
     static std::optional<Position> decode_fen_string(const std::string& fen);
@@ -87,6 +83,10 @@ struct Position {
     std::span<Move> generate_moves(std::span<Move> move_buf) const;
 
     std::unordered_map<std::string, size_t> name_moves(std::span<Move> moves) const;
+
+    uint64_t all_pieces() const;
+
+    Position execute_move(const Move& move) const;
 };
 
 inline std::pair<char, int> square_alg(size_t sq) {
@@ -96,4 +96,10 @@ inline std::pair<char, int> square_alg(size_t sq) {
     return {file, rank};
 }
 
-uint64_t king_moves(uint8_t from, uint64_t side_pieces);
+inline int opponent(int side) {
+    return (side + 1) & 1;
+}
+
+inline uint64_t sq_to_bb(uint8_t index) {
+    return (uint64_t)1 << index;
+}

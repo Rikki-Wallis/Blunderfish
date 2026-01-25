@@ -2,11 +2,7 @@
 
 #include "blunderfish.h"
 
-inline uint64_t sq_to_bb(uint8_t index) {
-    return (uint64_t)1 << index;
-}
-
-uint64_t king_moves(uint8_t from, uint64_t side_pieces) {
+static uint64_t king_moves(uint8_t from, uint64_t allies) {
     uint64_t bb = sq_to_bb(from);
 
     uint64_t l  = (bb >> 1) & (~FILE_H);
@@ -20,7 +16,27 @@ uint64_t king_moves(uint8_t from, uint64_t side_pieces) {
 
     uint64_t m = l | lu | u | ru | r | rd | d | ld;
 
-    return m & (~side_pieces);
+    return m & (~allies);
+}
+
+uint64_t white_pawn_single_moves(uint8_t from, uint64_t opps, uint64_t all_pieces) {
+    uint64_t bb = sq_to_bb(from);
+
+    uint64_t push  = (bb << 8) & (~all_pieces);
+    uint64_t left  = (bb << 7) & (~FILE_H) & opps;
+    uint64_t right = (bb << 9) & (~FILE_A) & opps;
+
+    return push | left | right;
+}
+
+uint64_t black_pawn_single_moves(uint8_t from, uint64_t opps, uint64_t all_pieces) {
+    uint64_t bb = sq_to_bb(from);
+
+    uint64_t push  = (bb >> 8) & (~all_pieces);
+    uint64_t left  = (bb >> 9) & (~FILE_H) & opps;
+    uint64_t right = (bb >> 7) & (~FILE_A) & opps;
+
+    return push | left | right;
 }
 
 struct set_bits {
@@ -65,9 +81,21 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
         };
     };
 
-    for (uint8_t from : set_bits(sides[to_move].king)) {
+    int opp = opponent(to_move);
+    uint64_t opps = sides[opp].all();
+    int all = all_pieces();
+
+    for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KING])) {
         for (uint8_t to : set_bits(king_moves(from, sides[to_move].all()))) {
             new_move(from, to, PIECE_KING, 0);
+        }
+    }
+
+    auto pawn_single_moves = to_move == WHITE ? white_pawn_single_moves : black_pawn_single_moves;
+
+    for (uint8_t from : set_bits(sides[to_move].bb[PIECE_PAWN])) {
+        for (uint8_t to : set_bits(pawn_single_moves(from, opps, all))) {
+            new_move(from, to, PIECE_PAWN, 0);
         }
     }
 
@@ -89,7 +117,13 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
 
             auto [f1, r1] = square_alg(m.from);
 
-            bool need_file = m.piece == PIECE_PAWN;
+            bool is_capture = piece_at[m.to] != PIECE_NONE;
+
+            //if (m.piece == PIECE_PAWN && r1 == 4 && f1 == 'e') {
+            //    asm("int3");
+            //}
+
+            bool need_file = m.piece == PIECE_PAWN && is_capture;
             bool need_rank = false;
 
             for (size_t j = 0; j < moves.size(); ++j) {
@@ -103,7 +137,6 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
                     continue;
                 }
 
-
                 auto [f2, r2] = square_alg(n.from);
 
                 if (f1 != f2) {
@@ -116,16 +149,41 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
 
             auto [to_file, to_rank] = square_alg(m.to);
 
-            std::string capture_str = (sides[to_move].all() & sq_to_bb(m.to)) ? "x" : "";
-            std::string file_str = need_file ? std::format("{}", f1) : "";
-            std::string rank_str = need_rank ? std::format("{}", r1) : "";
+            std::string capture_str = is_capture ? "x" : "";
+            std::string unambig_file = need_file ? std::format("{}", f1) : "";
+            std::string unambig_rank = need_rank ? std::format("{}", r1) : "";
 
-            std::string name = std::format("{}{}{}{}{}{}", piece_alg[m.piece], file_str, rank_str, capture_str, to_file, to_rank);
+            std::string name = std::format("{}{}{}{}{}{}", piece_alg_table[m.piece], unambig_file, unambig_rank, capture_str, to_file, to_rank);
 
-            assert(!lookup.contains(name));
-            lookup.emplace(std::move(name), i);
+            lookup.emplace(std::move(name), moves[i]);
         } 
     }
 
     return lookup;
+}
+
+Position Position::execute_move(const Move& move) const {
+    Position next = {};
+    memcpy(next.sides, sides, sizeof(sides));
+    memcpy(next.piece_at, piece_at, sizeof(piece_at));
+    next.to_move = opponent(to_move);
+
+    next.sides[to_move].bb[move.piece] &= ~sq_to_bb(move.from);
+    next.sides[to_move].bb[move.piece] |= sq_to_bb(move.to);
+    
+    Piece captured = (Piece)next.piece_at[move.to]; 
+
+    if (captured != PIECE_NONE) {
+        next.sides[opponent(to_move)].bb[captured] &= ~sq_to_bb(move.to);
+    }
+
+    next.piece_at[move.from] = PIECE_NONE;
+    next.piece_at[move.to] = move.piece;
+    
+    if (move.piece == PIECE_KING) {
+        next.sides[to_move].set_can_castle_kingside(false);
+        next.sides[to_move].set_can_castle_queenside(false);
+    }
+
+    return next;
 }
