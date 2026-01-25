@@ -2,6 +2,7 @@
 
 #include "blunderfish.h"
 
+// King
 static uint64_t king_moves(uint8_t from, uint64_t allies) {
     uint64_t bb = sq_to_bb(from);
 
@@ -19,6 +20,7 @@ static uint64_t king_moves(uint8_t from, uint64_t allies) {
     return m & (~allies);
 }
 
+// Pawns
 uint64_t white_pawn_single_moves(uint8_t from, uint64_t opps, uint64_t all_pieces) {
     uint64_t bb = sq_to_bb(from);
 
@@ -38,6 +40,25 @@ uint64_t black_pawn_single_moves(uint8_t from, uint64_t opps, uint64_t all_piece
 
     return push | left | right;
 }
+
+uint64_t white_pawn_double_moves(uint8_t from, uint64_t all_pieces) {
+    
+    uint64_t bb = sq_to_bb(from) & RANK_2;
+    uint64_t push  = (bb << 8) & (~all_pieces);
+    uint64_t double_push = (push << 8) & (~all_pieces);
+    return double_push;
+
+
+}
+
+uint64_t black_pawn_double_moves(uint8_t from, uint64_t all_pieces) {
+    
+    uint64_t bb = sq_to_bb(from) & RANK_7;
+    uint64_t push  = (bb >> 8) & (~all_pieces);
+    uint64_t double_push = (push >> 8) & (~all_pieces);
+    return double_push;
+}
+
 
 struct set_bits {
     uint64_t x;
@@ -92,9 +113,14 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     }
 
     auto pawn_single_moves = to_move == WHITE ? white_pawn_single_moves : black_pawn_single_moves;
+    auto pawn_double_moves = to_move == WHITE ? white_pawn_double_moves : black_pawn_double_moves;
 
     for (uint8_t from : set_bits(sides[to_move].bb[PIECE_PAWN])) {
         for (uint8_t to : set_bits(pawn_single_moves(from, opps, all))) {
+            new_move(from, to, PIECE_PAWN, 0);
+        }
+
+        for (uint8_t to : set_bits(pawn_double_moves(from, all))) {
             new_move(from, to, PIECE_PAWN, 0);
         }
     }
