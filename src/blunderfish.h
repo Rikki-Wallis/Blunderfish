@@ -91,7 +91,7 @@ struct Position {
 
 inline std::pair<char, int> square_alg(size_t sq) {
     char file = sq % 8 + 'a';
-    int rank  = sq / 8 + 1;
+    int rank  = int(sq / 8 + 1);
 
     return {file, rank};
 }
