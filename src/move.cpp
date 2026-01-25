@@ -1,6 +1,7 @@
 #include <bit>
 
 #include "blunderfish.h"
+#include "../generated/generated_tables.h"
 
 // King
 static uint64_t king_moves(uint8_t from, uint64_t allies) {
@@ -71,7 +72,15 @@ uint64_t black_pawn_enpassant_moves(uint8_t from, int enpassant_sq) {
     return left_capture | right_capture;
 }
 
+static size_t magic_index(uint64_t all_pieces, uint64_t mask, uint64_t magic, size_t shift) {
+    return ((all_pieces & mask) * magic) >> shift;
+}
 
+uint64_t rook_moves(uint8_t from, uint64_t all_pieces, uint64_t allies) {
+    size_t index = magic_index(all_pieces, rook_mask[from], rook_magic[from], rook_shift[from]);
+    uint64_t moves = rook_move[from][index];
+    return moves & (~allies);
+}
 
 struct set_bits {
     uint64_t x;
@@ -117,11 +126,18 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
 
     int opp = opponent(to_move);
     uint64_t opps = sides[opp].all();
+    uint64_t allies = sides[to_move].all();
     uint64_t all = all_pieces();
 
     for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KING])) {
-        for (uint8_t to : set_bits(king_moves(from, sides[to_move].all()))) {
+        for (uint8_t to : set_bits(king_moves(from, allies))) {
             new_move(from, to, PIECE_KING, 0);
+        }
+    }
+
+    for (uint8_t from: set_bits(sides[to_move].bb[PIECE_ROOK])) {
+        for (uint8_t to : set_bits(rook_moves(from, all, allies))) {
+            new_move(from, to, PIECE_ROOK, 0);
         }
     }
 
@@ -164,10 +180,6 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
             auto [f1, r1] = square_alg(m.from);
 
             bool is_capture = piece_at[m.to] != PIECE_NONE;
-
-            //if (m.piece == PIECE_PAWN && r1 == 4 && f1 == 'e') {
-            //    asm("int3");
-            //}
 
             bool need_file = m.piece == PIECE_PAWN && is_capture;
             bool need_rank = false;

@@ -51,5 +51,11 @@ int main() {
         pos = pos.execute_move(m);
     }
 
+    //for (size_t i = 0; i < 64; ++i) {
+    //    Position pos = {};
+    //    pos.sides[WHITE].bb[PIECE_PAWN] = rook_masks[i];
+    //    pos.display();
+    //}
+
     return 0;
 }
