@@ -1,6 +1,7 @@
 #include <cstdio>
+#include <array>
 
-#include "position.h"
+#include "blunderfish.h"
 
 int main() {
     std::string start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"; 
@@ -12,8 +13,14 @@ int main() {
         return 1;
     }
 
-    auto pos = *maybe_pos;
-    pos.display(true);
+    Position pos = *maybe_pos;
+    memset(pos.sides, 0, sizeof(pos.sides));
+
+    for (int i = 0; i < 64; ++i) {
+        pos.sides[WHITE].king = (uint64_t)1 << i;
+        pos.sides[BLACK].pawns = king_moves(i, pos.sides[WHITE].all());
+        pos.display(true);
+    }
 
     return 0;
 }

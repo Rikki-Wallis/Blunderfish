@@ -1,7 +1,7 @@
 #include <cassert>
 #include <cctype>
 
-#include "position.h"
+#include "blunderfish.h"
 #include "common.h"
 
 enum SideFlags {
@@ -35,6 +35,10 @@ bool Side::can_castle_kingside() const {
 
 bool Side::can_castle_queenside() const {
     return (flags & SIDE_FLAG_CAN_CASTLE_QUEENSIDE) != 0;
+}
+
+uint64_t Side::all() const {
+    return pawns | rooks | knights | bishops | queens | king;
 }
 
 void Position::display(bool display_metadata) const {
