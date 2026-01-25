@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
+#include <vector>
 
 template<typename...Args>
 inline int print(const std::format_string<Args...>& fmt, Args&&... args) {

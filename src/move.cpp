@@ -51,9 +51,7 @@ struct set_bits {
     std::default_sentinel_t end() const { return {}; }
 };
 
-std::span<Move> Position::generate_moves(int side, std::span<Move> move_buf) const {
-    assert("invalid side" && side < 2);
-
+std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     size_t move_count = 0;
 
     auto new_move = [&](uint8_t from, uint8_t to, uint8_t piece, uint8_t flags) {
@@ -67,11 +65,67 @@ std::span<Move> Position::generate_moves(int side, std::span<Move> move_buf) con
         };
     };
 
-    for (uint8_t from : set_bits(sides[side].king)) {
-        for (uint8_t to : set_bits(king_moves(from, sides[side].all()))) {
+    for (uint8_t from : set_bits(sides[to_move].king)) {
+        for (uint8_t to : set_bits(king_moves(from, sides[to_move].all()))) {
             new_move(from, to, PIECE_KING, 0);
         }
     }
 
     return move_buf.subspan(0, move_count);
+}
+
+std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all) const {
+    std::vector<size_t> board[64];
+
+    for (size_t i = 0; i < all.size(); ++i) {
+        board[all[i].to].push_back(i);
+    }
+
+    std::unordered_map<std::string, size_t> lookup;
+
+    for (auto& moves : board) {
+        for (size_t i = 0; i < moves.size(); ++i) {
+            Move& m = all[moves[i]];
+
+            auto [f1, r1] = square_alg(m.from);
+
+            bool need_file = m.piece == PIECE_PAWN;
+            bool need_rank = false;
+
+            for (size_t j = 0; j < moves.size(); ++j) {
+                if (i == j) {
+                    continue;
+                }
+
+                Move& n = all[moves[j]];
+
+                if (m.piece != n.piece) {
+                    continue;
+                }
+
+
+                auto [f2, r2] = square_alg(n.from);
+
+                if (f1 != f2) {
+                    need_file = true;
+                }
+                else if (r1 != r2) {
+                    need_rank = true;
+                }
+            }
+
+            auto [to_file, to_rank] = square_alg(m.to);
+
+            std::string capture_str = (sides[to_move].all() & sq_to_bb(m.to)) ? "x" : "";
+            std::string file_str = need_file ? std::format("{}", f1) : "";
+            std::string rank_str = need_rank ? std::format("{}", r1) : "";
+
+            std::string name = std::format("{}{}{}{}{}{}", piece_alg[m.piece], file_str, rank_str, capture_str, to_file, to_rank);
+
+            assert(!lookup.contains(name));
+            lookup.emplace(std::move(name), i);
+        } 
+    }
+
+    return lookup;
 }

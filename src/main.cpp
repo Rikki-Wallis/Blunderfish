@@ -15,12 +15,23 @@ int main() {
 
     Position pos = *maybe_pos;
     memset(pos.sides, 0, sizeof(pos.sides));
+    pos.sides[WHITE].king = 1 << 27;
+    pos.display();
 
-    for (int i = 0; i < 64; ++i) {
-        pos.sides[WHITE].king = (uint64_t)1 << i;
-        pos.sides[BLACK].pawns = king_moves(i, pos.sides[WHITE].all());
-        pos.display(true);
+    std::array<Move, 256> move_buffer;
+    std::span<Move> moves = pos.generate_moves(move_buffer);
+    std::unordered_map<std::string, size_t> move_names = pos.name_moves(moves); 
+
+    int count = 0;
+
+    print("Available moves: ");
+    for (auto& [name, i] : move_names) {
+        if (count++ > 0) {
+            print(", ");
+        }
+        print("{}", name);
     }
+    print("\n");
 
     return 0;
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <unordered_map>
 
 #include "common.h"
 
@@ -40,7 +41,7 @@ enum Piece {
 
 static const char* piece_alg[NUM_PIECE_TYPES] = {
     "uninitialized",
-    "p",
+    "",
     "r",
     "n",
     "b",
@@ -83,8 +84,9 @@ struct Position {
     void display(bool display_metadata=false) const;
     static std::optional<Position> decode_fen_string(const std::string& fen);
 
-    // @return the number of moves recorded into the move buffer
-    std::span<Move> generate_moves(int side, std::span<Move> move_buf) const;
+    std::span<Move> generate_moves(std::span<Move> move_buf) const;
+
+    std::unordered_map<std::string, size_t> name_moves(std::span<Move> moves) const;
 };
 
 inline std::pair<char, int> square_alg(size_t sq) {
