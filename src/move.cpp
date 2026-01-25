@@ -47,8 +47,6 @@ uint64_t white_pawn_double_moves(uint8_t from, uint64_t all_pieces) {
     uint64_t push  = (bb << 8) & (~all_pieces);
     uint64_t double_push = (push << 8) & (~all_pieces);
     return double_push;
-
-
 }
 
 uint64_t black_pawn_double_moves(uint8_t from, uint64_t all_pieces) {
@@ -58,6 +56,21 @@ uint64_t black_pawn_double_moves(uint8_t from, uint64_t all_pieces) {
     uint64_t double_push = (push >> 8) & (~all_pieces);
     return double_push;
 }
+
+uint64_t white_pawn_enpassant_moves(uint8_t from, int enpassant_sq) {
+    uint64_t bb = sq_to_bb(from);
+    uint64_t left_capture = (bb >> 9) & sq_to_bb(enpassant_sq) & (~FILE_A);
+    uint64_t right_capture = (bb >> 7) & sq_to_bb(enpassant_sq) & (~FILE_H);
+    return left_capture | right_capture;
+}
+
+uint64_t black_pawn_enpassant_moves(uint8_t from, int enpassant_sq) {
+    uint64_t bb = sq_to_bb(from);
+    uint64_t left_capture = (bb << 9) & sq_to_bb(enpassant_sq) & (~FILE_H);
+    uint64_t right_capture = (bb << 7) & sq_to_bb(enpassant_sq) & (~FILE_A);
+    return left_capture | right_capture;
+}
+
 
 
 struct set_bits {
@@ -114,6 +127,7 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
 
     auto pawn_single_moves = to_move == WHITE ? white_pawn_single_moves : black_pawn_single_moves;
     auto pawn_double_moves = to_move == WHITE ? white_pawn_double_moves : black_pawn_double_moves;
+    auto pawn_enpassant_moves = to_move == WHITE ? white_pawn_enpassant_moves : black_pawn_enpassant_moves;
 
     for (uint8_t from : set_bits(sides[to_move].bb[PIECE_PAWN])) {
         for (uint8_t to : set_bits(pawn_single_moves(from, opps, all))) {
@@ -123,7 +137,13 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
         for (uint8_t to : set_bits(pawn_double_moves(from, all))) {
             new_move(from, to, PIECE_PAWN, 0);
         }
+
+        for (uint8_t to : set_bits(pawn_enpassant_moves(from, en_passant_sq))) {
+            new_move(from, to, PIECE_PAWN, FLAG_ENPASSANT);
+        }
     }
+
+    // Enpassant
 
     return move_buf.subspan(0, move_count);
 }
@@ -209,6 +229,16 @@ Position Position::execute_move(const Move& move) const {
     if (move.piece == PIECE_KING) {
         next.sides[to_move].set_can_castle_kingside(false);
         next.sides[to_move].set_can_castle_queenside(false);
+    }
+
+    if (move.flags & FLAG_DOUBLE_PUSH ) {
+        if (to_move == WHITE) {
+            next.en_passant_sq = move.to - 8; 
+        }
+        else {
+            next.en_passant_sq = move.to - 8;
+        }
+        
     }
 
     return next;

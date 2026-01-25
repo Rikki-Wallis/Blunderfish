@@ -39,6 +39,12 @@ enum Piece {
     NUM_PIECE_TYPES
 };
 
+enum MoveFlags {
+    FLAG_NONE,
+    FLAG_ENPASSANT = (1 << 0),
+    FLAG_DOUBLE_PUSH = (1 << 1)
+};
+
 static const char* piece_alg_table[NUM_PIECE_TYPES] = {
     "uninitialized",
     "",
