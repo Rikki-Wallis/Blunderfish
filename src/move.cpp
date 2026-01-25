@@ -83,7 +83,7 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
 
     int opp = opponent(to_move);
     uint64_t opps = sides[opp].all();
-    int all = all_pieces();
+    uint64_t all = all_pieces();
 
     for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KING])) {
         for (uint8_t to : set_bits(king_moves(from, sides[to_move].all()))) {

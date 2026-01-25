@@ -18,6 +18,7 @@ static size_t select_move(const std::unordered_map<std::string, size_t>& moves) 
 }
 
 int main() {
+
     std::string start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"; 
 
     auto maybe_pos = Position::decode_fen_string(start_fen);

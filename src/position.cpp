@@ -52,19 +52,19 @@ void Position::display(bool display_metadata) const {
             const char* piece = ".";
             uint64_t mask = sq_to_bb(sq);
 
-            if      (sides[WHITE].bb[PIECE_PAWN]   & mask) piece = "♟";
-            else if (sides[WHITE].bb[PIECE_ROOK]   & mask) piece = "♜";
-            else if (sides[WHITE].bb[PIECE_KNIGHT] & mask) piece = "♞";
-            else if (sides[WHITE].bb[PIECE_BISHOP] & mask) piece = "♝";
-            else if (sides[WHITE].bb[PIECE_KING]   & mask) piece = "♚";
-            else if (sides[WHITE].bb[PIECE_QUEEN]  & mask) piece = "♛";
+            if      (sides[WHITE].bb[PIECE_PAWN]   & mask) piece = "P";
+            else if (sides[WHITE].bb[PIECE_ROOK]   & mask) piece = "R";
+            else if (sides[WHITE].bb[PIECE_KNIGHT] & mask) piece = "N";
+            else if (sides[WHITE].bb[PIECE_BISHOP] & mask) piece = "B";
+            else if (sides[WHITE].bb[PIECE_KING]   & mask) piece = "K";
+            else if (sides[WHITE].bb[PIECE_QUEEN]  & mask) piece = "Q";
 
-            if      (sides[BLACK].bb[PIECE_PAWN]   & mask) piece = "♙";
-            else if (sides[BLACK].bb[PIECE_ROOK]   & mask) piece = "♖";
-            else if (sides[BLACK].bb[PIECE_KNIGHT] & mask) piece = "♘";
-            else if (sides[BLACK].bb[PIECE_BISHOP] & mask) piece = "♗";
-            else if (sides[BLACK].bb[PIECE_KING]   & mask) piece = "♔";
-            else if (sides[BLACK].bb[PIECE_QUEEN]  & mask) piece = "♕";
+            if      (sides[BLACK].bb[PIECE_PAWN]   & mask) piece = "p";
+            else if (sides[BLACK].bb[PIECE_ROOK]   & mask) piece = "r";
+            else if (sides[BLACK].bb[PIECE_KNIGHT] & mask) piece = "n";
+            else if (sides[BLACK].bb[PIECE_BISHOP] & mask) piece = "b";
+            else if (sides[BLACK].bb[PIECE_KING]   & mask) piece = "k";
+            else if (sides[BLACK].bb[PIECE_QUEEN]  & mask) piece = "q";
 
             print("{} ", piece);
 
@@ -110,7 +110,7 @@ std::optional<Position> Position::decode_fen_string(const std::string& fen) {
 
     Position pos = {};
 
-    auto set_piece = [&](int side, Piece piece, size_t rank, size_t file) {
+    auto set_piece = [&](int side, uint8_t piece, size_t rank, size_t file) {
         size_t index = rank * 8 + file;
         pos.sides[side].bb[piece] |= sq_to_bb(index);
         pos.piece_at[index] = piece; 

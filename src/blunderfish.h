@@ -100,6 +100,6 @@ inline int opponent(int side) {
     return (side + 1) & 1;
 }
 
-inline uint64_t sq_to_bb(uint8_t index) {
+inline uint64_t sq_to_bb(size_t index) {
     return (uint64_t)1 << index;
 }

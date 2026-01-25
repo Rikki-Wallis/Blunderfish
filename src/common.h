@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstring>
 #include <vector>
+#include <span>
 
 template<typename...Args>
 inline int print(const std::format_string<Args...>& fmt, Args&&... args) {
