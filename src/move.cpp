@@ -88,6 +88,10 @@ uint64_t bishop_moves(uint8_t from, uint64_t all_pieces, uint64_t allies) {
     return moves & (~allies);
 }
 
+uint64_t queen_moves(uint8_t from, uint64_t all_pieces, uint64_t allies) {
+    return bishop_moves(from, all_pieces, allies) | rook_moves(from, all_pieces, allies);
+}
+
 struct set_bits {
     uint64_t x;
 
@@ -150,6 +154,12 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     for (uint8_t from: set_bits(sides[to_move].bb[PIECE_BISHOP])) {
         for (uint8_t to : set_bits(bishop_moves(from, all, allies))) {
             new_move(from, to, PIECE_BISHOP, 0);
+        }
+    }
+
+    for (uint8_t from: set_bits(sides[to_move].bb[PIECE_QUEEN])) {
+        for (uint8_t to : set_bits(queen_moves(from, all, allies))) {
+            new_move(from, to, PIECE_QUEEN, 0);
         }
     }
 
