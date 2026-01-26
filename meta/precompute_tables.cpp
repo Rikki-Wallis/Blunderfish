@@ -191,6 +191,28 @@ uint64_t slide(size_t sq, uint64_t blockers, uint64_t(*translate)(uint64_t)) {
     return result;
 }
 
+uint64_t bishop_moves_at(size_t sq, uint64_t blockers) {
+    uint64_t result = 0;
+
+    result |= slide(sq, blockers, [](uint64_t x){ return (x << 7) & (~get_file(7)); }); // left up
+    result |= slide(sq, blockers, [](uint64_t x){ return (x << 9) & (~get_file(0)); }); // right up
+    result |= slide(sq, blockers, [](uint64_t x){ return (x >> 7) & (~get_file(0)); }); // right down
+    result |= slide(sq, blockers, [](uint64_t x){ return (x >> 9) & (~get_file(7)); }); // left down
+
+    return result;
+}
+
+uint64_t bishop_mask_at(size_t sq) {
+    uint64_t result = 0;
+
+    result |= slide(sq, 0, [](uint64_t x){ return (x << 7) & (~get_file(7)); }) & (~(get_file(0) | get_rank(7))); // left up
+    result |= slide(sq, 0, [](uint64_t x){ return (x << 9) & (~get_file(0)); }) & (~(get_file(7) | get_rank(7))); // right up
+    result |= slide(sq, 0, [](uint64_t x){ return (x >> 7) & (~get_file(0)); }) & (~(get_file(7) | get_rank(0))); // right down
+    result |= slide(sq, 0, [](uint64_t x){ return (x >> 9) & (~get_file(7)); }) & (~(get_file(0) | get_rank(0))); // left down
+
+    return result;
+}
+
 uint64_t rook_moves_at(size_t sq, uint64_t blockers) {
     uint64_t result = 0;
 
@@ -211,6 +233,7 @@ int main(int argc, char** argv) {
     fprint(stderr, "Pre-computing tables...\n");
 
     Tables rooks = generate_table(rook_mask_at, rook_moves_at);
+    Tables bishops = generate_table(bishop_mask_at, bishop_moves_at);
 
     const char* path = argv[1];
     FILE* file = fopen(path, "w");
@@ -224,6 +247,7 @@ int main(int argc, char** argv) {
     fprint(file, "#include <cstdint>\n\n");
 
     rooks.dump(file, "rook");
+    bishops.dump(file, "bishop");
 
     return 0;
 }

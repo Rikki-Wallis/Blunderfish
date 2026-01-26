@@ -3,6 +3,7 @@
 #include <array>
 
 #include "blunderfish.h"
+#include "../generated/generated_tables.h"
 
 static size_t select_move(const std::unordered_map<std::string, size_t>& moves) {
     for (;;) {
@@ -51,11 +52,13 @@ int main() {
         pos = pos.execute_move(m);
     }
 
-    //for (size_t i = 0; i < 64; ++i) {
-    //    Position pos = {};
-    //    pos.sides[WHITE].bb[PIECE_PAWN] = rook_masks[i];
-    //    pos.display();
-    //}
+    /*
+    for (size_t i = 0; i < 64; ++i) {
+        Position pos = {};
+        pos.sides[WHITE].bb[PIECE_PAWN] = rook_mask[i];
+        pos.display();
+    }
+    */
 
     return 0;
 }
