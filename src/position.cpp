@@ -95,9 +95,7 @@ void Position::display(bool display_metadata) const {
         }
 
         if (en_passant_sq != NULL_SQUARE) {
-            int sq = en_passant_sq;
-            int rank = sq / 8;
-            char file = (sq % 8) + 'a';
+            auto [file, rank] = square_alg(en_passant_sq);
             print("En passant possible on {}{}.\n", file, rank);
         }
     }
