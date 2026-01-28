@@ -43,32 +43,40 @@ uint64_t black_pawn_single_moves(uint8_t from, uint64_t opps, uint64_t all_piece
 }
 
 uint64_t white_pawn_double_moves(uint8_t from, uint64_t all_pieces) {
-    
     uint64_t bb = sq_to_bb(from) & RANK_2;
+
     uint64_t push  = (bb << 8) & (~all_pieces);
     uint64_t double_push = (push << 8) & (~all_pieces);
+
     return double_push;
 }
 
 uint64_t black_pawn_double_moves(uint8_t from, uint64_t all_pieces) {
-    
     uint64_t bb = sq_to_bb(from) & RANK_7;
+
     uint64_t push  = (bb >> 8) & (~all_pieces);
     uint64_t double_push = (push >> 8) & (~all_pieces);
+
     return double_push;
 }
 
 uint64_t white_pawn_enpassant_moves(uint8_t from, int enpassant_sq) {
+    uint64_t mask = enpassant_sq == NULL_SQUARE ? 0 : sq_to_bb(enpassant_sq);
     uint64_t bb = sq_to_bb(from);
-    uint64_t left_capture = (bb >> 9) & sq_to_bb(enpassant_sq) & (~FILE_A);
-    uint64_t right_capture = (bb >> 7) & sq_to_bb(enpassant_sq) & (~FILE_H);
+
+    uint64_t left_capture  = (bb << 7) & (~FILE_H) & mask;
+    uint64_t right_capture = (bb << 9) & (~FILE_A) & mask;
+
     return left_capture | right_capture;
 }
 
 uint64_t black_pawn_enpassant_moves(uint8_t from, int enpassant_sq) {
+    uint64_t mask = enpassant_sq == NULL_SQUARE ? 0 : sq_to_bb(enpassant_sq);
     uint64_t bb = sq_to_bb(from);
-    uint64_t left_capture = (bb << 9) & sq_to_bb(enpassant_sq) & (~FILE_H);
-    uint64_t right_capture = (bb << 7) & sq_to_bb(enpassant_sq) & (~FILE_A);
+
+    uint64_t left_capture  = (bb >> 9) & (~FILE_H) & mask;
+    uint64_t right_capture = (bb >> 7) & (~FILE_A) & mask;
+
     return left_capture | right_capture;
 }
 
@@ -175,8 +183,8 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
         }
     }
 
-    auto pawn_single_moves = to_move == WHITE ? white_pawn_single_moves : black_pawn_single_moves;
-    auto pawn_double_moves = to_move == WHITE ? white_pawn_double_moves : black_pawn_double_moves;
+    auto pawn_single_moves    = to_move == WHITE ? white_pawn_single_moves : black_pawn_single_moves;
+    auto pawn_double_moves    = to_move == WHITE ? white_pawn_double_moves : black_pawn_double_moves;
     auto pawn_enpassant_moves = to_move == WHITE ? white_pawn_enpassant_moves : black_pawn_enpassant_moves;
     auto pawn_promotion_moves = to_move == WHITE ? white_pawn_promotion_moves : black_pawn_promotion_moves;
 
@@ -186,11 +194,11 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
         }
 
         for (uint8_t to : set_bits(pawn_double_moves(from, all))) {
-            new_move(from, to, PIECE_PAWN, 0);
+            new_move(from, to, PIECE_PAWN, MOVE_FLAG_DOUBLE_PUSH);
         }
 
         for (uint8_t to : set_bits(pawn_enpassant_moves(from, en_passant_sq))) {
-            new_move(from, to, PIECE_PAWN, FLAG_ENPASSANT);
+            new_move(from, to, PIECE_PAWN, MOVE_FLAG_ENPASSANT);
         }
 
         for (uint8_t to : set_bits(pawn_promotion_moves(from, all))) {
@@ -216,7 +224,7 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
 
             auto [f1, r1] = square_alg(m.from);
 
-            bool is_capture = piece_at[m.to] != PIECE_NONE;
+            bool is_capture = (piece_at[m.to] != PIECE_NONE) || (m.flags & MOVE_FLAG_ENPASSANT);
 
             bool need_file = m.piece == PIECE_PAWN && is_capture;
             bool need_rank = false;
@@ -266,28 +274,34 @@ Position Position::execute_move(const Move& move) const {
     next.sides[to_move].bb[move.piece] &= ~sq_to_bb(move.from);
     next.sides[to_move].bb[move.piece] |= sq_to_bb(move.to);
     
-    Piece captured = (Piece)next.piece_at[move.to]; 
+    int captured_pos;
 
-    if (captured != PIECE_NONE) {
-        next.sides[opponent(to_move)].bb[captured] &= ~sq_to_bb(move.to);
+    if (move.flags & MOVE_FLAG_ENPASSANT) {
+        int offsets[] = { -8, 8 };
+        captured_pos = move.to + offsets[to_move];
+    }
+    else {
+        captured_pos = move.to; 
+    }
+
+    Piece captured_piece = (Piece)next.piece_at[captured_pos];
+
+    if (captured_piece != PIECE_NONE) {
+        next.sides[opponent(to_move)].bb[captured_piece] &= ~sq_to_bb(captured_pos);
+        next.piece_at[captured_pos] = PIECE_NONE;
     }
 
     next.piece_at[move.from] = PIECE_NONE;
-    next.piece_at[move.to] = move.piece;
+    next.piece_at[move.to] = move.piece; // make sure this happens AFTER we set the state of the captured piece because they could be on the same square
     
     if (move.piece == PIECE_KING) {
         next.sides[to_move].set_can_castle_kingside(false);
         next.sides[to_move].set_can_castle_queenside(false);
     }
 
-    if (move.flags & FLAG_DOUBLE_PUSH ) {
-        if (to_move == WHITE) {
-            next.en_passant_sq = move.to - 8; 
-        }
-        else {
-            next.en_passant_sq = move.to - 8;
-        }
-        
+    if (move.flags & MOVE_FLAG_DOUBLE_PUSH ) {
+        int offsets[] = { -8, 8 };
+        next.en_passant_sq = move.to + offsets[to_move];
     }
 
     if (move.flags & FLAG_PROMOTION) {

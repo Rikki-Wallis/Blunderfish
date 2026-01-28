@@ -30,7 +30,7 @@ int main() {
     Position pos = *maybe_pos;
 
     for (;;) {
-        pos.display();
+        pos.display(true);
 
         std::array<Move, 256> move_buffer;
         std::span<Move> moves = pos.generate_moves(move_buffer);
