@@ -25,7 +25,7 @@ static uint64_t king_moves(uint8_t from, uint64_t allies) {
 uint64_t white_pawn_single_moves(uint8_t from, uint64_t opps, uint64_t all_pieces) {
     uint64_t bb = sq_to_bb(from);
 
-    uint64_t push  = (bb << 8) & (~all_pieces);
+    uint64_t push  = (bb << 8) & (~all_pieces) & (~RANK_1);
     uint64_t left  = (bb << 7) & (~FILE_H) & opps;
     uint64_t right = (bb << 9) & (~FILE_A) & opps;
 
@@ -35,7 +35,7 @@ uint64_t white_pawn_single_moves(uint8_t from, uint64_t opps, uint64_t all_piece
 uint64_t black_pawn_single_moves(uint8_t from, uint64_t opps, uint64_t all_pieces) {
     uint64_t bb = sq_to_bb(from);
 
-    uint64_t push  = (bb >> 8) & (~all_pieces);
+    uint64_t push  = (bb >> 8) & (~all_pieces) & (~RANK_8);
     uint64_t left  = (bb >> 9) & (~FILE_H) & opps;
     uint64_t right = (bb >> 7) & (~FILE_A) & opps;
 
@@ -72,6 +72,17 @@ uint64_t black_pawn_enpassant_moves(uint8_t from, int enpassant_sq) {
     return left_capture | right_capture;
 }
 
+uint64_t white_pawn_promotion_moves(uint8_t from, uint64_t all_pieces) {
+    uint64_t bb = sq_to_bb(from);
+    return (bb >> 8) & (~all_pieces) & RANK_1;
+}
+
+uint64_t black_pawn_promotion_moves(uint8_t from, uint64_t all_pieces) {
+    uint64_t bb = sq_to_bb(from);
+    return (bb << 8) & (~all_pieces) & RANK_8;
+}
+
+// Magic Bitboards
 static size_t magic_index(uint64_t all_pieces, uint64_t mask, uint64_t magic, size_t shift) {
     return ((all_pieces & mask) * magic) >> shift;
 }
@@ -91,6 +102,7 @@ uint64_t bishop_moves(uint8_t from, uint64_t all_pieces, uint64_t allies) {
 uint64_t queen_moves(uint8_t from, uint64_t all_pieces, uint64_t allies) {
     return bishop_moves(from, all_pieces, allies) | rook_moves(from, all_pieces, allies);
 }
+
 
 struct set_bits {
     uint64_t x;
@@ -166,6 +178,7 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     auto pawn_single_moves = to_move == WHITE ? white_pawn_single_moves : black_pawn_single_moves;
     auto pawn_double_moves = to_move == WHITE ? white_pawn_double_moves : black_pawn_double_moves;
     auto pawn_enpassant_moves = to_move == WHITE ? white_pawn_enpassant_moves : black_pawn_enpassant_moves;
+    auto pawn_promotion_moves = to_move == WHITE ? white_pawn_promotion_moves : black_pawn_promotion_moves;
 
     for (uint8_t from : set_bits(sides[to_move].bb[PIECE_PAWN])) {
         for (uint8_t to : set_bits(pawn_single_moves(from, opps, all))) {
@@ -179,9 +192,11 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
         for (uint8_t to : set_bits(pawn_enpassant_moves(from, en_passant_sq))) {
             new_move(from, to, PIECE_PAWN, FLAG_ENPASSANT);
         }
-    }
 
-    // Enpassant
+        for (uint8_t to : set_bits(pawn_promotion_moves(from, all))) {
+            new_move(from, to, PIECE_PAWN, FLAG_PROMOTION);
+        }
+    }
 
     return move_buf.subspan(0, move_count);
 }
@@ -273,6 +288,10 @@ Position Position::execute_move(const Move& move) const {
             next.en_passant_sq = move.to - 8;
         }
         
+    }
+
+    if (move.flags & FLAG_PROMOTION) {
+        // TODO: this
     }
 
     return next;

@@ -15,7 +15,7 @@ def index():
     for rank in range(0, 8):
         for file in range(0, 8):
             is_light = (rank + file) % 2 == 0
-            file_idx = rank + file
+            file_idx = rank*8 + file
             squares.append({
                 "name": file_idx,
                 "color": "light" if is_light else "dark"
