@@ -267,3 +267,8 @@ std::optional<Position> Position::decode_fen_string(const std::string& fen) {
 uint64_t Position::all_pieces() const {
     return sides[0].all() | sides[1].all();
 }
+
+std::vector<Side> Position::get_sides() const {
+    return std::vector<Side>(sides, sides + 2);
+}
+

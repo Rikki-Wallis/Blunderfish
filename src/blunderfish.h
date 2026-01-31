@@ -95,6 +95,8 @@ struct Position {
     uint64_t all_pieces() const;
 
     Position execute_move(const Move& move) const;
+
+    std::vector<Side> get_sides() const;  
 };
 
 inline std::pair<char, int> square_alg(size_t sq) {
