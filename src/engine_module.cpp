@@ -10,7 +10,8 @@ PYBIND11_MODULE(engine, m) {
     py::class_<Side>(m, "Side")
     .def(py::init<>())
     .def("can_castle_kingside", &Side::can_castle_kingside)
-    .def("can_castle_queenside", &Side::can_castle_queenside);
+    .def("can_castle_queenside", &Side::can_castle_queenside)
+    .def_property_readonly("bb", &Side::get_bbs);
 
     py::class_<Position>(m, "Position")
     .def(py::init<>())

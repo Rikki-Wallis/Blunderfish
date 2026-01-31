@@ -272,3 +272,7 @@ std::vector<Side> Position::get_sides() const {
     return std::vector<Side>(sides, sides + 2);
 }
 
+std::vector<uint64_t> Side::get_bbs() const {
+    return std::vector<uint64_t>(bb, bb + NUM_PIECE_TYPES);
+}
+

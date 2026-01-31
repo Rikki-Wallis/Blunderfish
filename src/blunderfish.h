@@ -75,6 +75,8 @@ struct Side {
     bool can_castle_queenside() const;
 
     uint64_t all() const;
+
+    std::vector<uint64_t> get_bbs() const; 
 };
 
 static constexpr int NULL_SQUARE = 0xffffffff;

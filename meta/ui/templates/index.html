@@ -26,6 +26,8 @@
             {% for square in squares %}
             <div class="square {{ square.color }}"
                 data-square="{{ square.name }}">
+
+                <img src="{{ url_for('static', filename='img/' + square.piece) }}" class="piece">
             </div>
             {% endfor %}
         </div>
