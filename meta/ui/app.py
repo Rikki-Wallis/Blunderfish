@@ -26,9 +26,11 @@ def index():
             squares.append({
                 "name": file_idx,
                 "color": "light" if is_light else "dark",
-                "piece": PIECE_PNG_TABLE[colour][piece]
+                "piece": None
             })
-            
+        
+    helper.render_pieces(position, squares)
+    
     return render_template("index.html", squares=squares)
 
 @app.route("/data")
