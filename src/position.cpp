@@ -276,3 +276,13 @@ std::vector<uint64_t> Side::get_bbs() const {
     return std::vector<uint64_t>(bb, bb + NUM_PIECE_TYPES);
 }
 
+bool Position::is_in_check(uint8_t colour) const {
+    uint64_t king_bb = sides[colour].bb[PIECE_KING];
+    uint8_t opp_colour = colour == WHITE ? BLACK : WHITE;
+
+    if (generate_attacks(opp_colour) & king_bb) {
+        return true;
+    }
+    
+    return false;
+}

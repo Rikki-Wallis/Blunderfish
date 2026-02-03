@@ -42,6 +42,18 @@ uint64_t black_pawn_single_moves(uint8_t from, uint64_t opps, uint64_t all_piece
     return push | left | right;
 }
 
+uint64_t white_pawn_attacks(uint64_t pawns_bb) {
+    uint64_t left  = (pawns_bb << 7) & (~FILE_H);
+    uint64_t right = (pawns_bb << 9) & (~FILE_A);
+    return left | right;
+}
+
+uint64_t black_pawn_attacks(uint64_t pawns_bb) {
+    uint64_t left  = (pawns_bb >> 9) & (~FILE_H);
+    uint64_t right = (pawns_bb >> 7) & (~FILE_A);
+    return left | right;
+}
+
 uint64_t white_pawn_double_moves(uint8_t from, uint64_t all_pieces) {
     uint64_t bb = sq_to_bb(from) & RANK_2;
 
@@ -131,6 +143,40 @@ struct set_bits {
     std::default_sentinel_t end() const { return {}; }
 };
 
+uint64_t Position::generate_attacks(uint8_t colour) const {
+    uint64_t allies = sides[colour].all();
+    uint64_t attacks = 0;
+
+    for (uint8_t from : set_bits(sides[colour].bb[PIECE_KING])) {
+        for (uint8_t to : set_bits(king_moves(from, allies))) {
+            attacks = attacks | to;
+        }
+    }
+
+    for (uint8_t from: set_bits(sides[colour].bb[PIECE_ROOK])) {
+        for (uint8_t to : set_bits(rook_moves(from, all, allies))) {
+            attacks = attacks | to;
+        }
+    }
+
+    for (uint8_t from: set_bits(sides[colour].bb[PIECE_BISHOP])) {
+        for (uint8_t to : set_bits(bishop_moves(from, all, allies))) {
+            attacks = attacks | to;
+        }
+    }
+
+    for (uint8_t from: set_bits(sides[colour].bb[PIECE_QUEEN])) {
+        for (uint8_t to : set_bits(queen_moves(from, all, allies))) {
+            attacks = attacks | to;
+        }
+    }
+
+    auto pawn_attacks = colour == WHITE ? white_pawn_attacks : black_pawn_attacks;
+    attacks = attacks | pawn_attacks(sides[colour].bb[PIECE_PAWN]);
+
+    return attacks;
+}
+
 std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     size_t move_count = 0;
 
@@ -195,10 +241,6 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
 
         for (uint8_t to : set_bits(pawn_enpassant_moves(from, en_passant_sq))) {
             new_move(from, to, PIECE_PAWN, MOVE_FLAG_ENPASSANT);
-        }
-
-        for (uint8_t to : set_bits(pawn_promotion_moves(from, all))) {
-            new_move(from, to, PIECE_PAWN, FLAG_PROMOTION);
         }
     }
 

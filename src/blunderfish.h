@@ -91,6 +91,8 @@ struct Position {
     static std::optional<Position> decode_fen_string(const std::string& fen);
 
     std::span<Move> generate_moves(std::span<Move> move_buf) const;
+    
+    uint64_t generate_attacks(uint8_t colour) const;
 
     std::unordered_map<std::string, size_t> name_moves(std::span<Move> moves) const;
 
@@ -99,6 +101,8 @@ struct Position {
     Position execute_move(const Move& move) const;
 
     std::vector<Side> get_sides() const;  
+
+    bool is_in_check(uint8_t colour) const;
 };
 
 inline std::pair<char, int> square_alg(size_t sq) {
