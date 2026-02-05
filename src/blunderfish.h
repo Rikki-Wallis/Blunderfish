@@ -23,7 +23,7 @@ static constexpr uint64_t FILE_F = 0x2020202020202020;
 static constexpr uint64_t FILE_G = 0x4040404040404040;
 static constexpr uint64_t FILE_H = 0x8080808080808080;
 
-enum {
+enum Colour : uint8_t{
     WHITE,
     BLACK
 };
@@ -44,7 +44,11 @@ enum MoveFlags {
     FLAG_ENPASSANT = (1 << 0),
     FLAG_DOUBLE_PUSH = (1 << 1),
     FLAG_CAPUTRE = (1 << 2),
-    FLAG_PROMOTION = (1 << 3)
+    FLAG_PROMOTION = (1 << 3),
+    FLAG_PROMOTION_BISHOP = (1 << 4),
+    FLAG_PROMOTION_ROOK = (1 << 5),
+    FLAG_PROMOTION_QUEEN = (1 << 6),
+    FLAG_PROMOTION_KNIGHT = (1 << 7)
 };
 
 static const char* piece_alg_table[NUM_PIECE_TYPES] = {

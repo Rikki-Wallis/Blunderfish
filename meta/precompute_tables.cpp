@@ -9,7 +9,7 @@
 #include <limits>
 
 size_t get_index(uint64_t perm, uint64_t magic, size_t shift) {
-    return (perm * magic) >> shift;
+    return static_cast<size_t>((perm * magic) >> shift);
 }
 
 template<typename...Args>
@@ -118,7 +118,7 @@ static Tables generate_table(uint64_t(*mask_at)(size_t), uint64_t(*moves_at)(siz
 
         uint64_t magic = find_magic_number(mask, shift);
 
-        table.moves[sq].resize(1 << bits);
+        table.moves[sq].resize(1ULL << bits);
         
         uint64_t perm = mask;
         
@@ -236,7 +236,11 @@ int main(int argc, char** argv) {
     Tables bishops = generate_table(bishop_mask_at, bishop_moves_at);
 
     const char* path = argv[1];
-    FILE* file = fopen(path, "w");
+    FILE* file = nullptr;
+    if (fopen_s(&file, path, "w") != 0) {
+        fprintf(stderr, "Failed to open file: %s\n", path);
+        return 1;
+    }
 
     if (!file) {
         fprint(stderr, "Failed to write %s\n", path);

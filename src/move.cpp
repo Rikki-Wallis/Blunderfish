@@ -95,7 +95,7 @@ uint64_t black_pawn_enpassant_moves(uint8_t from, int enpassant_sq) {
 
 // Magic Bitboards
 static size_t magic_index(uint64_t all_pieces, uint64_t mask, uint64_t magic, size_t shift) {
-    return ((all_pieces & mask) * magic) >> shift;
+    return static_cast<size_t>(((all_pieces & mask) * magic) >> shift);
 }
 
 uint64_t rook_moves(uint8_t from, uint64_t all_pieces, uint64_t allies) {
@@ -144,6 +144,7 @@ struct set_bits {
 };
 
 uint64_t Position::generate_attacks(uint8_t colour) const {
+    uint64_t all = all_pieces();
     uint64_t allies = sides[colour].all();
     uint64_t attacks = 0;
 
@@ -222,13 +223,17 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
 
     auto pawn_single_moves    = to_move == WHITE ? white_pawn_single_moves : black_pawn_single_moves;
     auto pawn_double_moves    = to_move == WHITE ? white_pawn_double_moves : black_pawn_double_moves;
-    int promotion_rank        = to_move == WHITE ? RANK_8 : RANK_1;
+    auto pawn_enpassant_moves = to_move == WHITE ? white_pawn_enpassant_moves : black_pawn_enpassant_moves;
+    auto promotion_rank        = to_move == WHITE ? RANK_8 : RANK_1;
 
     for (uint8_t from : set_bits(sides[to_move].bb[PIECE_PAWN])) {
         for (uint8_t to : set_bits(pawn_single_moves(from, opps, all))) {
             
-            if (to & promotion_rank) {
-                new_move(from, to, PIECE_PAWN, FLAG_PROMOTION);
+            if (sq_to_bb(to) & promotion_rank) {
+                new_move(from, to, PIECE_PAWN, FLAG_PROMOTION | FLAG_PROMOTION_KNIGHT);
+                new_move(from, to, PIECE_PAWN, FLAG_PROMOTION | FLAG_PROMOTION_BISHOP);
+                new_move(from, to, PIECE_PAWN, FLAG_PROMOTION | FLAG_PROMOTION_ROOK);
+                new_move(from, to, PIECE_PAWN, FLAG_PROMOTION | FLAG_PROMOTION_QUEEN);
             } 
             else {
                 new_move(from, to, PIECE_PAWN, 0);
@@ -236,11 +241,11 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
         }
 
         for (uint8_t to : set_bits(pawn_double_moves(from, all))) {
-            new_move(from, to, PIECE_PAWN, MOVE_FLAG_DOUBLE_PUSH);
+            new_move(from, to, PIECE_PAWN, FLAG_DOUBLE_PUSH);
         }
 
         for (uint8_t to : set_bits(pawn_enpassant_moves(from, en_passant_sq))) {
-            new_move(from, to, PIECE_PAWN, MOVE_FLAG_ENPASSANT);
+            new_move(from, to, PIECE_PAWN, FLAG_ENPASSANT);
         }
     }
 
@@ -262,8 +267,8 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
 
             auto [f1, r1] = square_alg(m.from);
 
-            bool is_capture = (piece_at[m.to] != PIECE_NONE) || (m.flags & MOVE_FLAG_ENPASSANT);
-
+            bool is_capture = (piece_at[m.to] != PIECE_NONE) || (m.flags & FLAG_ENPASSANT);
+            bool is_promotion = (m.flags & FLAG_PROMOTION);
             bool need_file = m.piece == PIECE_PAWN && is_capture;
             bool need_rank = false;
 
@@ -290,11 +295,23 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
 
             auto [to_file, to_rank] = square_alg(m.to);
 
+            std::string promotion_str = "";
+            if (is_promotion) {
+                if (m.flags & FLAG_PROMOTION_KNIGHT) {
+                    promotion_str = "=N";
+                } else if (m.flags & FLAG_PROMOTION_BISHOP) {
+                    promotion_str = "=B";
+                } else if (m.flags & FLAG_PROMOTION_ROOK) {
+                    promotion_str = "=R";
+                } else if (m.flags & FLAG_PROMOTION_QUEEN) {
+                    promotion_str = "=Q";
+                }
+            }
             std::string capture_str = is_capture ? "x" : "";
             std::string unambig_file = need_file ? std::format("{}", f1) : "";
             std::string unambig_rank = need_rank ? std::format("{}", r1) : "";
 
-            std::string name = std::format("{}{}{}{}{}{}", piece_alg_table[m.piece], unambig_file, unambig_rank, capture_str, to_file, to_rank);
+            std::string name = std::format("{}{}{}{}{}{}{}", piece_alg_table[m.piece], unambig_file, unambig_rank, capture_str, to_file, to_rank, promotion_str);
 
             lookup.emplace(std::move(name), moves[i]);
         } 
@@ -314,7 +331,7 @@ Position Position::execute_move(const Move& move) const {
     
     int captured_pos;
 
-    if (move.flags & MOVE_FLAG_ENPASSANT) {
+    if (move.flags & FLAG_ENPASSANT) {
         int offsets[] = { -8, 8 };
         captured_pos = move.to + offsets[to_move];
     }
@@ -337,13 +354,25 @@ Position Position::execute_move(const Move& move) const {
         next.sides[to_move].set_can_castle_queenside(false);
     }
 
-    if (move.flags & MOVE_FLAG_DOUBLE_PUSH ) {
+    if (move.flags & FLAG_DOUBLE_PUSH ) {
         int offsets[] = { -8, 8 };
         next.en_passant_sq = move.to + offsets[to_move];
     }
 
     if (move.flags & FLAG_PROMOTION) {
-        // TODO: this
+        uint8_t piece = 0;
+        if (move.flags & FLAG_PROMOTION_KNIGHT) {
+            piece = PIECE_KNIGHT;
+        } else if (move.flags & FLAG_PROMOTION_BISHOP) {
+            piece = PIECE_BISHOP;
+        } else if (move.flags & FLAG_PROMOTION_ROOK) {
+            piece = PIECE_ROOK;
+        } else {
+            piece = PIECE_QUEEN;
+        }
+
+        next.sides[to_move].bb[PIECE_PAWN] &= ~(1ULL << move.to);
+        next.sides[to_move].bb[piece] |= (1ULL << move.to);
     }
 
     return next;
