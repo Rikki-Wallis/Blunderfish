@@ -21,6 +21,22 @@ static uint64_t king_moves(uint8_t from, uint64_t allies) {
     return m & (~allies);
 }
 
+// Knights
+static uint64_t knight_moves(uint8_t from, uint64_t allies) {
+    uint64_t bb = sq_to_bb(from);
+
+    uint64_t ul = (bb >> 17) & ~FILE_H;
+    uint64_t ur = (bb >> 15) & ~FILE_A; 
+    uint64_t lu = (bb >> 10) & ~(FILE_H | FILE_G); 
+    uint64_t ru = (bb >> 6)  & ~(FILE_A | FILE_B); 
+    uint64_t dl = (bb << 17) & ~FILE_A; 
+    uint64_t dr = (bb << 15) & ~FILE_H; 
+    uint64_t ld = (bb << 10) & ~(FILE_A | FILE_B); 
+    uint64_t rd = (bb << 6)  & ~(FILE_H | FILE_G); 
+
+    return (ul | ur | lu | ru | dl | dr | ld | rd) & ~(allies);
+}
+
 // Pawns
 uint64_t white_pawn_single_moves(uint8_t from, uint64_t opps, uint64_t all_pieces) {
     uint64_t bb = sq_to_bb(from);
@@ -143,6 +159,7 @@ struct set_bits {
     std::default_sentinel_t end() const { return {}; }
 };
 
+// TODO: Maybe change later to use moves instead of seperate attack function
 uint64_t Position::generate_attacks(uint8_t colour) const {
     uint64_t all = all_pieces();
     uint64_t allies = sides[colour].all();
@@ -150,6 +167,10 @@ uint64_t Position::generate_attacks(uint8_t colour) const {
 
     for (uint8_t from : set_bits(sides[colour].bb[PIECE_KING])) {
         attacks |= king_moves(from, allies);
+    }
+
+    for (uint8_t from : set_bits(sides[colour].bb[PIECE_KNIGHT])) {
+        attacks |= knight_moves(from, allies);
     }
 
     for (uint8_t from: set_bits(sides[colour].bb[PIECE_ROOK])) {
@@ -192,6 +213,12 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KING])) {
         for (uint8_t to : set_bits(king_moves(from, allies))) {
             new_move(from, to, PIECE_KING, 0);
+        }
+    }
+
+    for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KNIGHT])) {
+        for (uint8_t to : set_bits(knight_moves(from, allies))) {
+            new_move(from, to, PIECE_KNIGHT, 0);
         }
     }
 
