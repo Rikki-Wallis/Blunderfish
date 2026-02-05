@@ -149,31 +149,23 @@ uint64_t Position::generate_attacks(uint8_t colour) const {
     uint64_t attacks = 0;
 
     for (uint8_t from : set_bits(sides[colour].bb[PIECE_KING])) {
-        for (uint8_t to : set_bits(king_moves(from, allies))) {
-            attacks = attacks | to;
-        }
+        attacks |= king_moves(from, allies);
     }
 
     for (uint8_t from: set_bits(sides[colour].bb[PIECE_ROOK])) {
-        for (uint8_t to : set_bits(rook_moves(from, all, allies))) {
-            attacks = attacks | to;
-        }
+        attacks |= rook_moves(from, all, allies);
     }
 
     for (uint8_t from: set_bits(sides[colour].bb[PIECE_BISHOP])) {
-        for (uint8_t to : set_bits(bishop_moves(from, all, allies))) {
-            attacks = attacks | to;
-        }
+        attacks |= bishop_moves(from, all, allies);
     }
 
     for (uint8_t from: set_bits(sides[colour].bb[PIECE_QUEEN])) {
-        for (uint8_t to : set_bits(queen_moves(from, all, allies))) {
-            attacks = attacks | to;
-        }
+        attacks |= queen_moves(from, all, allies);
     }
 
     auto pawn_attacks = colour == WHITE ? white_pawn_attacks : black_pawn_attacks;
-    attacks = attacks | pawn_attacks(sides[colour].bb[PIECE_PAWN]);
+    attacks |= pawn_attacks(sides[colour].bb[PIECE_PAWN]);
 
     return attacks;
 }
