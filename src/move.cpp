@@ -371,6 +371,18 @@ Position Position::execute_move(const Move& move) const {
     if (move.piece == PIECE_KING) {
         next.sides[to_move].set_can_castle_kingside(false);
         next.sides[to_move].set_can_castle_queenside(false);
+    
+    } else if (move.piece == PIECE_ROOK) {
+            
+        uint8_t kingside_rook_pos = to_move == WHITE ? 7 : 63;
+        uint8_t queenside_rook_pos = to_move == WHITE ? 0 : 56;
+
+        if (kingside_rook_pos == move.from) {
+            next.sides[to_move].set_can_castle_kingside(false);
+        } else if (queenside_rook_pos == move.from) {
+            next.sides[to_move].set_can_castle_queenside(false);
+        }
+
     }
 
     if (move.flags & FLAG_DOUBLE_PUSH ) {
