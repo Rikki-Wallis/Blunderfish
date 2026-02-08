@@ -194,7 +194,7 @@ uint64_t Position::generate_attacks(uint8_t colour) const {
 std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     size_t move_count = 0;
 
-    auto new_move = [&](uint8_t from, uint8_t to, uint8_t piece, uint8_t flags) {
+    auto new_move = [&](uint8_t from, uint8_t to, uint8_t piece, uint16_t flags) {
         assert("move buffer overflow" && move_count < move_buf.size());
 
         move_buf[move_count++] = Move {
@@ -213,6 +213,25 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KING])) {
         for (uint8_t to : set_bits(king_moves(from, allies))) {
             new_move(from, to, PIECE_KING, 0);
+        }
+    }
+
+    // Castling
+    if (sides[to_move].can_castle_kingside()) {
+        uint64_t castle_space = to_move == WHITE ? WHITE_SHORT_SPACING : BLACK_SHORT_SPACING;
+        uint8_t from = to_move == WHITE ? 4 : 60;
+        uint8_t to   = to_move == WHITE ? 6 : 62;
+        if (!(castle_space & all)) {
+            new_move(from, to, PIECE_KING, FLAG_SHORT_CASTLE);
+        }
+    }
+
+    if (sides[to_move].can_castle_queenside()) {
+        uint64_t castle_space = to_move == WHITE ? WHITE_LONG_SPACING : BLACK_LONG_SPACING;
+        uint8_t from = to_move == WHITE ? 4 : 60;
+        uint8_t to   = to_move == WHITE ? 2 : 58;
+        if (!(castle_space & all)) {
+            new_move(from, to, PIECE_KING, FLAG_LONG_CASTLE);
         }
     }
 
@@ -330,7 +349,14 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
             std::string unambig_file = need_file ? std::format("{}", f1) : "";
             std::string unambig_rank = need_rank ? std::format("{}", r1) : "";
 
-            std::string name = std::format("{}{}{}{}{}{}{}", piece_alg_table[m.piece], unambig_file, unambig_rank, capture_str, to_file, to_rank, promotion_str);
+            std::string name = "";
+            if (m.flags & FLAG_SHORT_CASTLE) {
+                name = "O-O";
+            } else if (m.flags & FLAG_LONG_CASTLE) {
+                name = "O-O-O";
+            } else {
+                name = std::format("{}{}{}{}{}{}{}", piece_alg_table[m.piece], unambig_file, unambig_rank, capture_str, to_file, to_rank, promotion_str);
+            }
 
             lookup.emplace(std::move(name), moves[i]);
         } 
@@ -373,7 +399,7 @@ Position Position::execute_move(const Move& move) const {
         next.sides[to_move].set_can_castle_queenside(false);
     
     } else if (move.piece == PIECE_ROOK) {
-            
+
         uint8_t kingside_rook_pos = to_move == WHITE ? 7 : 63;
         uint8_t queenside_rook_pos = to_move == WHITE ? 0 : 56;
 
@@ -388,9 +414,8 @@ Position Position::execute_move(const Move& move) const {
     if (move.flags & FLAG_DOUBLE_PUSH ) {
         int offsets[] = { -8, 8 };
         next.en_passant_sq = move.to + offsets[to_move];
-    }
-
-    if (move.flags & FLAG_PROMOTION) {
+    
+    } else if (move.flags & FLAG_PROMOTION) {
         uint8_t piece = 0;
         if (move.flags & FLAG_PROMOTION_KNIGHT) {
             piece = PIECE_KNIGHT;
@@ -404,6 +429,22 @@ Position Position::execute_move(const Move& move) const {
 
         next.sides[to_move].bb[PIECE_PAWN] &= ~(1ULL << move.to);
         next.sides[to_move].bb[piece] |= (1ULL << move.to);
+
+    } else if (move.flags & FLAG_SHORT_CASTLE) {
+        uint8_t old_rook_pos = to_move == WHITE ? 7 : 63;
+        uint8_t new_rook_pos = to_move == WHITE ? 5 : 61;
+
+        next.sides[to_move].bb[PIECE_ROOK] &= ~(1ULL << old_rook_pos);
+        next.sides[to_move].bb[PIECE_ROOK] |= (1ULL << new_rook_pos);
+        next.piece_at[old_rook_pos] = PIECE_NONE;
+    
+    } else if (move.flags & FLAG_LONG_CASTLE) {
+        uint8_t old_rook_pos = to_move == WHITE ? 0 : 56;
+        uint8_t new_rook_pos = to_move == WHITE ? 3 : 59;
+
+        next.sides[to_move].bb[PIECE_ROOK] &= ~(1ULL << old_rook_pos);
+        next.sides[to_move].bb[PIECE_ROOK] |= (1ULL << new_rook_pos);
+        next.piece_at[old_rook_pos] = PIECE_NONE;
     }
 
     return next;

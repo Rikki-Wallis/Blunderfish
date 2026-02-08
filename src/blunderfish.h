@@ -23,6 +23,11 @@ static constexpr uint64_t FILE_F = 0x2020202020202020;
 static constexpr uint64_t FILE_G = 0x4040404040404040;
 static constexpr uint64_t FILE_H = 0x8080808080808080;
 
+static constexpr uint64_t WHITE_SHORT_SPACING = (FILE_F | FILE_G) & RANK_1;
+static constexpr uint64_t WHITE_LONG_SPACING  = (FILE_B | FILE_C | FILE_D) & RANK_1;
+static constexpr uint64_t BLACK_SHORT_SPACING = (FILE_F | FILE_G) & RANK_8;
+static constexpr uint64_t BLACK_LONG_SPACING  = (FILE_B | FILE_C | FILE_D) & RANK_8;
+
 enum Colour : uint8_t{
     WHITE,
     BLACK
@@ -48,7 +53,9 @@ enum MoveFlags {
     FLAG_PROMOTION_BISHOP = (1 << 4),
     FLAG_PROMOTION_ROOK = (1 << 5),
     FLAG_PROMOTION_QUEEN = (1 << 6),
-    FLAG_PROMOTION_KNIGHT = (1 << 7)
+    FLAG_PROMOTION_KNIGHT = (1 << 7),
+    FLAG_SHORT_CASTLE = (1 << 8),
+    FLAG_LONG_CASTLE = (1 << 9)
 };
 
 static const char* piece_alg_table[NUM_PIECE_TYPES] = {
@@ -65,7 +72,7 @@ struct Move {
     uint8_t from;
     uint8_t to;
     uint8_t piece;
-    uint8_t flags;
+    uint16_t flags;
 };
 
 struct Side {
