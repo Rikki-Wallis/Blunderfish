@@ -28,7 +28,7 @@ static constexpr uint64_t WHITE_LONG_SPACING  = (FILE_B | FILE_C | FILE_D) & RAN
 static constexpr uint64_t BLACK_SHORT_SPACING = (FILE_F | FILE_G) & RANK_8;
 static constexpr uint64_t BLACK_LONG_SPACING  = (FILE_B | FILE_C | FILE_D) & RANK_8;
 
-enum Colour : uint8_t{
+enum Colour : uint8_t {
     WHITE,
     BLACK
 };
@@ -114,6 +114,8 @@ struct Position {
     std::vector<Side> get_sides() const;  
 
     bool is_in_check(uint8_t colour) const;
+
+    void filter_moves(std::span<Move>& moves) const; 
 };
 
 inline std::pair<char, int> square_alg(size_t sq) {

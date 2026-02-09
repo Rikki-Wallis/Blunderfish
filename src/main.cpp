@@ -34,6 +34,7 @@ int main() {
 
         std::array<Move, 256> move_buffer;
         std::span<Move> moves = pos.generate_moves(move_buffer);
+        pos.filter_moves(moves);
         std::unordered_map<std::string, size_t> move_names = pos.name_moves(moves); 
 
         int count = 0;

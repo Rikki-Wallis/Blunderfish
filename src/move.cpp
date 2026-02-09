@@ -290,6 +290,44 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     return move_buf.subspan(0, move_count);
 }
 
+void Position::filter_moves(std::span<Move>& moves) const {
+    size_t i = 0;
+
+    while (i < moves.size()) {
+        Move& m = moves[i];
+
+        Position next = execute_move(m);
+        if (next.is_in_check(static_cast<uint8_t>(to_move))) {
+            // swap with last and pop
+            moves[i] = moves.back();
+            moves = moves.first(moves.size() - 1);
+        
+        // Make sure cant move through check when castling
+        } else if (m.flags & (FLAG_SHORT_CASTLE | FLAG_LONG_CASTLE)) {
+            
+            uint8_t opp_colour = to_move == WHITE ? BLACK : WHITE;
+            uint64_t possible_check_pos = 0;
+
+            if (m.flags & FLAG_SHORT_CASTLE) {
+                possible_check_pos = to_move == WHITE ? WHITE_SHORT_SPACING : BLACK_SHORT_SPACING;
+            } else {
+                possible_check_pos = to_move == WHITE ? WHITE_LONG_SPACING : BLACK_LONG_SPACING;
+            }
+
+            if (possible_check_pos & generate_attacks(opp_colour)) {
+                // swap with last and pop
+                moves[i] = moves.back();
+                moves = moves.first(moves.size() - 1);
+            } else {
+                ++i;
+            }            
+
+        } else {
+            ++i;
+        }
+    }
+}
+
 std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all) const {
     std::vector<size_t> board[64];
 
