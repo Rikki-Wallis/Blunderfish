@@ -1,12 +1,30 @@
 #include <cstdint>
 #include <cstddef>
-#include <unordered_set>
 #include <bit>
 #include <vector>
 #include <cstdio>
 #include <format>
 #include <random>
 #include <limits>
+
+typedef struct { uint64_t state;  uint64_t inc; } pcg32_random_t;
+
+static uint32_t pcg32_random_r(pcg32_random_t* rng)
+{
+    uint64_t oldstate = rng->state;
+    // Advance internal state
+    rng->state = oldstate * 6364136223846793005ULL + (rng->inc|1);
+    // Calculate output function (XSH RR), uses old state for max ILP
+    uint32_t xorshifted = uint32_t(((oldstate >> 18u) ^ oldstate) >> 27u);
+    uint32_t rot = oldstate >> 59u;
+    return (xorshifted >> rot) | (xorshifted << ((-(int32_t)rot) & 31));
+}
+
+static uint64_t rand64(pcg32_random_t* rng) {
+    uint64_t a = pcg32_random_r(rng);
+    uint64_t b = pcg32_random_r(rng);
+    return (a << 32) | b;
+}
 
 size_t get_index(uint64_t perm, uint64_t magic, size_t shift) {
     return static_cast<size_t>((perm * magic) >> shift);
@@ -23,21 +41,42 @@ inline int fprint(FILE* stream, const std::format_string<>& fmt) {
     return fprintf(stream, "%s", str.c_str());
 }
 
+class Bitset {
+public:
+    Bitset(size_t size)
+        : _data((size + 63)/64)
+    {
+    }
+
+    void set(size_t index) {
+        _data[index/64] |= (uint64_t)1 << (index%64);
+    }
+
+    bool get(size_t index) {
+        return (_data[index/64] >> (index%64)) & 1;
+    }
+
+    void clear() {
+        memset(_data.data(), 0, sizeof(uint64_t) * _data.size());
+    }
+
+private:
+    std::vector<uint64_t> _data;
+};
+
 // find a magic number that multiplies a permutation of a mask, such that it produces a unique top n bits per permutation, where n is the number of bits in the mask
-uint64_t find_magic_number(uint64_t mask, size_t shift) {
-    std::unordered_set<size_t> hit;
+uint64_t find_magic_number(uint64_t mask, size_t bits) {
+    size_t shift = 64 - bits;
+    Bitset hit((size_t)1 << bits);
 
-    std::random_device rd;
-    std::mt19937_64 engine(rd()); 
-
-    std::uniform_int_distribution<uint64_t> rand64(
-        std::numeric_limits<uint64_t>::min(), // 0
-        std::numeric_limits<uint64_t>::max()  // 18446744073709551615
-    );
+    pcg32_random_t rng = {
+        .state = 59323,
+        .inc = 3,
+    };
 
     for(;;) {
         // get a sparse random number
-        uint64_t magic = rand64(engine) & rand64(engine) & rand64(engine);
+        uint64_t magic = rand64(&rng) & rand64(&rng) & rand64(&rng);
 
         bool ok = true;
         uint64_t perm = mask;
@@ -46,12 +85,12 @@ uint64_t find_magic_number(uint64_t mask, size_t shift) {
         for(;;) {
             size_t index = get_index(perm, magic, shift);
 
-            if (hit.contains(index)) { // there is a collision
+            if (hit.get(index)) { // there is a collision
                 ok = false;
                 break;
             }
 
-            hit.insert(index);
+            hit.set(index);
 
             if (perm == 0) {
                 break;
@@ -116,7 +155,7 @@ static Tables generate_table(uint64_t(*mask_at)(size_t), uint64_t(*moves_at)(siz
         size_t bits = std::popcount(mask);
         size_t shift = 64 - bits;
 
-        uint64_t magic = find_magic_number(mask, shift);
+        uint64_t magic = find_magic_number(mask, bits);
 
         table.moves[sq].resize(1ULL << bits);
         
