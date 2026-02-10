@@ -42,6 +42,8 @@ uint64_t Side::all() const {
 }
 
 void Position::display(bool display_metadata) const {
+    verify_integrity();
+
     for (int rank=7; rank>=0; --rank) 
     {   
         print("{}|", rank+1);
@@ -285,4 +287,30 @@ bool Position::is_in_check(uint8_t colour) const {
     }
     
     return false;
+}
+
+static void fill_map(uint8_t* map, uint64_t bb, uint8_t value) {
+    assert(value);
+
+    for (int i = 0; i < 64; ++i) {
+        if (bb >> i & 1) {
+            assert(!map[i]);
+            map[i] = value;
+        }
+    }
+}
+
+void Position::verify_integrity() const {
+    uint8_t map[64] = {};
+
+    for (const Side& side : sides) {
+        fill_map(map, side.bb[PIECE_PAWN],   PIECE_PAWN);
+        fill_map(map, side.bb[PIECE_ROOK],   PIECE_ROOK);
+        fill_map(map, side.bb[PIECE_KNIGHT], PIECE_KNIGHT);
+        fill_map(map, side.bb[PIECE_BISHOP], PIECE_BISHOP);
+        fill_map(map, side.bb[PIECE_QUEEN],  PIECE_QUEEN);
+        fill_map(map, side.bb[PIECE_KING],   PIECE_KING);
+    }
+
+    assert(memcmp(map, piece_at, sizeof(map)) == 0);
 }

@@ -116,6 +116,8 @@ struct Position {
     bool is_in_check(uint8_t colour) const;
 
     void filter_moves(std::span<Move>& moves) const; 
+
+    void verify_integrity() const;
 };
 
 inline std::pair<char, int> square_alg(size_t sq) {
