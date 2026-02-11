@@ -380,7 +380,7 @@ inline void remove_piece(Position& pos, int side, Piece piece, size_t index) {
     pos.piece_at[index] = PIECE_NONE;
 }
 
-void set_piece(Position& pos, int side, Piece piece, size_t index) {
+inline void set_piece(Position& pos, int side, Piece piece, size_t index) {
     assert((Piece)pos.piece_at[index] == PIECE_NONE);
     pos.sides[side].bb[piece] |= sq_to_bb(index);
     pos.piece_at[index] = (uint8_t)piece;
