@@ -5,6 +5,8 @@
 #include "blunderfish.h"
 #include "../generated/generated_tables.h"
 
+//uint64_t knight_moves(uint8_t from, uint64_t allies);
+
 static size_t select_move(const std::unordered_map<std::string, size_t>& moves) {
     for (;;) {
         print("Enter a valid move: ");
@@ -54,9 +56,19 @@ int main() {
     }
 
     /*
-    for (size_t i = 0; i < 64; ++i) {
+    for (uint8_t i = 0; i < 64; ++i) {
         Position pos = {};
-        pos.sides[WHITE].bb[PIECE_PAWN] = rook_mask[i];
+
+        pos.sides[BLACK].bb[PIECE_KNIGHT] = (uint64_t)1 << i;
+        pos.piece_at[i] = PIECE_KNIGHT;
+
+        uint64_t moves = knight_moves(i, 0);
+        pos.sides[WHITE].bb[PIECE_PAWN] = moves;
+
+        for (auto x : set_bits(moves)) {
+            pos.piece_at[x] = PIECE_PAWN;
+        }
+
         pos.display();
     }
     */

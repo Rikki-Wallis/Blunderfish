@@ -1,5 +1,3 @@
-#include <bit>
-
 #include "blunderfish.h"
 #include "../generated/generated_tables.h"
 
@@ -130,34 +128,6 @@ uint64_t queen_moves(uint8_t from, uint64_t all_pieces, uint64_t allies) {
     return bishop_moves(from, all_pieces, allies) | rook_moves(from, all_pieces, allies);
 }
 
-
-struct set_bits {
-    uint64_t x;
-
-    set_bits(uint64_t x)
-        : x(x)
-    {}
-
-    struct Iterator {
-        uint64_t v;
-
-        bool operator!=(std::default_sentinel_t) const {
-            return v != 0;
-        }
-
-        Iterator& operator++() {
-            v &= v - 1;
-            return *this;
-        }
-
-        uint8_t operator*() const {
-            return (uint8_t)std::countr_zero(v);
-        }
-    };
-
-    Iterator begin() const { return { .v = x }; }
-    std::default_sentinel_t end() const { return {}; }
-};
 
 // TODO: Maybe change later to use moves instead of seperate attack function
 uint64_t Position::generate_attacks(uint8_t colour) const {
@@ -410,7 +380,7 @@ inline void remove_piece(Position& pos, int side, Piece piece, size_t index) {
     pos.piece_at[index] = PIECE_NONE;
 }
 
-inline void set_piece(Position& pos, int side, Piece piece, size_t index) {
+void set_piece(Position& pos, int side, Piece piece, size_t index) {
     assert((Piece)pos.piece_at[index] == PIECE_NONE);
     pos.sides[side].bb[piece] |= sq_to_bb(index);
     pos.piece_at[index] = (uint8_t)piece;
