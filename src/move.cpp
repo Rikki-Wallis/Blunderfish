@@ -403,41 +403,71 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
     return lookup;
 }
 
+// hopefully these functions get inlined and the rewrites get optimized away
+inline void remove_piece(Position& pos, int side, Piece piece, size_t index) {
+    assert((Piece)pos.piece_at[index] == piece);
+    pos.sides[side].bb[piece] &= ~sq_to_bb(index);
+    pos.piece_at[index] = PIECE_NONE;
+}
+
+inline void set_piece(Position& pos, int side, Piece piece, size_t index) {
+    assert((Piece)pos.piece_at[index] == PIECE_NONE);
+    pos.sides[side].bb[piece] |= sq_to_bb(index);
+    pos.piece_at[index] = (uint8_t)piece;
+}
+
 Position Position::execute_move(const Move& move) const {
     Position next = {};
     memcpy(next.sides, sides, sizeof(sides));
     memcpy(next.piece_at, piece_at, sizeof(piece_at));
     next.to_move = opponent(to_move);
 
-    next.sides[to_move].bb[move.piece] &= ~sq_to_bb(move.from);
-    next.sides[to_move].bb[move.piece] |= sq_to_bb(move.to);
-    
-    int captured_pos;
+    // First, check for a capture and remove the piece
 
-    if (move.flags & FLAG_ENPASSANT) {
+    int captured_pos = move.to; // usually the piece being captured is at the square being moved to
+
+    if (move.flags & FLAG_ENPASSANT) { // en passant is the exception
         int offsets[] = { -8, 8 };
         captured_pos = move.to + offsets[to_move];
-    }
-    else {
-        captured_pos = move.to; 
     }
 
     Piece captured_piece = (Piece)next.piece_at[captured_pos];
 
     if (captured_piece != PIECE_NONE) {
-        next.sides[opponent(to_move)].bb[captured_piece] &= ~sq_to_bb(captured_pos);
-        next.piece_at[captured_pos] = PIECE_NONE;
+        remove_piece(next, opponent(to_move), captured_piece, captured_pos);
     }
 
-    next.piece_at[move.from] = PIECE_NONE;
-    next.piece_at[move.to] = move.piece; // make sure this happens AFTER we set the state of the captured piece because they could be on the same square
+    // Then move the piece
+    // The order matters here
+
+    Piece start_piece = (Piece)move.piece;
+    Piece end_piece   = (Piece)move.piece; // store this because promotions can change what piece is re-placed
+
+    // pray ts gets optimized into something other than this godless if statement chain
+    if (move.flags & FLAG_PROMOTION_BISHOP) {
+        end_piece = PIECE_BISHOP;
+    }
+    else if (move.flags & FLAG_PROMOTION_KNIGHT) {
+        end_piece = PIECE_KNIGHT;
+    }
+    else if (move.flags & FLAG_PROMOTION_QUEEN) {
+        end_piece = PIECE_QUEEN;
+    }
+    else if (move.flags & FLAG_PROMOTION_ROOK) {
+        end_piece = PIECE_QUEEN;
+    }
+
+    remove_piece(next, to_move, start_piece, move.from);
+    set_piece   (next, to_move, end_piece,   move.to);
+
+    // Update castling rights
     
     if (move.piece == PIECE_KING) {
         next.sides[to_move].set_can_castle_kingside(false);
         next.sides[to_move].set_can_castle_queenside(false);
-    
-    } else if (move.piece == PIECE_ROOK) {
+    }
 
+    if (move.piece == PIECE_ROOK) {
         uint8_t kingside_rook_pos = to_move == WHITE ? 7 : 63;
         uint8_t queenside_rook_pos = to_move == WHITE ? 0 : 56;
 
@@ -446,43 +476,29 @@ Position Position::execute_move(const Move& move) const {
         } else if (queenside_rook_pos == move.from) {
             next.sides[to_move].set_can_castle_queenside(false);
         }
-
     }
 
     if (move.flags & FLAG_DOUBLE_PUSH ) {
-        int offsets[] = { -8, 8 };
+        int offsets[] = { -8, 8 }; // set en passant marker
         next.en_passant_sq = move.to + offsets[to_move];
-    
-    } else if (move.flags & FLAG_PROMOTION) {
-        uint8_t piece = 0;
-        if (move.flags & FLAG_PROMOTION_KNIGHT) {
-            piece = PIECE_KNIGHT;
-        } else if (move.flags & FLAG_PROMOTION_BISHOP) {
-            piece = PIECE_BISHOP;
-        } else if (move.flags & FLAG_PROMOTION_ROOK) {
-            piece = PIECE_ROOK;
-        } else {
-            piece = PIECE_QUEEN;
-        }
+    }
 
-        next.sides[to_move].bb[PIECE_PAWN] &= ~(1ULL << move.to);
-        next.sides[to_move].bb[piece] |= (1ULL << move.to);
+    // some extra piece movement for castling
 
-    } else if (move.flags & FLAG_SHORT_CASTLE) {
+    if (move.flags & FLAG_SHORT_CASTLE) {
         uint8_t old_rook_pos = to_move == WHITE ? 7 : 63;
         uint8_t new_rook_pos = to_move == WHITE ? 5 : 61;
 
-        next.sides[to_move].bb[PIECE_ROOK] &= ~(1ULL << old_rook_pos);
-        next.sides[to_move].bb[PIECE_ROOK] |= (1ULL << new_rook_pos);
-        next.piece_at[old_rook_pos] = PIECE_NONE;
-    
-    } else if (move.flags & FLAG_LONG_CASTLE) {
+        remove_piece(next, to_move, PIECE_ROOK, old_rook_pos);
+        set_piece(next, to_move, PIECE_ROOK, new_rook_pos);
+    }
+
+    if (move.flags & FLAG_LONG_CASTLE) {
         uint8_t old_rook_pos = to_move == WHITE ? 0 : 56;
         uint8_t new_rook_pos = to_move == WHITE ? 3 : 59;
 
-        next.sides[to_move].bb[PIECE_ROOK] &= ~(1ULL << old_rook_pos);
-        next.sides[to_move].bb[PIECE_ROOK] |= (1ULL << new_rook_pos);
-        next.piece_at[old_rook_pos] = PIECE_NONE;
+        remove_piece(next, to_move, PIECE_ROOK, old_rook_pos);
+        set_piece(next, to_move, PIECE_ROOK, new_rook_pos);
     }
 
     return next;
