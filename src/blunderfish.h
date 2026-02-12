@@ -5,6 +5,8 @@
 
 #include "common.h"
 
+#define MAX_DEPTH 32
+
 static constexpr uint64_t RANK_1 = 0x00000000000000ff;
 static constexpr uint64_t RANK_2 = 0x000000000000ff00;
 static constexpr uint64_t RANK_3 = 0x0000000000ff0000;
@@ -92,30 +94,51 @@ struct Side {
 
 static constexpr int NULL_SQUARE = 0xffffffff;
 
+struct Undo {
+    uint8_t captured_piece;
+    int flags[2];
+    int en_passant_sq;
+};
+
 struct Position {
     Side sides[2];
     int to_move;
-    int en_passant_sq = NULL_SQUARE;
+    int en_passant_sq;
     uint8_t piece_at[64];
+
+    Undo undo_stack[MAX_DEPTH];
+    int undo_count;
+
+    Position()
+        : to_move(WHITE), en_passant_sq(NULL_SQUARE), undo_stack({}), undo_count(0)
+    {
+        memset(sides, 0, sizeof(sides));
+        memset(piece_at, 0, sizeof(piece_at));
+    }
+
+    Position(Position&&) = default;
+    Position(const Position&) = delete;
+    const Position& operator=(const Position&) = delete;
 
     void display(bool display_metadata=false) const;
     static std::optional<Position> decode_fen_string(const std::string& fen);
 
     std::span<Move> generate_moves(std::span<Move> move_buf) const;
     
-    uint64_t generate_attacks(uint8_t colour) const;
+    uint64_t generate_attacks(int colour) const;
 
     std::unordered_map<std::string, size_t> name_moves(std::span<Move> moves) const;
 
     uint64_t all_pieces() const;
 
-    Position execute_move(const Move& move) const;
+    void make_move(const Move& move);
+    void unmake_move(const Move& move);
 
     std::vector<Side> get_sides() const;  
 
-    bool is_in_check(uint8_t colour) const;
+    bool is_in_check(int colour) const;
 
-    void filter_moves(std::span<Move>& moves) const; 
+    void filter_moves(std::span<Move>& moves); 
 
     void verify_integrity() const;
 };

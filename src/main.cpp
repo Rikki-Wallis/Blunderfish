@@ -7,12 +7,22 @@
 
 //uint64_t knight_moves(uint8_t from, uint64_t allies);
 
+constexpr size_t UNDO_MOVE = 0xffffffff; 
+
+static std::optional<Move> last_move; 
+
 static size_t select_move(const std::unordered_map<std::string, size_t>& moves) {
     for (;;) {
         print("Enter a valid move: ");
 
         std::string input;
         std::cin >> input;
+
+        if (input == "undo") {
+            if (last_move) {
+                return UNDO_MOVE;
+            }
+        }
 
         if (moves.contains(input)) {
             return moves.at(input);
@@ -29,7 +39,7 @@ int main() {
         return 1;
     }
 
-    Position pos = *maybe_pos;
+    Position pos(std::move(*maybe_pos));
 
     for (;;) {
         pos.display(true);
@@ -50,9 +60,16 @@ int main() {
         }
         print("\n");
 
-        auto& m = moves[select_move(move_names)];
+        size_t selected = select_move(move_names); 
 
-        pos = pos.execute_move(m);
+        if (selected == UNDO_MOVE) {
+            pos.unmake_move(*last_move);
+        }
+        else{
+            auto& m = moves[selected];
+            pos.make_move(m);
+            last_move = m;
+        }
     }
 
     /*

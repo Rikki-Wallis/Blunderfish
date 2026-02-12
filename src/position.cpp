@@ -108,7 +108,7 @@ void Position::display(bool display_metadata) const {
 std::optional<Position> Position::decode_fen_string(const std::string& fen) {
     size_t cursor = 0;
 
-    Position pos = {};
+    Position pos;
 
     auto set_piece = [&](int side, uint8_t piece, size_t rank, size_t file) {
         size_t index = rank * 8 + file;
@@ -278,7 +278,7 @@ std::vector<uint64_t> Side::get_bbs() const {
     return std::vector<uint64_t>(bb, bb + NUM_PIECE_TYPES);
 }
 
-bool Position::is_in_check(uint8_t colour) const {
+bool Position::is_in_check(int colour) const {
     uint64_t king_bb = sides[colour].bb[PIECE_KING];
     uint8_t opp_colour = colour == WHITE ? BLACK : WHITE;
 

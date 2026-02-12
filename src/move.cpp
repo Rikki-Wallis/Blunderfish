@@ -130,7 +130,7 @@ uint64_t queen_moves(uint8_t from, uint64_t all_pieces, uint64_t allies) {
 
 
 // TODO: Maybe change later to use moves instead of seperate attack function
-uint64_t Position::generate_attacks(uint8_t colour) const {
+uint64_t Position::generate_attacks(int colour) const {
     uint64_t all = all_pieces();
     uint64_t allies = sides[colour].all();
     uint64_t attacks = 0;
@@ -260,40 +260,39 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     return move_buf.subspan(0, move_count);
 }
 
-void Position::filter_moves(std::span<Move>& moves) const {
-    size_t i = 0;
-
-    while (i < moves.size()) {
+void Position::filter_moves(std::span<Move>& moves) {
+    int side = to_move; // ALERT! do NOT use to_move because it is altered by make_move
+ 
+    for (int i = (int)moves.size()-1; i >= 0; --i) {
         Move& m = moves[i];
 
-        Position next = execute_move(m);
-        if (next.is_in_check(static_cast<uint8_t>(to_move))) {
-            // swap with last and pop
-            moves[i] = moves.back();
-            moves = moves.first(moves.size() - 1);
-        
+        make_move(m);
+        bool illegal = false;
+
+        if (is_in_check(side)) {
+            illegal = true;
+        }
+
         // Make sure cant move through check when castling
-        } else if (m.flags & (FLAG_SHORT_CASTLE | FLAG_LONG_CASTLE)) {
-            
-            uint8_t opp_colour = to_move == WHITE ? BLACK : WHITE;
+        if (m.flags & (FLAG_SHORT_CASTLE | FLAG_LONG_CASTLE)) {
             uint64_t possible_check_pos = 0;
 
             if (m.flags & FLAG_SHORT_CASTLE) {
-                possible_check_pos = to_move == WHITE ? WHITE_SHORT_SPACING : BLACK_SHORT_SPACING;
+                possible_check_pos = side == WHITE ? WHITE_SHORT_SPACING : BLACK_SHORT_SPACING;
             } else {
-                possible_check_pos = to_move == WHITE ? WHITE_LONG_SPACING : BLACK_LONG_SPACING;
+                possible_check_pos = side == WHITE ? WHITE_LONG_SPACING : BLACK_LONG_SPACING;
             }
 
-            if (possible_check_pos & generate_attacks(opp_colour)) {
-                // swap with last and pop
-                moves[i] = moves.back();
-                moves = moves.first(moves.size() - 1);
-            } else {
-                ++i;
-            }            
+            if (possible_check_pos & generate_attacks(opponent(side))) {
+                illegal = true;
+            }
+        }
 
-        } else {
-            ++i;
+        unmake_move(m);
+
+        if (illegal) {
+            moves[i] = moves.back();
+            moves = moves.first(moves.size() - 1);
         }
     }
 }
@@ -376,6 +375,7 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
 // hopefully these functions get inlined and the rewrites get optimized away
 inline void remove_piece(Position& pos, int side, Piece piece, size_t index) {
     assert((Piece)pos.piece_at[index] == piece);
+    assert(pos.sides[side].bb[piece] & sq_to_bb(index));
     pos.sides[side].bb[piece] &= ~sq_to_bb(index);
     pos.piece_at[index] = PIECE_NONE;
 }
@@ -386,30 +386,7 @@ inline void set_piece(Position& pos, int side, Piece piece, size_t index) {
     pos.piece_at[index] = (uint8_t)piece;
 }
 
-Position Position::execute_move(const Move& move) const {
-    Position next = {};
-    memcpy(next.sides, sides, sizeof(sides));
-    memcpy(next.piece_at, piece_at, sizeof(piece_at));
-    next.to_move = opponent(to_move);
-
-    // First, check for a capture and remove the piece
-
-    int captured_pos = move.to; // usually the piece being captured is at the square being moved to
-
-    if (move.flags & FLAG_ENPASSANT) { // en passant is the exception
-        int offsets[] = { -8, 8 };
-        captured_pos = move.to + offsets[to_move];
-    }
-
-    Piece captured_piece = (Piece)next.piece_at[captured_pos];
-
-    if (captured_piece != PIECE_NONE) {
-        remove_piece(next, opponent(to_move), captured_piece, captured_pos);
-    }
-
-    // Then move the piece
-    // The order matters here
-
+static std::pair<Piece, Piece> start_and_end_piece(const Move& move) {
     Piece start_piece = (Piece)move.piece;
     Piece end_piece   = (Piece)move.piece; // store this because promotions can change what piece is re-placed
 
@@ -427,14 +404,69 @@ Position Position::execute_move(const Move& move) const {
         end_piece = PIECE_QUEEN;
     }
 
-    remove_piece(next, to_move, start_piece, move.from);
-    set_piece   (next, to_move, end_piece,   move.to);
+    return {start_piece, end_piece};
+}
+
+static int get_captured_square(const Move& move, int to_move) {
+    int captured_pos = move.to; // usually the piece being captured is at the square being moved to
+
+    if (move.flags & FLAG_ENPASSANT) { // en passant is the exception
+        int offsets[] = { -8, 8 };
+        captured_pos = move.to + offsets[to_move];
+    }
+
+    return captured_pos;
+}
+
+static std::pair<int, int> short_castle_start_and_end_rook_squares(int side) {
+    int old_pos[] = { 7, 63 };
+    int new_pos[] = { 5, 61 };
+    return {old_pos[side], new_pos[side]};
+}
+
+static std::pair<int, int> long_castle_start_and_end_rook_squares(int side) {
+    int old_pos[] = { 0, 56 };
+    int new_pos[] = { 3, 59 };
+    return {old_pos[side], new_pos[side]};
+}
+
+void Position::make_move(const Move& move) {
+    // First, check for a capture and remove the piece
+
+    int captured_pos = get_captured_square(move, to_move);
+    Piece captured_piece = (Piece)piece_at[captured_pos];
+
+    // Little aside before we modify anything, record the destroyable data in the undo stack
+
+    Undo undo = {
+        .captured_piece = (uint8_t)captured_piece,
+        .flags = {
+            sides[0].flags,
+            sides[1].flags
+        },
+        .en_passant_sq = en_passant_sq
+    };
+
+    assert(undo_count < MAX_DEPTH);
+    undo_stack[undo_count++] = undo;
+
+    if (captured_piece != PIECE_NONE) {
+        remove_piece(*this, opponent(to_move), captured_piece, captured_pos);
+    }
+
+    // Then move the piece
+    // The order matters here
+
+    auto [start_piece, end_piece] = start_and_end_piece(move);
+
+    remove_piece(*this, to_move, start_piece, move.from);
+    set_piece   (*this, to_move, end_piece,   move.to);
 
     // Update castling rights
     
     if (move.piece == PIECE_KING) {
-        next.sides[to_move].set_can_castle_kingside(false);
-        next.sides[to_move].set_can_castle_queenside(false);
+        sides[to_move].set_can_castle_kingside(false);
+        sides[to_move].set_can_castle_queenside(false);
     }
 
     if (move.piece == PIECE_ROOK) {
@@ -442,34 +474,69 @@ Position Position::execute_move(const Move& move) const {
         uint8_t queenside_rook_pos = to_move == WHITE ? 0 : 56;
 
         if (kingside_rook_pos == move.from) {
-            next.sides[to_move].set_can_castle_kingside(false);
+            sides[to_move].set_can_castle_kingside(false);
         } else if (queenside_rook_pos == move.from) {
-            next.sides[to_move].set_can_castle_queenside(false);
+            sides[to_move].set_can_castle_queenside(false);
         }
     }
 
     if (move.flags & FLAG_DOUBLE_PUSH ) {
         int offsets[] = { -8, 8 }; // set en passant marker
-        next.en_passant_sq = move.to + offsets[to_move];
+        en_passant_sq = move.to + offsets[to_move];
+    }
+    else {
+        en_passant_sq = NULL_SQUARE;
     }
 
     // some extra piece movement for castling
 
     if (move.flags & FLAG_SHORT_CASTLE) {
-        uint8_t old_rook_pos = to_move == WHITE ? 7 : 63;
-        uint8_t new_rook_pos = to_move == WHITE ? 5 : 61;
-
-        remove_piece(next, to_move, PIECE_ROOK, old_rook_pos);
-        set_piece(next, to_move, PIECE_ROOK, new_rook_pos);
+        auto [p1, p2] = short_castle_start_and_end_rook_squares(to_move);
+        remove_piece(*this, to_move, PIECE_ROOK, p1);
+        set_piece   (*this, to_move, PIECE_ROOK, p2);
     }
 
     if (move.flags & FLAG_LONG_CASTLE) {
-        uint8_t old_rook_pos = to_move == WHITE ? 0 : 56;
-        uint8_t new_rook_pos = to_move == WHITE ? 3 : 59;
-
-        remove_piece(next, to_move, PIECE_ROOK, old_rook_pos);
-        set_piece(next, to_move, PIECE_ROOK, new_rook_pos);
+        auto [p1, p2] = long_castle_start_and_end_rook_squares(to_move);
+        remove_piece(*this, to_move, PIECE_ROOK, p1);
+        set_piece   (*this, to_move, PIECE_ROOK, p2);
     }
 
-    return next;
+    to_move = opponent(to_move);
+}
+
+void Position::unmake_move(const Move& move) {
+    assert(undo_count > 0);
+    Undo undo = undo_stack[--undo_count];
+
+    to_move = opponent(to_move);
+
+    auto [start_piece, end_piece] = start_and_end_piece(move);
+
+    remove_piece(*this, to_move, end_piece,   move.to);
+    set_piece   (*this, to_move, start_piece, move.from);
+
+    // replace the captured piece must be done AFTER we remove the moving piece
+    if (undo.captured_piece != PIECE_NONE) {
+        int captured_square = get_captured_square(move, to_move);
+        set_piece(*this, opponent(to_move), (Piece)undo.captured_piece, captured_square);
+    }
+
+    // handle rook moves in the case of castling
+    if (move.flags & FLAG_SHORT_CASTLE) {
+        auto [p1, p2] = short_castle_start_and_end_rook_squares(to_move);
+        remove_piece(*this, to_move, PIECE_ROOK, p2);
+        set_piece   (*this, to_move, PIECE_ROOK, p1);
+    }
+
+    if (move.flags & FLAG_LONG_CASTLE) {
+        auto [p1, p2] = long_castle_start_and_end_rook_squares(to_move);
+        remove_piece(*this, to_move, PIECE_ROOK, p2);
+        set_piece   (*this, to_move, PIECE_ROOK, p1);
+    }
+
+    sides[0].flags = undo.flags[0];
+    sides[1].flags = undo.flags[1];
+
+    en_passant_sq = undo.en_passant_sq;
 }
