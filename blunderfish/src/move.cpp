@@ -262,12 +262,18 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
 
 void Position::filter_moves(std::span<Move>& moves) {
     int side = to_move; // ALERT! do NOT use to_move because it is altered by make_move
+
+    bool checked = is_in_check(to_move);
  
     for (int i = (int)moves.size()-1; i >= 0; --i) {
         Move& m = moves[i];
 
+        bool short_castle = (m.flags & FLAG_SHORT_CASTLE) != 0;
+        bool long_castle = (m.flags & FLAG_LONG_CASTLE) != 0;
+
+        bool illegal = (short_castle || long_castle) && checked;
+
         make_move(m);
-        bool illegal = false;
 
         if (is_in_check(side)) {
             illegal = true;

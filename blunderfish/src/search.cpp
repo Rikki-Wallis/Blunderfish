@@ -9,14 +9,29 @@ int64_t Position::negamax(int depth, int ply) {
         return eval();
     }
 
+    int my_side = to_move;
+
     int64_t best = -MATE_SCORE;
 
     std::array<Move, 256> move_buf;
     std::span<Move> moves = generate_moves(move_buf);
-    filter_moves(moves);
 
-    if (moves.empty()) {
-        if (is_in_check(to_move)) {
+    int n = 0;
+
+    for (auto& m : moves) {
+        make_move(m);
+
+        if (!is_in_check(my_side)) {
+            n++;
+            int64_t score = -negamax(depth - 1, ply + 1);
+            best = std::max(best, score);
+        }
+
+        unmake_move(m);
+    }
+
+    if (n == 0) { // no legal moves
+        if (is_in_check(my_side)) {
             return -MATE_SCORE + ply; // checkmate
         }
         else {
@@ -24,24 +39,12 @@ int64_t Position::negamax(int depth, int ply) {
         }
     }
 
-    for (auto& m : moves) {
-        make_move(m);
-        int64_t score = -negamax(depth - 1, ply + 1);
-        unmake_move(m);
-
-        best = std::max(best, score);
-    }
-
     return best;
 }
 
-std::optional<Move> Position::best_move() {
+int Position::best_move(std::span<Move> moves) {
     int64_t best_score = INT64_MIN;
     int best_move = -1;
-
-    std::array<Move, 256> move_buf;
-    std::span<Move> moves = generate_moves(move_buf);
-    filter_moves(moves);
 
     for (int i = 0; i < moves.size(); ++i) {
         auto& m = moves[i];
@@ -57,8 +60,8 @@ std::optional<Move> Position::best_move() {
     }
 
     if (best_move == -1) {
-        return std::nullopt;
+        return -1;
     }
 
-    return moves[best_move];
+    return best_move;
 }
