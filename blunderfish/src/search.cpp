@@ -18,7 +18,7 @@ int64_t Position::negamax(int depth, int ply) {
 
     int n = 0;
 
-    for (auto& m : moves) {
+    for (Move m : moves) {
         make_move(m);
 
         if (!is_in_check(my_side)) {
@@ -47,7 +47,7 @@ int Position::best_move(std::span<Move> moves) {
     int best_move = -1;
 
     for (int i = 0; i < moves.size(); ++i) {
-        auto& m = moves[i];
+        Move m = moves[i];
 
         make_move(m);
         int64_t score = -negamax(2, 1);

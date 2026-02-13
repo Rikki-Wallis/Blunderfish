@@ -57,14 +57,14 @@ static int play_main() {
 
             size_t selected = select_move(move_names); 
 
-            auto& m = moves[selected];
+            Move m = moves[selected];
             pos.make_move(m);
         }
         else {
             auto move_idx = pos.best_move(moves);
             assert(move_idx != -1);
 
-            auto& m = moves[move_idx];
+            Move m = moves[move_idx];
             pos.make_move(m);
         }
     }
