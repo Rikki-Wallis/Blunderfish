@@ -130,6 +130,8 @@ struct Position {
     std::vector<Side> get_sides() const;  
 
     bool is_in_check(int colour) const;
+    // omits king
+    bool is_attacked(int side, int square) const;
 
     void filter_moves(std::span<Move>& moves); 
 

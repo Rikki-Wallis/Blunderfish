@@ -50,7 +50,7 @@ int Position::best_move(std::span<Move> moves) {
         Move m = moves[i];
 
         make_move(m);
-        int64_t score = -negamax(2, 1);
+        int64_t score = -negamax(4, 1);
         unmake_move(m);
 
         if (score > best_score) {

@@ -2,7 +2,7 @@
 #include "generated_tables.h"
 
 // King
-static uint64_t king_moves(uint8_t from, uint64_t allies) {
+static uint64_t king_moves(int from, uint64_t allies) {
     uint64_t bb = sq_to_bb(from);
 
     uint64_t l  = (bb >> 1) & (~FILE_H);
@@ -36,7 +36,7 @@ static uint64_t knight_moves(int from, uint64_t allies) {
 }
 
 // Pawns
-uint64_t white_pawn_single_moves(uint8_t from, uint64_t opps, uint64_t all_pieces) {
+uint64_t white_pawn_single_moves(int from, uint64_t opps, uint64_t all_pieces) {
     uint64_t bb = sq_to_bb(from);
 
     uint64_t push  = (bb << 8) & (~all_pieces) & (~RANK_1);
@@ -46,7 +46,7 @@ uint64_t white_pawn_single_moves(uint8_t from, uint64_t opps, uint64_t all_piece
     return push | left | right;
 }
 
-uint64_t black_pawn_single_moves(uint8_t from, uint64_t opps, uint64_t all_pieces) {
+uint64_t black_pawn_single_moves(int from, uint64_t opps, uint64_t all_pieces) {
     uint64_t bb = sq_to_bb(from);
 
     uint64_t push  = (bb >> 8) & (~all_pieces) & (~RANK_8);
@@ -128,62 +128,53 @@ uint64_t queen_moves(int from, uint64_t all_pieces, uint64_t allies) {
     return bishop_moves(from, all_pieces, allies) | rook_moves(from, all_pieces, allies);
 }
 
-bool Position::is_in_check(int colour) const {
-    uint64_t king_bb = sides[colour].bb[PIECE_KING];
-    assert(std::popcount(king_bb) == 1);
-    int king_index = std::countr_zero(king_bb);
+bool Position::is_attacked(int side, int square) const {
+    uint64_t bb = sq_to_bb(square);
 
-    int opp = opponent(colour);
+    int opp = opponent(side);
 
-    uint64_t all = all_pieces();
-    uint64_t allies = sides[colour].all();
-    uint64_t opps = sides[opp].all();
+    uint64_t allies = (sides[side].all() & ~(sides[side].bb[PIECE_KING])) | bb;
+    uint64_t opp_mask = sides[opp].all();
+    uint64_t all = allies | opp_mask;
 
-    uint64_t diags = bishop_moves(king_index, all, allies);
-    uint64_t straights = rook_moves(king_index, all, allies);
-    uint64_t ls = knight_moves(king_index, allies);
+    uint64_t diag_mask = bishop_moves(square, all, allies);
+    uint64_t straight_mask = rook_moves(square, all, allies);
+    uint64_t knight_mask = knight_moves(square, allies);
+    uint64_t pawn_mask = side == WHITE ? black_pawn_single_moves(square, opp_mask, all) : white_pawn_single_moves(square, opp_mask, all); // reversed side
+    uint64_t king_mask = king_moves(square, allies);
 
-    for (uint8_t from : set_bits(sides[opp].bb[PIECE_KNIGHT] & ls)) {
-        if (knight_moves(from, opps) & king_bb) {
-            return true;
-        }
+    if (diag_mask & sides[opp].bb[PIECE_BISHOP]) {
+        return true;
     }
 
-    for (uint8_t from : set_bits(sides[opp].bb[PIECE_ROOK] & straights)) {
-        if(rook_moves(from, all, opps) & king_bb) {
-            return true;
-        }
+    if (straight_mask & sides[opp].bb[PIECE_ROOK]) {
+        return true;
     }
 
-    for (uint8_t from : set_bits(sides[opp].bb[PIECE_BISHOP] & diags)) {
-        if(bishop_moves(from, all, opps) & king_bb) {
-            return true;
-        }
+    if (knight_mask & sides[opp].bb[PIECE_KNIGHT]) {
+        return true;
     }
 
-    for (uint8_t from : set_bits(sides[opp].bb[PIECE_QUEEN] & (diags | straights))) {
-        if(queen_moves(from, all, opps) & king_bb) {
-            return true;
-        }
+    if ((straight_mask | diag_mask) & sides[opp].bb[PIECE_QUEEN]) {
+        return true;
     }
 
-    for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KING] & (diags | straights))) {
-        if(king_moves(from, opps)) {
-            return true;
-        }
+    if (king_mask & sides[opp].bb[PIECE_KING]) {
+        return true;
     }
 
-    auto pawn_single_moves = opp == WHITE ? white_pawn_single_moves : black_pawn_single_moves;
-
-    for (uint8_t from : set_bits(sides[opp].bb[PIECE_PAWN] & diags)) {
-        if(pawn_single_moves(from, allies, all) & king_bb) {
-            return true;
-        }
+    if (pawn_mask & sides[opp].bb[PIECE_PAWN]) {
+        return true;
     }
 
     return false;
 }
 
+bool Position::is_in_check(int colour) const {
+    assert(std::popcount(sides[colour].bb[PIECE_KING]) == 1);
+    int square = std::countr_zero(sides[colour].bb[PIECE_KING]);
+    return is_attacked(colour, square);
+}
 
 std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     size_t move_count = 0;
@@ -209,6 +200,7 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
         uint64_t castle_space = to_move == WHITE ? WHITE_SHORT_SPACING : BLACK_SHORT_SPACING;
         uint8_t from = to_move == WHITE ? 4 : 60;
         uint8_t to   = to_move == WHITE ? 6 : 62;
+        assert(std::countr_zero(sides[to_move].bb[PIECE_KING]) == from);
         if (!(castle_space & all)) {
             new_move(from, to, MOVE_SHORT_CASTLE);
         }
@@ -218,6 +210,7 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
         uint64_t castle_space = to_move == WHITE ? WHITE_LONG_SPACING : BLACK_LONG_SPACING;
         uint8_t from = to_move == WHITE ? 4 : 60;
         uint8_t to   = to_move == WHITE ? 2 : 58;
+        assert(std::countr_zero(sides[to_move].bb[PIECE_KING]) == from);
         if (!(castle_space & all)) {
             new_move(from, to, MOVE_LONG_CASTLE);
         }
@@ -289,25 +282,28 @@ void Position::filter_moves(std::span<Move>& moves) {
         bool is_castle = move_type(m) == MOVE_LONG_CASTLE || move_type(m) == MOVE_SHORT_CASTLE;
         bool illegal = is_castle && checked;
 
+        // Make sure cant move through check when castling
+        if (is_castle) {
+            int pos1;
+            int pos2;
+
+            if (move_type(m) == MOVE_SHORT_CASTLE) {
+                pos1 = side == WHITE ? 5 : 61;
+                pos2 = side == WHITE ? 6 : 62;
+            } else {
+                pos1 = side == WHITE ? 3 : 59;
+                pos2 = side == WHITE ? 2 : 58;
+            }
+
+            if (is_attacked(side, pos1) || is_attacked(side, pos2)) {
+                illegal = true;
+            }
+        }
+
         make_move(m);
 
         if (is_in_check(side)) {
             illegal = true;
-        }
-
-        // Make sure cant move through check when castling
-        if (is_castle) {
-            uint64_t possible_check_pos = 0;
-
-            if (move_type(m) == MOVE_SHORT_CASTLE) {
-                possible_check_pos = side == WHITE ? WHITE_SHORT_SPACING : BLACK_SHORT_SPACING;
-            } else {
-                possible_check_pos = side == WHITE ? WHITE_LONG_SPACING : BLACK_LONG_SPACING;
-            }
-
-            if (possible_check_pos & generate_attacks(opponent(side))) {
-                illegal = true;
-            }
         }
 
         unmake_move(m);
@@ -404,6 +400,7 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
 
 // hopefully these functions get inlined and the rewrites get optimized away
 inline void remove_piece(Position& pos, int side, Piece piece, size_t index) {
+    assert(piece);
     assert((Piece)pos.piece_at[index] == piece);
     assert(pos.sides[side].bb[piece] & sq_to_bb(index));
     pos.sides[side].bb[piece] &= ~sq_to_bb(index);
@@ -411,6 +408,7 @@ inline void remove_piece(Position& pos, int side, Piece piece, size_t index) {
 }
 
 inline void set_piece(Position& pos, int side, Piece piece, size_t index) {
+    assert(piece);
     assert((Piece)pos.piece_at[index] == PIECE_NONE);
     pos.sides[side].bb[piece] |= sq_to_bb(index);
     pos.piece_at[index] = (uint8_t)piece;
@@ -442,6 +440,8 @@ static std::pair<int, int> long_castle_start_and_end_rook_squares(int side) {
 void Position::make_move(const Move& move) {
     // First, check for a capture and remove the piece
 
+    Piece piece = (Piece)piece_at[move_from(move)];
+
     int captured_pos = get_captured_square(move, to_move);
     Piece captured_piece = (Piece)piece_at[captured_pos];
 
@@ -466,7 +466,7 @@ void Position::make_move(const Move& move) {
     // Then move the piece
     // The order matters here
 
-    Piece start_piece = (Piece)piece_at[move_from(move)];
+    Piece start_piece = piece;
     Piece end_piece = start_piece;
 
     switch (move_type(move)) {
@@ -489,7 +489,7 @@ void Position::make_move(const Move& move) {
 
     // Update castling rights
     
-    switch (piece_at[move_from(move)]) {
+    switch (piece) {
         case PIECE_KING:
             sides[to_move].set_can_castle_kingside(false);
             sides[to_move].set_can_castle_queenside(false);

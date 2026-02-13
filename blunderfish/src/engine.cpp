@@ -15,16 +15,11 @@ uint64_t perft_search(int depth, Position& position) {
     uint64_t nodes = 0;
     std::array<Move, 256> move_buffer;
     std::span<Move> moves = position.generate_moves(move_buffer);
-
-    int my_side = position.to_move;
+    position.filter_moves(moves);
 
     for (const Move& move : moves) {
         position.make_move(move);
-
-        if (!position.is_in_check(my_side)) {
-            nodes += perft_search(depth-1, position);
-        } 
-
+        nodes += perft_search(depth-1, position);
         position.unmake_move(move);
     }
 
