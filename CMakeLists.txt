@@ -31,12 +31,11 @@ add_executable(precompute_tables "meta/precompute_tables.cpp")
 
 #target_link_libraries(tests PRIVATE Catch2::Catch2WithMain)
 
-if(MSVC)
-  target_compile_options(precompute_tables PRIVATE /O2)
-else()
-  target_compile_options(precompute_tables PRIVATE -O3 -march=native)
-endif()
-target_compile_definitions(precompute_tables PRIVATE NDEBUG)
+set_target_properties(precompute_tables PROPERTIES
+  MAP_IMPORTED_CONFIG_DEBUG Release
+  MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release
+  MAP_IMPORTED_CONFIG_MINSIZEREL Release
+)
 
 add_custom_command(
     OUTPUT ${GENERATED_HPP}

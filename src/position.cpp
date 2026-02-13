@@ -42,6 +42,8 @@ uint64_t Side::all() const {
 }
 
 void Position::display(bool display_metadata) const {
+    verify_integrity();
+
     for (int rank=7; rank>=0; --rank) 
     {   
         print("{}|", rank+1);
@@ -106,7 +108,7 @@ void Position::display(bool display_metadata) const {
 std::optional<Position> Position::decode_fen_string(const std::string& fen) {
     size_t cursor = 0;
 
-    Position pos = {};
+    Position pos;
 
     auto set_piece = [&](int side, uint8_t piece, size_t rank, size_t file) {
         size_t index = rank * 8 + file;
@@ -276,7 +278,7 @@ std::vector<uint64_t> Side::get_bbs() const {
     return std::vector<uint64_t>(bb, bb + NUM_PIECE_TYPES);
 }
 
-bool Position::is_in_check(uint8_t colour) const {
+bool Position::is_in_check(int colour) const {
     uint64_t king_bb = sides[colour].bb[PIECE_KING];
     uint8_t opp_colour = colour == WHITE ? BLACK : WHITE;
 
@@ -285,4 +287,30 @@ bool Position::is_in_check(uint8_t colour) const {
     }
     
     return false;
+}
+
+static void fill_map(uint8_t* map, uint64_t bb, uint8_t value) {
+    assert(value);
+
+    for (int i = 0; i < 64; ++i) {
+        if (bb >> i & 1) {
+            assert(!map[i]);
+            map[i] = value;
+        }
+    }
+}
+
+void Position::verify_integrity() const {
+    uint8_t map[64] = {};
+
+    for (const Side& side : sides) {
+        fill_map(map, side.bb[PIECE_PAWN],   PIECE_PAWN);
+        fill_map(map, side.bb[PIECE_ROOK],   PIECE_ROOK);
+        fill_map(map, side.bb[PIECE_KNIGHT], PIECE_KNIGHT);
+        fill_map(map, side.bb[PIECE_BISHOP], PIECE_BISHOP);
+        fill_map(map, side.bb[PIECE_QUEEN],  PIECE_QUEEN);
+        fill_map(map, side.bb[PIECE_KING],   PIECE_KING);
+    }
+
+    assert(memcmp(map, piece_at, sizeof(map)) == 0);
 }

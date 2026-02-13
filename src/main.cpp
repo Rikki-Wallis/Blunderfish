@@ -5,6 +5,12 @@
 #include "blunderfish.h"
 #include "../generated/generated_tables.h"
 
+//uint64_t knight_moves(uint8_t from, uint64_t allies);
+
+constexpr size_t UNDO_MOVE = 0xffffffff; 
+
+static std::optional<Move> last_move; 
+
 static size_t select_move(const std::unordered_map<std::string, size_t>& moves) {
     for (;;) {
         print("Enter a valid move: ");
@@ -12,13 +18,19 @@ static size_t select_move(const std::unordered_map<std::string, size_t>& moves) 
         std::string input;
         std::cin >> input;
 
+        if (input == "undo") {
+            if (last_move) {
+                return UNDO_MOVE;
+            }
+        }
+
         if (moves.contains(input)) {
             return moves.at(input);
         }
     }
 }
 
-int main() {
+static int play_main() {
     std::string start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"; 
 
     auto maybe_pos = Position::decode_fen_string(start_fen);
@@ -27,7 +39,7 @@ int main() {
         return 1;
     }
 
-    Position pos = *maybe_pos;
+    Position pos(std::move(*maybe_pos));
 
     for (;;) {
         pos.display(true);
@@ -48,18 +60,79 @@ int main() {
         }
         print("\n");
 
-        auto& m = moves[select_move(move_names)];
+        size_t selected = select_move(move_names); 
 
-        pos = pos.execute_move(m);
+        if (selected == UNDO_MOVE) {
+            pos.unmake_move(*last_move);
+        }
+        else{
+            auto& m = moves[selected];
+            pos.make_move(m);
+            last_move = m;
+        }
     }
 
     /*
-    for (size_t i = 0; i < 64; ++i) {
+    for (uint8_t i = 0; i < 64; ++i) {
         Position pos = {};
-        pos.sides[WHITE].bb[PIECE_PAWN] = rook_mask[i];
+
+        pos.sides[BLACK].bb[PIECE_KNIGHT] = (uint64_t)1 << i;
+        pos.piece_at[i] = PIECE_KNIGHT;
+
+        uint64_t moves = knight_moves(i, 0);
+        pos.sides[WHITE].bb[PIECE_PAWN] = moves;
+
+        for (auto x : set_bits(moves)) {
+            pos.piece_at[x] = PIECE_PAWN;
+        }
+
         pos.display();
     }
     */
 
     return 0;
+}
+
+static int eval_main(const char* FEN) {
+    (void)FEN;
+    printf("Position eval: 67\n");
+    return 0;
+}
+
+static int best_main(const char* FEN) {
+    (void)FEN;
+    printf("Best move: bruh!\n");
+    return 0;
+}
+
+int main(int argc, char** argv) {
+    if (argc < 2) {
+        printf("Usage: %s <play, eval, best> <FEN?>\n", argv[0]);
+        return 1;
+    }
+
+    if (strcmp(argv[1], "play") == 0) {
+        return play_main();
+    }
+
+    if (strcmp(argv[1], "eval") == 0) {
+        if (argc < 3) {
+            printf("Usage: %s eval <FEN>\n", argv[0]);
+            return 1;
+        }
+
+        return eval_main(argv[2]);
+    }
+
+    if (strcmp(argv[1], "best") == 0) {
+        if (argc < 3) {
+            printf("Usage: %s best <FEN>\n", argv[0]);
+            return 1;
+        }
+
+        return best_main(argv[2]);
+    }
+
+    printf("Invalid mode given '%s'\n", argv[1]);
+    return 1;
 }
