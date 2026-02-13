@@ -1,5 +1,5 @@
 #include "blunderfish.h"
-#include "../generated/generated_tables.h"
+#include "generated_tables.h"
 
 // King
 static uint64_t king_moves(uint8_t from, uint64_t allies) {

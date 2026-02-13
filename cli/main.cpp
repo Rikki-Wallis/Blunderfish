@@ -3,13 +3,8 @@
 #include <array>
 
 #include "blunderfish.h"
-#include "../generated/generated_tables.h"
-
-//uint64_t knight_moves(uint8_t from, uint64_t allies);
 
 constexpr size_t UNDO_MOVE = 0xffffffff; 
-
-static std::optional<Move> last_move; 
 
 static size_t select_move(const std::unordered_map<std::string, size_t>& moves) {
     for (;;) {
@@ -17,12 +12,6 @@ static size_t select_move(const std::unordered_map<std::string, size_t>& moves) 
 
         std::string input;
         std::cin >> input;
-
-        if (input == "undo") {
-            if (last_move) {
-                return UNDO_MOVE;
-            }
-        }
 
         if (moves.contains(input)) {
             return moves.at(input);
@@ -35,40 +24,47 @@ static int play_main() {
 
     auto maybe_pos = Position::decode_fen_string(start_fen);
     if (!maybe_pos) {
-        printf("Invalid FEN string.\n");
+        print("Invalid FEN string.\n");
         return 1;
     }
 
     Position pos(std::move(*maybe_pos));
 
     for (;;) {
-        pos.display(true);
+        pos.display(false);
 
-        std::array<Move, 256> move_buffer;
-        std::span<Move> moves = pos.generate_moves(move_buffer);
-        pos.filter_moves(moves);
-        std::unordered_map<std::string, size_t> move_names = pos.name_moves(moves); 
+        if (pos.to_move == WHITE) {
+            std::array<Move, 256> move_buffer;
+            std::span<Move> moves = pos.generate_moves(move_buffer);
+            pos.filter_moves(moves);
+            std::unordered_map<std::string, size_t> move_names = pos.name_moves(moves); 
 
-        int count = 0;
+            int count = 0;
 
-        print("Available moves: ");
-        for (auto& [name, i] : move_names) {
-            if (count++ > 0) {
-                print(", ");
+            print("Available moves: ");
+            for (auto& [name, i] : move_names) {
+                if (count++ > 0) {
+                    print(", ");
+                }
+                print("{}", name);
             }
-            print("{}", name);
-        }
-        print("\n");
+            print("\n");
 
-        size_t selected = select_move(move_names); 
+            size_t selected = select_move(move_names); 
 
-        if (selected == UNDO_MOVE) {
-            pos.unmake_move(*last_move);
-        }
-        else{
             auto& m = moves[selected];
             pos.make_move(m);
-            last_move = m;
+        }
+        else {
+            auto maybe_move = pos.best_move();
+
+            if (!maybe_move) {
+                printf("Game over.\n");
+                return 0;
+            }
+
+            auto m = *maybe_move;
+            pos.make_move(m);
         }
     }
 
@@ -94,20 +90,30 @@ static int play_main() {
 }
 
 static int eval_main(const char* FEN) {
-    (void)FEN;
-    printf("Position eval: 67\n");
+    auto maybe_pos = Position::decode_fen_string(FEN);
+
+    if (!maybe_pos) {
+        print("Invalid FEN string '{}'.\n", FEN);
+        return 1;
+    }
+
+    Position pos = std::move(*maybe_pos);
+    int64_t v = pos.eval();
+
+    print("Position eval: {}\n", v);
+
     return 0;
 }
 
 static int best_main(const char* FEN) {
     (void)FEN;
-    printf("Best move: bruh!\n");
+    print("Best move: bruh!\n");
     return 0;
 }
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        printf("Usage: %s <play, eval, best> <FEN?>\n", argv[0]);
+        print("Usage: {} <play, eval, best> <FEN?>\n", argv[0]);
         return 1;
     }
 
@@ -117,7 +123,7 @@ int main(int argc, char** argv) {
 
     if (strcmp(argv[1], "eval") == 0) {
         if (argc < 3) {
-            printf("Usage: %s eval <FEN>\n", argv[0]);
+            print("Usage: {} eval <FEN>\n", argv[0]);
             return 1;
         }
 
@@ -126,13 +132,13 @@ int main(int argc, char** argv) {
 
     if (strcmp(argv[1], "best") == 0) {
         if (argc < 3) {
-            printf("Usage: %s best <FEN>\n", argv[0]);
+            print("Usage: {} best <FEN>\n", argv[0]);
             return 1;
         }
 
         return best_main(argv[2]);
     }
 
-    printf("Invalid mode given '%s'\n", argv[1]);
+    print("Invalid mode given '{}'\n", argv[1]);
     return 1;
 }
