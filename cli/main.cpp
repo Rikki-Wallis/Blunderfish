@@ -3,7 +3,6 @@
 #include <array>
 
 #include "blunderfish.h"
-#include "../generated/generated_tables.h"
 
 constexpr size_t UNDO_MOVE = 0xffffffff; 
 
