@@ -46,18 +46,16 @@ enum Piece {
     NUM_PIECE_TYPES
 };
 
-enum MoveFlags {
-    FLAG_NONE,
-    FLAG_ENPASSANT = (1 << 0),
-    FLAG_DOUBLE_PUSH = (1 << 1),
-    FLAG_CAPUTRE = (1 << 2),
-    FLAG_PROMOTION = (1 << 3),
-    FLAG_PROMOTION_BISHOP = (1 << 4),
-    FLAG_PROMOTION_ROOK = (1 << 5),
-    FLAG_PROMOTION_QUEEN = (1 << 6),
-    FLAG_PROMOTION_KNIGHT = (1 << 7),
-    FLAG_SHORT_CASTLE = (1 << 8),
-    FLAG_LONG_CASTLE = (1 << 9)
+enum MoveType {
+    MOVE_NORMAL,
+    MOVE_DOUBLE_PUSH,
+    MOVE_EN_PASSANT,
+    MOVE_SHORT_CASTLE,
+    MOVE_LONG_CASTLE,
+    MOVE_PROMOTE_QUEEN,
+    MOVE_PROMOTE_BISHOP,
+    MOVE_PROMOTE_ROOK,
+    MOVE_PROMOTE_KNIGHT,
 };
 
 static const char* piece_alg_table[NUM_PIECE_TYPES] = {
@@ -70,12 +68,7 @@ static const char* piece_alg_table[NUM_PIECE_TYPES] = {
     "K",
 };
 
-struct Move {
-    uint8_t from;
-    uint8_t to;
-    uint8_t piece;
-    uint16_t flags;
-};
+using Move = uint16_t;
 
 struct Side {
     uint64_t bb[NUM_PIECE_TYPES];
@@ -166,3 +159,23 @@ inline uint64_t sq_to_bb(size_t index) {
 }
 
 uint64_t perft_search(int depth, Position& position);
+
+inline int move_from(Move move) {
+    return move & 0b111111;
+}
+
+inline int move_to(Move move) {
+    return (move >> 6) & 0b111111;
+}
+
+inline MoveType move_type(Move move) {
+    int type = (move >> 12) & 0b1111;
+    return (MoveType)type;
+}
+
+inline Move encode_move(int from, int to, MoveType type) {
+    uint16_t mv = (uint16_t)from; 
+    mv         |= ((uint16_t)to) << 6;
+    mv         |= ((uint16_t)type) << 12;
+    return mv;
+}

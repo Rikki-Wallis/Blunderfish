@@ -164,15 +164,9 @@ uint64_t Position::generate_attacks(int colour) const {
 std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     size_t move_count = 0;
 
-    auto new_move = [&](uint8_t from, uint8_t to, uint8_t piece, uint16_t flags) {
+    auto new_move = [&](int from, int to, MoveType type) {
         assert("move buffer overflow" && move_count < move_buf.size());
-
-        move_buf[move_count++] = Move {
-            .from = from,
-            .to = to,
-            .piece = piece,
-            .flags = flags
-        };
+        move_buf[move_count++] = encode_move(from, to, type);
     };
 
     int opp = opponent(to_move);
@@ -182,7 +176,7 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
 
     for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KING])) {
         for (uint8_t to : set_bits(king_moves(from, allies))) {
-            new_move(from, to, PIECE_KING, 0);
+            new_move(from, to, MOVE_NORMAL);
         }
     }
 
@@ -192,7 +186,7 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
         uint8_t from = to_move == WHITE ? 4 : 60;
         uint8_t to   = to_move == WHITE ? 6 : 62;
         if (!(castle_space & all)) {
-            new_move(from, to, PIECE_KING, FLAG_SHORT_CASTLE);
+            new_move(from, to, MOVE_SHORT_CASTLE);
         }
     }
 
@@ -201,59 +195,59 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
         uint8_t from = to_move == WHITE ? 4 : 60;
         uint8_t to   = to_move == WHITE ? 2 : 58;
         if (!(castle_space & all)) {
-            new_move(from, to, PIECE_KING, FLAG_LONG_CASTLE);
+            new_move(from, to, MOVE_LONG_CASTLE);
         }
     }
 
     for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KNIGHT])) {
         for (uint8_t to : set_bits(knight_moves(from, allies))) {
-            new_move(from, to, PIECE_KNIGHT, 0);
+            new_move(from, to, MOVE_NORMAL);
         }
     }
 
     for (uint8_t from: set_bits(sides[to_move].bb[PIECE_ROOK])) {
         for (uint8_t to : set_bits(rook_moves(from, all, allies))) {
-            new_move(from, to, PIECE_ROOK, 0);
+            new_move(from, to, MOVE_NORMAL);
         }
     }
 
     for (uint8_t from: set_bits(sides[to_move].bb[PIECE_BISHOP])) {
         for (uint8_t to : set_bits(bishop_moves(from, all, allies))) {
-            new_move(from, to, PIECE_BISHOP, 0);
+            new_move(from, to, MOVE_NORMAL);
         }
     }
 
     for (uint8_t from: set_bits(sides[to_move].bb[PIECE_QUEEN])) {
         for (uint8_t to : set_bits(queen_moves(from, all, allies))) {
-            new_move(from, to, PIECE_QUEEN, 0);
+            new_move(from, to, MOVE_NORMAL);
         }
     }
 
     auto pawn_single_moves    = to_move == WHITE ? white_pawn_single_moves : black_pawn_single_moves;
     auto pawn_double_moves    = to_move == WHITE ? white_pawn_double_moves : black_pawn_double_moves;
     auto pawn_enpassant_moves = to_move == WHITE ? white_pawn_enpassant_moves : black_pawn_enpassant_moves;
-    auto promotion_rank        = to_move == WHITE ? RANK_8 : RANK_1;
+    auto promotion_rank       = to_move == WHITE ? RANK_8 : RANK_1;
 
     for (uint8_t from : set_bits(sides[to_move].bb[PIECE_PAWN])) {
         for (uint8_t to : set_bits(pawn_single_moves(from, opps, all))) {
             
             if (sq_to_bb(to) & promotion_rank) {
-                new_move(from, to, PIECE_PAWN, FLAG_PROMOTION | FLAG_PROMOTION_KNIGHT);
-                new_move(from, to, PIECE_PAWN, FLAG_PROMOTION | FLAG_PROMOTION_BISHOP);
-                new_move(from, to, PIECE_PAWN, FLAG_PROMOTION | FLAG_PROMOTION_ROOK);
-                new_move(from, to, PIECE_PAWN, FLAG_PROMOTION | FLAG_PROMOTION_QUEEN);
+                new_move(from, to, MOVE_PROMOTE_KNIGHT);
+                new_move(from, to, MOVE_PROMOTE_BISHOP);
+                new_move(from, to, MOVE_PROMOTE_ROOK);
+                new_move(from, to, MOVE_PROMOTE_QUEEN);
             } 
             else {
-                new_move(from, to, PIECE_PAWN, 0);
+                new_move(from, to, MOVE_NORMAL);
             }
         }
 
         for (uint8_t to : set_bits(pawn_double_moves(from, all))) {
-            new_move(from, to, PIECE_PAWN, FLAG_DOUBLE_PUSH);
+            new_move(from, to, MOVE_DOUBLE_PUSH);
         }
 
         for (uint8_t to : set_bits(pawn_enpassant_moves(from, en_passant_sq))) {
-            new_move(from, to, PIECE_PAWN, FLAG_ENPASSANT);
+            new_move(from, to, MOVE_EN_PASSANT);
         }
     }
 
@@ -266,12 +260,10 @@ void Position::filter_moves(std::span<Move>& moves) {
     bool checked = is_in_check(to_move);
  
     for (int i = (int)moves.size()-1; i >= 0; --i) {
-        Move& m = moves[i];
+        Move m = moves[i];
 
-        bool short_castle = (m.flags & FLAG_SHORT_CASTLE) != 0;
-        bool long_castle = (m.flags & FLAG_LONG_CASTLE) != 0;
-
-        bool illegal = (short_castle || long_castle) && checked;
+        bool is_castle = move_type(m) == MOVE_LONG_CASTLE || move_type(m) == MOVE_SHORT_CASTLE;
+        bool illegal = is_castle && checked;
 
         make_move(m);
 
@@ -280,10 +272,10 @@ void Position::filter_moves(std::span<Move>& moves) {
         }
 
         // Make sure cant move through check when castling
-        if (m.flags & (FLAG_SHORT_CASTLE | FLAG_LONG_CASTLE)) {
+        if (is_castle) {
             uint64_t possible_check_pos = 0;
 
-            if (m.flags & FLAG_SHORT_CASTLE) {
+            if (move_type(m) == MOVE_SHORT_CASTLE) {
                 possible_check_pos = side == WHITE ? WHITE_SHORT_SPACING : BLACK_SHORT_SPACING;
             } else {
                 possible_check_pos = side == WHITE ? WHITE_LONG_SPACING : BLACK_LONG_SPACING;
@@ -307,20 +299,19 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
     std::vector<size_t> board[64];
 
     for (size_t i = 0; i < all.size(); ++i) {
-        board[all[i].to].push_back(i);
+        board[move_to(all[i])].push_back(i);
     }
 
     std::unordered_map<std::string, size_t> lookup;
 
     for (auto& moves : board) {
         for (size_t i = 0; i < moves.size(); ++i) {
-            Move& m = all[moves[i]];
+            Move m = all[moves[i]];
 
-            auto [f1, r1] = square_alg(m.from);
+            auto [f1, r1] = square_alg(move_from(m));
 
-            bool is_capture = (piece_at[m.to] != PIECE_NONE) || (m.flags & FLAG_ENPASSANT);
-            bool is_promotion = (m.flags & FLAG_PROMOTION);
-            bool need_file = m.piece == PIECE_PAWN && is_capture;
+            bool is_capture = (piece_at[move_to(m)] != PIECE_NONE) || move_type(m) == MOVE_EN_PASSANT;
+            bool need_file = piece_at[move_from(m)] == PIECE_PAWN && is_capture;
             bool need_rank = false;
 
             for (size_t j = 0; j < moves.size(); ++j) {
@@ -330,11 +321,11 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
 
                 Move& n = all[moves[j]];
 
-                if (m.piece != n.piece) {
+                if (piece_at[move_from(m)] != piece_at[move_from(n)]) {
                     continue;
                 }
 
-                auto [f2, r2] = square_alg(n.from);
+                auto [f2, r2] = square_alg(move_from(n));
 
                 if (f1 != f2) {
                     need_file = true;
@@ -344,31 +335,40 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
                 }
             }
 
-            auto [to_file, to_rank] = square_alg(m.to);
+            auto [to_file, to_rank] = square_alg(move_to(m));
 
             std::string promotion_str = "";
-            if (is_promotion) {
-                if (m.flags & FLAG_PROMOTION_KNIGHT) {
+            switch (move_type(m)) {
+                case MOVE_PROMOTE_KNIGHT:
                     promotion_str = "=N";
-                } else if (m.flags & FLAG_PROMOTION_BISHOP) {
+                    break;
+                case MOVE_PROMOTE_BISHOP:
                     promotion_str = "=B";
-                } else if (m.flags & FLAG_PROMOTION_ROOK) {
-                    promotion_str = "=R";
-                } else if (m.flags & FLAG_PROMOTION_QUEEN) {
+                    break;
+                case MOVE_PROMOTE_QUEEN:
                     promotion_str = "=Q";
-                }
+                    break;
+                case MOVE_PROMOTE_ROOK:
+                    promotion_str = "=R";
+                    break;
             }
+
             std::string capture_str = is_capture ? "x" : "";
             std::string unambig_file = need_file ? std::format("{}", f1) : "";
             std::string unambig_rank = need_rank ? std::format("{}", r1) : "";
 
             std::string name = "";
-            if (m.flags & FLAG_SHORT_CASTLE) {
-                name = "O-O";
-            } else if (m.flags & FLAG_LONG_CASTLE) {
-                name = "O-O-O";
-            } else {
-                name = std::format("{}{}{}{}{}{}{}", piece_alg_table[m.piece], unambig_file, unambig_rank, capture_str, to_file, to_rank, promotion_str);
+
+            switch (move_type(m)) {
+                case MOVE_SHORT_CASTLE:
+                    name = "O-O";
+                    break;
+                case MOVE_LONG_CASTLE:
+                    name = "O-O-O";
+                    break;
+                default:
+                    name = std::format("{}{}{}{}{}{}{}", piece_alg_table[piece_at[move_from(m)]], unambig_file, unambig_rank, capture_str, to_file, to_rank, promotion_str);
+                    break;
             }
 
             lookup.emplace(std::move(name), moves[i]);
@@ -392,33 +392,12 @@ inline void set_piece(Position& pos, int side, Piece piece, size_t index) {
     pos.piece_at[index] = (uint8_t)piece;
 }
 
-static std::pair<Piece, Piece> start_and_end_piece(const Move& move) {
-    Piece start_piece = (Piece)move.piece;
-    Piece end_piece   = (Piece)move.piece; // store this because promotions can change what piece is re-placed
-
-    // pray ts gets optimized into something other than this godless if statement chain
-    if (move.flags & FLAG_PROMOTION_BISHOP) {
-        end_piece = PIECE_BISHOP;
-    }
-    else if (move.flags & FLAG_PROMOTION_KNIGHT) {
-        end_piece = PIECE_KNIGHT;
-    }
-    else if (move.flags & FLAG_PROMOTION_QUEEN) {
-        end_piece = PIECE_QUEEN;
-    }
-    else if (move.flags & FLAG_PROMOTION_ROOK) {
-        end_piece = PIECE_QUEEN;
-    }
-
-    return {start_piece, end_piece};
-}
-
 static int get_captured_square(const Move& move, int to_move) {
-    int captured_pos = move.to; // usually the piece being captured is at the square being moved to
+    int captured_pos = move_to(move); // usually the piece being captured is at the square being moved to
 
-    if (move.flags & FLAG_ENPASSANT) { // en passant is the exception
+    if (move_type(move) == MOVE_EN_PASSANT) { // en passant is the exception
         int offsets[] = { -8, 8 };
-        captured_pos = move.to + offsets[to_move];
+        captured_pos = move_to(move) + offsets[to_move];
     }
 
     return captured_pos;
@@ -463,49 +442,67 @@ void Position::make_move(const Move& move) {
     // Then move the piece
     // The order matters here
 
-    auto [start_piece, end_piece] = start_and_end_piece(move);
+    Piece start_piece = (Piece)piece_at[move_from(move)];
+    Piece end_piece = start_piece;
 
-    remove_piece(*this, to_move, start_piece, move.from);
-    set_piece   (*this, to_move, end_piece,   move.to);
+    switch (move_type(move)) {
+        case MOVE_PROMOTE_BISHOP:
+            end_piece = PIECE_BISHOP;
+            break;
+        case MOVE_PROMOTE_KNIGHT:
+            end_piece = PIECE_KNIGHT;
+            break;
+        case MOVE_PROMOTE_QUEEN:
+            end_piece = PIECE_QUEEN;
+            break;
+        case MOVE_PROMOTE_ROOK:
+            end_piece = PIECE_ROOK;
+            break;
+    }
+
+    remove_piece(*this, to_move, start_piece, move_from(move));
+    set_piece   (*this, to_move, end_piece,   move_to(move));
 
     // Update castling rights
     
-    if (move.piece == PIECE_KING) {
-        sides[to_move].set_can_castle_kingside(false);
-        sides[to_move].set_can_castle_queenside(false);
-    }
-
-    if (move.piece == PIECE_ROOK) {
-        uint8_t kingside_rook_pos = to_move == WHITE ? 7 : 63;
-        uint8_t queenside_rook_pos = to_move == WHITE ? 0 : 56;
-
-        if (kingside_rook_pos == move.from) {
+    switch (piece_at[move_from(move)]) {
+        case PIECE_KING:
             sides[to_move].set_can_castle_kingside(false);
-        } else if (queenside_rook_pos == move.from) {
             sides[to_move].set_can_castle_queenside(false);
-        }
+            break;
+
+        case PIECE_ROOK:
+            uint8_t kingside_rook_pos = to_move == WHITE ? 7 : 63;
+            uint8_t queenside_rook_pos = to_move == WHITE ? 0 : 56;
+
+            if (kingside_rook_pos == move_from(move)) {
+                sides[to_move].set_can_castle_kingside(false);
+            } else if (queenside_rook_pos == move_from(move)) {
+                sides[to_move].set_can_castle_queenside(false);
+            }
+
+            break;
     }
 
-    if (move.flags & FLAG_DOUBLE_PUSH ) {
-        int offsets[] = { -8, 8 }; // set en passant marker
-        en_passant_sq = move.to + offsets[to_move];
-    }
-    else {
-        en_passant_sq = NULL_SQUARE;
-    }
+    en_passant_sq = NULL_SQUARE;
 
-    // some extra piece movement for castling
+    switch (move_type(move)) {
+        case MOVE_DOUBLE_PUSH: {
+            int offsets[] = { -8, 8 }; // set en passant marker
+            en_passant_sq = move_to(move) + offsets[to_move];
+        } break;
 
-    if (move.flags & FLAG_SHORT_CASTLE) {
-        auto [p1, p2] = short_castle_start_and_end_rook_squares(to_move);
-        remove_piece(*this, to_move, PIECE_ROOK, p1);
-        set_piece   (*this, to_move, PIECE_ROOK, p2);
-    }
+        case MOVE_SHORT_CASTLE: {
+            auto [p1, p2] = short_castle_start_and_end_rook_squares(to_move);
+            remove_piece(*this, to_move, PIECE_ROOK, p1);
+            set_piece   (*this, to_move, PIECE_ROOK, p2);
+        } break;
 
-    if (move.flags & FLAG_LONG_CASTLE) {
-        auto [p1, p2] = long_castle_start_and_end_rook_squares(to_move);
-        remove_piece(*this, to_move, PIECE_ROOK, p1);
-        set_piece   (*this, to_move, PIECE_ROOK, p2);
+        case MOVE_LONG_CASTLE: {
+            auto [p1, p2] = long_castle_start_and_end_rook_squares(to_move);
+            remove_piece(*this, to_move, PIECE_ROOK, p1);
+            set_piece   (*this, to_move, PIECE_ROOK, p2);
+        } break;
     }
 
     to_move = opponent(to_move);
@@ -517,28 +514,37 @@ void Position::unmake_move(const Move& move) {
 
     to_move = opponent(to_move);
 
-    auto [start_piece, end_piece] = start_and_end_piece(move);
+    Piece end_piece = (Piece)piece_at[move_to(move)];
+    Piece start_piece = end_piece;
 
-    remove_piece(*this, to_move, end_piece,   move.to);
-    set_piece   (*this, to_move, start_piece, move.from);
+    switch (move_type(move)) {
+        case MOVE_PROMOTE_BISHOP:
+        case MOVE_PROMOTE_KNIGHT:
+        case MOVE_PROMOTE_QUEEN:
+        case MOVE_PROMOTE_ROOK:
+            start_piece = PIECE_PAWN;
+            break;
+
+        case MOVE_SHORT_CASTLE: {
+            auto [p1, p2] = short_castle_start_and_end_rook_squares(to_move);
+            remove_piece(*this, to_move, PIECE_ROOK, p2);
+            set_piece   (*this, to_move, PIECE_ROOK, p1);
+        } break;
+
+        case MOVE_LONG_CASTLE: {
+            auto [p1, p2] = long_castle_start_and_end_rook_squares(to_move);
+            remove_piece(*this, to_move, PIECE_ROOK, p2);
+            set_piece   (*this, to_move, PIECE_ROOK, p1);
+        } break;
+    }
+
+    remove_piece(*this, to_move, end_piece,   move_to(move));
+    set_piece   (*this, to_move, start_piece, move_from(move));
 
     // replace the captured piece must be done AFTER we remove the moving piece
     if (undo.captured_piece != PIECE_NONE) {
         int captured_square = get_captured_square(move, to_move);
         set_piece(*this, opponent(to_move), (Piece)undo.captured_piece, captured_square);
-    }
-
-    // handle rook moves in the case of castling
-    if (move.flags & FLAG_SHORT_CASTLE) {
-        auto [p1, p2] = short_castle_start_and_end_rook_squares(to_move);
-        remove_piece(*this, to_move, PIECE_ROOK, p2);
-        set_piece   (*this, to_move, PIECE_ROOK, p1);
-    }
-
-    if (move.flags & FLAG_LONG_CASTLE) {
-        auto [p1, p2] = long_castle_start_and_end_rook_squares(to_move);
-        remove_piece(*this, to_move, PIECE_ROOK, p2);
-        set_piece   (*this, to_move, PIECE_ROOK, p1);
     }
 
     sides[0].flags = undo.flags[0];

@@ -1,6 +1,3 @@
-#define CATCH_CONFIG_RUNNER
-#include <catch2/catch_session.hpp>
-
 #include <cstdio>
 #include <iostream>
 #include <array>
@@ -150,16 +147,6 @@ int main(int argc, char** argv) {
         }
 
         return best_main(argv[2]);
-    }
-
-    if (strcmp(argv[1], "tests") == 0) {
-        // Run Catch2 tests
-        Catch::Session session;
-        
-        // You can pass Catch2 args here if needed
-        // For example, to run verbose: session.configData().verbosity = Catch::Verbosity::High;
-        
-        return session.run();
     }
 
     print("Invalid mode given '{}'\n", argv[1]);
