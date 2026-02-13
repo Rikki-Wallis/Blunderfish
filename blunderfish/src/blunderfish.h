@@ -164,3 +164,5 @@ inline int opponent(int side) {
 inline uint64_t sq_to_bb(size_t index) {
     return (uint64_t)1 << index;
 }
+
+uint64_t perft_search(int depth, Position& position);

@@ -12,16 +12,14 @@ set_target_properties(precompute_tables PROPERTIES
 add_custom_command(
     OUTPUT ${GENERATED_HPP}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${GENERATED_DIR}
-    COMMAND precompute_tables
-            ${GENERATED_HPP}
+    COMMAND precompute_tables ${GENERATED_HPP}
     DEPENDS precompute_tables
     COMMAND_EXPAND_LISTS
 )
 
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp)
-
-# Remove engine_module.cpp from the list
 list(FILTER SOURCES EXCLUDE REGEX ".*engine_module\\.cpp$")
 
 add_library(blunderfish STATIC ${SOURCES} ${GENERATED_HPP})
+target_include_directories(blunderfish PUBLIC ${CMAKE_CURRENT_LIST_DIR}/src)
 target_include_directories(blunderfish PRIVATE ${GENERATED_DIR})
