@@ -9,7 +9,7 @@
 
 constexpr size_t UNDO_MOVE = 0xffffffff; 
 
-static std::optional<Move> last_move; 
+std::vector<Move> move_stack;
 
 static size_t select_move(const std::unordered_map<std::string, size_t>& moves) {
     for (;;) {
@@ -19,7 +19,7 @@ static size_t select_move(const std::unordered_map<std::string, size_t>& moves) 
         std::cin >> input;
 
         if (input == "undo") {
-            if (last_move) {
+            if (move_stack.size() > 0) {
                 return UNDO_MOVE;
             }
         }
@@ -63,12 +63,14 @@ static int play_main() {
         size_t selected = select_move(move_names); 
 
         if (selected == UNDO_MOVE) {
-            pos.unmake_move(*last_move);
+            Move last_move = move_stack.back();
+            move_stack.pop_back();
+            pos.unmake_move(last_move);
         }
         else{
             auto& m = moves[selected];
             pos.make_move(m);
-            last_move = m;
+            move_stack.push_back(m);
         }
     }
 
