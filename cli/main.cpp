@@ -33,12 +33,17 @@ static int play_main() {
     for (;;) {
         pos.display(false);
 
-        if (pos.to_move == WHITE) {
-            std::array<Move, 256> move_buffer;
-            std::span<Move> moves = pos.generate_moves(move_buffer);
-            pos.filter_moves(moves);
-            std::unordered_map<std::string, size_t> move_names = pos.name_moves(moves); 
+        std::array<Move, 256> move_buffer;
+        std::span<Move> moves = pos.generate_moves(move_buffer);
+        pos.filter_moves(moves);
+        std::unordered_map<std::string, size_t> move_names = pos.name_moves(moves); 
 
+        if (moves.size() == 0) {
+            print("Game over.\n");
+            return 0;
+        }
+
+        if (pos.to_move == WHITE) {
             int count = 0;
 
             print("Available moves: ");
@@ -56,35 +61,13 @@ static int play_main() {
             pos.make_move(m);
         }
         else {
-            auto maybe_move = pos.best_move();
+            auto move_idx = pos.best_move(moves);
+            assert(move_idx != -1);
 
-            if (!maybe_move) {
-                printf("Game over.\n");
-                return 0;
-            }
-
-            auto m = *maybe_move;
+            auto& m = moves[move_idx];
             pos.make_move(m);
         }
     }
-
-    /*
-    for (uint8_t i = 0; i < 64; ++i) {
-        Position pos = {};
-
-        pos.sides[BLACK].bb[PIECE_KNIGHT] = (uint64_t)1 << i;
-        pos.piece_at[i] = PIECE_KNIGHT;
-
-        uint64_t moves = knight_moves(i, 0);
-        pos.sides[WHITE].bb[PIECE_PAWN] = moves;
-
-        for (auto x : set_bits(moves)) {
-            pos.piece_at[x] = PIECE_PAWN;
-        }
-
-        pos.display();
-    }
-    */
 
     return 0;
 }
@@ -106,9 +89,36 @@ static int eval_main(const char* FEN) {
 }
 
 static int best_main(const char* FEN) {
-    (void)FEN;
-    print("Best move: bruh!\n");
-    return 0;
+    auto maybe_pos = Position::decode_fen_string(FEN);
+
+    if (!maybe_pos) {
+        print("Invalid FEN string '{}'.\n", FEN);
+        return 1;
+    }
+
+    Position pos = std::move(*maybe_pos);
+
+    std::array<Move, 256> move_buf;
+    std::span<Move> moves = pos.generate_moves(move_buf);
+    pos.filter_moves(moves);
+    auto names = pos.name_moves(moves);
+
+    int best = pos.best_move(moves);
+
+    if (best == -1) {
+        print("There is no move.\n");
+        return 0;
+    }
+
+    for (auto& [name, move] : names) {
+        if (move == best) {
+            print("Best move: {}\n", name);
+            return 0;
+        }
+    }
+
+    assert(false); // should be unreachable
+    return 1;
 }
 
 int main(int argc, char** argv) {

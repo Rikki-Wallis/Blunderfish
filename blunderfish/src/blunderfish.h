@@ -147,7 +147,7 @@ struct Position {
     int64_t eval() const;
     int64_t negamax(int depth, int ply);
 
-    std::optional<Move> best_move();
+    int best_move(std::span<Move> moves);
 };
 
 inline std::pair<char, int> square_alg(size_t sq) {
