@@ -278,16 +278,6 @@ std::vector<uint64_t> Side::get_bbs() const {
     return std::vector<uint64_t>(bb, bb + NUM_PIECE_TYPES);
 }
 
-bool Position::is_in_check(int colour) const {
-    uint64_t king_bb = sides[colour].bb[PIECE_KING];
-
-    if (generate_attacks(opponent(colour)) & king_bb) {
-        return true;
-    }
-    
-    return false;
-}
-
 static void fill_map(uint8_t* map, uint64_t bb, uint8_t value) {
     assert(value);
 

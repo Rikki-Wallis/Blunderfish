@@ -20,7 +20,7 @@ static uint64_t king_moves(uint8_t from, uint64_t allies) {
 }
 
 // Knights
-static uint64_t knight_moves(uint8_t from, uint64_t allies) {
+static uint64_t knight_moves(int from, uint64_t allies) {
     uint64_t bb = sq_to_bb(from);
 
     uint64_t ul = (bb >> 17) & ~FILE_H;
@@ -112,54 +112,78 @@ static size_t magic_index(uint64_t all_pieces, uint64_t mask, uint64_t magic, si
     return static_cast<size_t>(((all_pieces & mask) * magic) >> shift);
 }
 
-uint64_t rook_moves(uint8_t from, uint64_t all_pieces, uint64_t allies) {
+uint64_t rook_moves(int from, uint64_t all_pieces, uint64_t allies) {
     size_t index = magic_index(all_pieces, rook_mask[from], rook_magic[from], rook_shift[from]);
     uint64_t moves = rook_move[from][index];
     return moves & (~allies);
 }
 
-uint64_t bishop_moves(uint8_t from, uint64_t all_pieces, uint64_t allies) {
+uint64_t bishop_moves(int from, uint64_t all_pieces, uint64_t allies) {
     size_t index = magic_index(all_pieces, bishop_mask[from], bishop_magic[from], bishop_shift[from]);
     uint64_t moves = bishop_move[from][index];
     return moves & (~allies);
 }
 
-uint64_t queen_moves(uint8_t from, uint64_t all_pieces, uint64_t allies) {
+uint64_t queen_moves(int from, uint64_t all_pieces, uint64_t allies) {
     return bishop_moves(from, all_pieces, allies) | rook_moves(from, all_pieces, allies);
 }
 
+bool Position::is_in_check(int colour) const {
+    uint64_t king_bb = sides[colour].bb[PIECE_KING];
+    assert(std::popcount(king_bb) == 1);
+    int king_index = std::countr_zero(king_bb);
 
-// TODO: Maybe change later to use moves instead of seperate attack function
-uint64_t Position::generate_attacks(int colour) const {
+    int opp = opponent(colour);
+
     uint64_t all = all_pieces();
     uint64_t allies = sides[colour].all();
-    uint64_t attacks = 0;
+    uint64_t opps = sides[opp].all();
 
-    for (uint8_t from : set_bits(sides[colour].bb[PIECE_KING])) {
-        attacks |= king_moves(from, allies);
+    uint64_t diags = bishop_moves(king_index, all, allies);
+    uint64_t straights = rook_moves(king_index, all, allies);
+    uint64_t ls = knight_moves(king_index, allies);
+
+    for (uint8_t from : set_bits(sides[opp].bb[PIECE_KNIGHT] & ls)) {
+        if (knight_moves(from, opps) & king_bb) {
+            return true;
+        }
     }
 
-    for (uint8_t from : set_bits(sides[colour].bb[PIECE_KNIGHT])) {
-        attacks |= knight_moves(from, allies);
+    for (uint8_t from : set_bits(sides[opp].bb[PIECE_ROOK] & straights)) {
+        if(rook_moves(from, all, opps) & king_bb) {
+            return true;
+        }
     }
 
-    for (uint8_t from: set_bits(sides[colour].bb[PIECE_ROOK])) {
-        attacks |= rook_moves(from, all, allies);
+    for (uint8_t from : set_bits(sides[opp].bb[PIECE_BISHOP] & diags)) {
+        if(bishop_moves(from, all, opps) & king_bb) {
+            return true;
+        }
     }
 
-    for (uint8_t from: set_bits(sides[colour].bb[PIECE_BISHOP])) {
-        attacks |= bishop_moves(from, all, allies);
+    for (uint8_t from : set_bits(sides[opp].bb[PIECE_QUEEN] & (diags | straights))) {
+        if(queen_moves(from, all, opps) & king_bb) {
+            return true;
+        }
     }
 
-    for (uint8_t from: set_bits(sides[colour].bb[PIECE_QUEEN])) {
-        attacks |= queen_moves(from, all, allies);
+    for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KING] & (diags | straights))) {
+        if(king_moves(from, opps)) {
+            return true;
+        }
     }
 
-    auto pawn_attacks = colour == WHITE ? white_pawn_attacks : black_pawn_attacks;
-    attacks |= pawn_attacks(sides[colour].bb[PIECE_PAWN]);
+    auto pawn_single_moves = opp == WHITE ? white_pawn_single_moves : black_pawn_single_moves;
 
-    return attacks;
+    for (uint8_t from : set_bits(sides[opp].bb[PIECE_PAWN] & diags)) {
+        if(pawn_single_moves(from, allies, all) & king_bb) {
+            return true;
+        }
+    }
+
+    return false;
 }
+
 
 std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     size_t move_count = 0;

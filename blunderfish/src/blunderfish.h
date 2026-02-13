@@ -119,8 +119,6 @@ struct Position {
     static std::optional<Position> decode_fen_string(const std::string& fen);
 
     std::span<Move> generate_moves(std::span<Move> move_buf) const;
-    
-    uint64_t generate_attacks(int colour) const;
 
     std::unordered_map<std::string, size_t> name_moves(std::span<Move> moves) const;
 
