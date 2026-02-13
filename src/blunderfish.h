@@ -89,7 +89,7 @@ struct Side {
 
     uint64_t all() const;
 
-    int material_value() const;
+    int64_t material_value() const;
 
     std::vector<uint64_t> get_bbs() const; 
 };
@@ -144,7 +144,10 @@ struct Position {
 
     void verify_integrity() const;
 
-    int eval() const;
+    int64_t eval() const;
+    int64_t negamax(int depth, int ply);
+
+    std::optional<Move> best_move();
 };
 
 inline std::pair<char, int> square_alg(size_t sq) {

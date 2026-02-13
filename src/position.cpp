@@ -280,9 +280,8 @@ std::vector<uint64_t> Side::get_bbs() const {
 
 bool Position::is_in_check(int colour) const {
     uint64_t king_bb = sides[colour].bb[PIECE_KING];
-    uint8_t opp_colour = colour == WHITE ? BLACK : WHITE;
 
-    if (generate_attacks(opp_colour) & king_bb) {
+    if (generate_attacks(opponent(colour)) & king_bb) {
         return true;
     }
     

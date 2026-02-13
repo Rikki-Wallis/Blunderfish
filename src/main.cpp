@@ -7,20 +7,12 @@
 
 constexpr size_t UNDO_MOVE = 0xffffffff; 
 
-std::vector<Move> move_stack;
-
 static size_t select_move(const std::unordered_map<std::string, size_t>& moves) {
     for (;;) {
         print("Enter a valid move: ");
 
         std::string input;
         std::cin >> input;
-
-        if (input == "undo") {
-            if (move_stack.size() > 0) {
-                return UNDO_MOVE;
-            }
-        }
 
         if (moves.contains(input)) {
             return moves.at(input);
@@ -40,35 +32,40 @@ static int play_main() {
     Position pos(std::move(*maybe_pos));
 
     for (;;) {
-        pos.display(true);
+        pos.display(false);
 
-        std::array<Move, 256> move_buffer;
-        std::span<Move> moves = pos.generate_moves(move_buffer);
-        pos.filter_moves(moves);
-        std::unordered_map<std::string, size_t> move_names = pos.name_moves(moves); 
+        if (pos.to_move == WHITE) {
+            std::array<Move, 256> move_buffer;
+            std::span<Move> moves = pos.generate_moves(move_buffer);
+            pos.filter_moves(moves);
+            std::unordered_map<std::string, size_t> move_names = pos.name_moves(moves); 
 
-        int count = 0;
+            int count = 0;
 
-        print("Available moves: ");
-        for (auto& [name, i] : move_names) {
-            if (count++ > 0) {
-                print(", ");
+            print("Available moves: ");
+            for (auto& [name, i] : move_names) {
+                if (count++ > 0) {
+                    print(", ");
+                }
+                print("{}", name);
             }
-            print("{}", name);
-        }
-        print("\n");
+            print("\n");
 
-        size_t selected = select_move(move_names); 
+            size_t selected = select_move(move_names); 
 
-        if (selected == UNDO_MOVE) {
-            Move last_move = move_stack.back();
-            move_stack.pop_back();
-            pos.unmake_move(last_move);
-        }
-        else{
             auto& m = moves[selected];
             pos.make_move(m);
-            move_stack.push_back(m);
+        }
+        else {
+            auto maybe_move = pos.best_move();
+
+            if (!maybe_move) {
+                printf("Game over.\n");
+                return 0;
+            }
+
+            auto m = *maybe_move;
+            pos.make_move(m);
         }
     }
 
@@ -102,7 +99,7 @@ static int eval_main(const char* FEN) {
     }
 
     Position pos = std::move(*maybe_pos);
-    int v = pos.eval();
+    int64_t v = pos.eval();
 
     print("Position eval: {}\n", v);
 

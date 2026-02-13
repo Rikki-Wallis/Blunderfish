@@ -1,6 +1,6 @@
 #include "blunderfish.h"
 
-inline int piece_value(Piece piece) {
+inline int64_t piece_value(Piece piece) {
     switch (piece) {
         default:
             assert(false);
@@ -20,8 +20,8 @@ inline int piece_value(Piece piece) {
     }
 }
 
-int Side::material_value() const {
-    int sum = 0;
+int64_t Side::material_value() const {
+    int64_t sum = 0;
 
     for (int p = PIECE_PAWN; p < NUM_PIECE_TYPES; ++p) {
         int n = std::popcount(bb[p]);
@@ -31,6 +31,6 @@ int Side::material_value() const {
     return sum;
 }
 
-int Position::eval() const {
+int64_t Position::eval() const {
     return sides[WHITE].material_value() - sides[BLACK].material_value();
 }
