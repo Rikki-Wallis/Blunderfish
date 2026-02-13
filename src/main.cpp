@@ -5,8 +5,6 @@
 #include "blunderfish.h"
 #include "../generated/generated_tables.h"
 
-//uint64_t knight_moves(uint8_t from, uint64_t allies);
-
 constexpr size_t UNDO_MOVE = 0xffffffff; 
 
 std::vector<Move> move_stack;
@@ -35,7 +33,7 @@ static int play_main() {
 
     auto maybe_pos = Position::decode_fen_string(start_fen);
     if (!maybe_pos) {
-        printf("Invalid FEN string.\n");
+        print("Invalid FEN string.\n");
         return 1;
     }
 
@@ -96,20 +94,30 @@ static int play_main() {
 }
 
 static int eval_main(const char* FEN) {
-    (void)FEN;
-    printf("Position eval: 67\n");
+    auto maybe_pos = Position::decode_fen_string(FEN);
+
+    if (!maybe_pos) {
+        print("Invalid FEN string '{}'.\n", FEN);
+        return 1;
+    }
+
+    Position pos = std::move(*maybe_pos);
+    int v = pos.eval();
+
+    print("Position eval: {}\n", v);
+
     return 0;
 }
 
 static int best_main(const char* FEN) {
     (void)FEN;
-    printf("Best move: bruh!\n");
+    print("Best move: bruh!\n");
     return 0;
 }
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        printf("Usage: %s <play, eval, best> <FEN?>\n", argv[0]);
+        print("Usage: {} <play, eval, best> <FEN?>\n", argv[0]);
         return 1;
     }
 
@@ -119,7 +127,7 @@ int main(int argc, char** argv) {
 
     if (strcmp(argv[1], "eval") == 0) {
         if (argc < 3) {
-            printf("Usage: %s eval <FEN>\n", argv[0]);
+            print("Usage: {} eval <FEN>\n", argv[0]);
             return 1;
         }
 
@@ -128,13 +136,13 @@ int main(int argc, char** argv) {
 
     if (strcmp(argv[1], "best") == 0) {
         if (argc < 3) {
-            printf("Usage: %s best <FEN>\n", argv[0]);
+            print("Usage: {} best <FEN>\n", argv[0]);
             return 1;
         }
 
         return best_main(argv[2]);
     }
 
-    printf("Invalid mode given '%s'\n", argv[1]);
+    print("Invalid mode given '{}'\n", argv[1]);
     return 1;
 }
