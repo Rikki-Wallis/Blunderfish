@@ -14,8 +14,9 @@ uint64_t perft_search(int depth, Position& position) {
     position.filter_moves(moves);
 
     for (const Move& move : moves) {
-        Position next = position.execute_move(move);
-        nodes += perft_search(depth-1, next);
+        position.make_move(move);
+        nodes += perft_search(depth-1, position);
+        position.unmake_move(move);
     }
 
     return nodes;
