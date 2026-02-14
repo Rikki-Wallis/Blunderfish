@@ -201,6 +201,7 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
         uint8_t from = to_move == WHITE ? 4 : 60;
         uint8_t to   = to_move == WHITE ? 6 : 62;
         assert(std::countr_zero(sides[to_move].bb[PIECE_KING]) == from);
+        assert(sides[to_move].bb[PIECE_ROOK] & sq_to_bb(to_move == WHITE ? 7 : 63));
         if (!(castle_space & all)) {
             new_move(from, to, MOVE_SHORT_CASTLE);
         }
@@ -211,6 +212,7 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
         uint8_t from = to_move == WHITE ? 4 : 60;
         uint8_t to   = to_move == WHITE ? 2 : 58;
         assert(std::countr_zero(sides[to_move].bb[PIECE_KING]) == from);
+        assert(sides[to_move].bb[PIECE_ROOK] & sq_to_bb(to_move == WHITE ? 0 : 56));
         if (!(castle_space & all)) {
             new_move(from, to, MOVE_LONG_CASTLE);
         }
@@ -461,6 +463,23 @@ void Position::make_move(const Move& move) {
 
     if (captured_piece != PIECE_NONE) {
         remove_piece(*this, opponent(to_move), captured_piece, captured_pos);
+
+        if (captured_piece == PIECE_ROOK) {
+            switch (((opponent(to_move)) << 6) | captured_pos) {
+                case (WHITE << 6) | 0:
+                    sides[WHITE].set_can_castle_queenside(false);
+                    break;
+                case (WHITE << 6) | 7:
+                    sides[WHITE].set_can_castle_kingside(false);
+                    break;
+                case (BLACK << 6) | 56:
+                    sides[BLACK].set_can_castle_queenside(false);
+                    break;
+                case (BLACK << 6) | 63:
+                    sides[BLACK].set_can_castle_kingside(false);
+                    break;
+            } 
+        }
     }
 
     // Then move the piece
