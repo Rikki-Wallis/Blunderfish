@@ -47,12 +47,12 @@ TEST_CASE("Perft - Starting Position") {
 
         Position pos(std::move(*maybe_pos));
 
-    REQUIRE(perft_search(1, pos) == 20);
-    REQUIRE(perft_search(2, pos) == 400);
-    REQUIRE(perft_search(3, pos) == 8902);
-    REQUIRE(perft_search(4, pos) == 197281);
-    REQUIRE(perft_search(5, pos) == 4865609);
-    //REQUIRE(perft_search(6, pos) == 119080324);
+        REQUIRE(perft_search(1, pos) == 20);
+        REQUIRE(perft_search(2, pos) == 400);
+        REQUIRE(perft_search(3, pos) == 8902);
+        REQUIRE(perft_search(4, pos) == 197281);
+        REQUIRE(perft_search(5, pos) == 4865609);
+        REQUIRE(perft_search(6, pos) == 119080324);
     }
 }
 
@@ -69,6 +69,6 @@ TEST_CASE("Perft - Kiwipete Position") {
         REQUIRE(perft_search(3, pos) == 97862);
         REQUIRE(perft_search(4, pos) == 4085603);
         REQUIRE(perft_search(5, pos) == 193690690);
-        //REQUIRE(perft_search(6, pos) == 8031647685);
+        REQUIRE(perft_search(6, pos) == 8031647685);
     }
 }
