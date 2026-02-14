@@ -133,14 +133,14 @@ bool Position::is_attacked(int side, int square) const {
 
     int opp = opponent(side);
 
-    uint64_t allies = (sides[side].all() & ~(sides[side].bb[PIECE_KING])) | bb;
-    uint64_t opp_mask = sides[opp].all();
-    uint64_t all = allies | opp_mask;
+    uint64_t allies = sides[side].all() & ~(sides[side].bb[PIECE_KING]);
+    //uint64_t opp_mask = sides[opp].all();
+    uint64_t all = all_pieces() & ~(sides[side].bb[PIECE_KING]);
 
     uint64_t diag_mask = bishop_moves(square, all, allies);
     uint64_t straight_mask = rook_moves(square, all, allies);
     uint64_t knight_mask = knight_moves(square, allies);
-    uint64_t pawn_mask = side == WHITE ? black_pawn_single_moves(square, opp_mask, all) : white_pawn_single_moves(square, opp_mask, all); // reversed side
+    uint64_t pawn_mask = side == WHITE ? white_pawn_attacks(bb) : black_pawn_attacks(bb); // reversed side
     uint64_t king_mask = king_moves(square, allies);
 
     if (diag_mask & sides[opp].bb[PIECE_BISHOP]) {
@@ -276,13 +276,13 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
 void Position::filter_moves(std::span<Move>& moves) {
     int side = to_move; // ALERT! do NOT use to_move because it is altered by make_move
 
-    bool checked = is_in_check(to_move);
+    bool currently_checked = is_in_check(side);
  
     for (int i = (int)moves.size()-1; i >= 0; --i) {
         Move m = moves[i];
 
         bool is_castle = move_type(m) == MOVE_LONG_CASTLE || move_type(m) == MOVE_SHORT_CASTLE;
-        bool illegal = is_castle && checked;
+        bool illegal = is_castle && currently_checked;
 
         // Make sure cant move through check when castling
         if (is_castle) {
@@ -446,6 +446,8 @@ void Position::make_move(const Move& move) {
 
     int captured_pos = get_captured_square(move, to_move);
     Piece captured_piece = (Piece)piece_at[captured_pos];
+
+    assert(captured_piece != PIECE_KING);
 
     // Little aside before we modify anything, record the destroyable data in the undo stack
 
