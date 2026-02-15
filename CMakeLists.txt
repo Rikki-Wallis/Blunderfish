@@ -15,6 +15,8 @@ else()
   add_compile_options(-Wall -Wextra -Wpedantic -Werror -Wimplicit-int-conversion)
 endif()
 
+add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+
 add_subdirectory(blunderfish)
 add_subdirectory(cli)
 add_subdirectory(tests)

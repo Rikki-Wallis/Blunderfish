@@ -105,10 +105,11 @@ struct Position {
     int undo_count;
 
     Position()
-        : to_move(WHITE), en_passant_sq(NULL_SQUARE), undo_stack({}), undo_count(0)
+        : to_move(WHITE), en_passant_sq(NULL_SQUARE), undo_count(0)
     {
         memset(sides, 0, sizeof(sides));
         memset(piece_at, 0, sizeof(piece_at));
+        memset(undo_stack, 0, sizeof(undo_stack));
     }
 
     Position(Position&&) = default;

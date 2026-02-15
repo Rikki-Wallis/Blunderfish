@@ -6,6 +6,7 @@
 #include <format>
 #include <random>
 #include <limits>
+#include <memory.h>
 
 typedef struct { uint64_t state;  uint64_t inc; } pcg32_random_t;
 
@@ -275,11 +276,7 @@ int main(int argc, char** argv) {
     Tables bishops = generate_table(bishop_mask_at, bishop_moves_at);
 
     const char* path = argv[1];
-    FILE* file = nullptr;
-    if (fopen_s(&file, path, "w") != 0) {
-        fprintf(stderr, "Failed to open file: %s\n", path);
-        return 1;
-    }
+    FILE* file = fopen(path, "w");
 
     if (!file) {
         fprint(stderr, "Failed to write %s\n", path);

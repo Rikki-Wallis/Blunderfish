@@ -4,8 +4,6 @@
 
 #include "blunderfish.h"
 
-constexpr size_t UNDO_MOVE = 0xffffffff; 
-
 static size_t select_move(const std::unordered_map<std::string, size_t>& moves) {
     for (;;) {
         print("Enter a valid move: ");
@@ -111,7 +109,7 @@ static int best_main(const char* FEN) {
     }
 
     for (auto& [name, move] : names) {
-        if (move == best) {
+        if (move == (size_t)best) {
             print("Best move: {}\n", name);
             return 0;
         }

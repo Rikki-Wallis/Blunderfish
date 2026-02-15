@@ -36,7 +36,7 @@ TEST_CASE("Perft - Benchmark") {
         times.push_back(run_and_time([&] {return perft_search(5, pos);}));
         times.push_back(run_and_time([&] {return perft_search(6, pos);}));
 
-        int i = 0;
+        size_t i = 0;
         std::vector<uint64_t> nodes = {20, 400, 8902, 197281, 4865609, 119060324};
         for (i = 0; i < times.size(); ++i) {
                         
@@ -67,7 +67,7 @@ TEST_CASE("best_move - Benchmark") {
         times.push_back(run_and_time([&] {return pos.best_move(pos.generate_moves(move_buf), 5);}));
         times.push_back(run_and_time([&] {return pos.best_move(pos.generate_moves(move_buf), 6);}));
 
-        int i = 0;
+        size_t i = 0;
         std::vector<uint64_t> nodes = {20, 400, 8902, 197281, 4865609, 119060324};
         for (i = 0; i < times.size(); ++i) {
                         

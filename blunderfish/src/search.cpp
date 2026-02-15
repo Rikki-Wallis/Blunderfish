@@ -46,7 +46,7 @@ int Position::best_move(std::span<Move> moves, uint8_t depth) {
     int64_t best_score = INT64_MIN;
     int best_move = -1;
 
-    for (int i = 0; i < moves.size(); ++i) {
+    for (int i = 0; i < (int)moves.size(); ++i) {
         Move m = moves[i];
 
         make_move(m);

@@ -361,6 +361,8 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
 
             std::string promotion_str = "";
             switch (move_type(m)) {
+                default:
+                    break;
                 case MOVE_PROMOTE_KNIGHT:
                     promotion_str = "=N";
                     break;
@@ -491,6 +493,8 @@ void Position::make_move(const Move& move) {
     Piece end_piece = start_piece;
 
     switch (move_type(move)) {
+        default:
+            break;
         case MOVE_PROMOTE_BISHOP:
             end_piece = PIECE_BISHOP;
             break;
@@ -511,6 +515,8 @@ void Position::make_move(const Move& move) {
     // Update castling rights
     
     switch (piece) {
+        default:
+            break;
         case PIECE_KING:
             sides[to_move].set_can_castle_kingside(false);
             sides[to_move].set_can_castle_queenside(false);
@@ -532,6 +538,9 @@ void Position::make_move(const Move& move) {
     en_passant_sq = NULL_SQUARE;
 
     switch (move_type(move)) {
+        default:
+            break;
+
         case MOVE_DOUBLE_PUSH: {
             int offsets[] = { -8, 8 }; // set en passant marker
             en_passant_sq = move_to(move) + offsets[to_move];
@@ -563,6 +572,9 @@ void Position::unmake_move(const Move& move) {
     Piece start_piece = end_piece;
 
     switch (move_type(move)) {
+        default:
+            break;
+
         case MOVE_PROMOTE_BISHOP:
         case MOVE_PROMOTE_KNIGHT:
         case MOVE_PROMOTE_QUEEN:
