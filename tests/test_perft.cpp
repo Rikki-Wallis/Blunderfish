@@ -60,6 +60,7 @@ TEST_CASE("best_move - Benchmark") {
 
         std::vector<uint64_t> times;
         std::array<Move, 256> move_buf;
+        times.push_back(run_and_time([&] {return pos.best_move(pos.generate_moves(move_buf), 1);}));
         times.push_back(run_and_time([&] {return pos.best_move(pos.generate_moves(move_buf), 2);}));
         times.push_back(run_and_time([&] {return pos.best_move(pos.generate_moves(move_buf), 3);}));
         times.push_back(run_and_time([&] {return pos.best_move(pos.generate_moves(move_buf), 4);}));
