@@ -61,7 +61,7 @@ static int play_main() {
             pos.make_move(m);
         }
         else {
-            auto move_idx = pos.best_move(moves);
+            auto move_idx = pos.best_move(moves, 4);
             assert(move_idx != -1);
 
             Move m = moves[move_idx];
@@ -103,7 +103,7 @@ static int best_main(const char* FEN) {
     pos.filter_moves(moves);
     auto names = pos.name_moves(moves);
 
-    int best = pos.best_move(moves);
+    int best = pos.best_move(moves, 4);
 
     if (best == -1) {
         print("There is no move.\n");
@@ -123,7 +123,7 @@ static int best_main(const char* FEN) {
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        print("Usage: {} <play, eval, best, tests> <FEN?>\n", argv[0]);
+        print("Usage: {} <play, eval, best> <FEN?>\n", argv[0]);
         return 1;
     }
 
