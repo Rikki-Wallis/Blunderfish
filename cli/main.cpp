@@ -59,11 +59,11 @@ static int play_main() {
             pos.make_move(m);
         }
         else {
-            size_t move_idx = pos.best_move(moves, 7);
+            int move_idx = pos.best_move(moves, 7);
             assert(move_idx != -1);
 
             for (auto& [name, m] : move_names) {
-                if (m == move_idx) {
+                if (m == (size_t)move_idx) {
                     print("Blunderfish plays {}\n", name);
                 }
             }
@@ -87,7 +87,7 @@ static int eval_main(const char* FEN) {
     Position pos = std::move(*maybe_pos);
     int64_t v = pos.eval();
 
-    print("Position eval: {}\n", v);
+    print("{}\n", v);
 
     return 0;
 }
@@ -116,7 +116,7 @@ static int best_main(const char* FEN) {
 
     for (auto& [name, move] : names) {
         if (move == (size_t)best) {
-            print("Best move: {}\n", name);
+            print("{}\n", name);
             return 0;
         }
     }

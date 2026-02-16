@@ -380,7 +380,7 @@ void Position::filter_moves(std::span<Move>& moves) {
     }
 }
 
-std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all) const {
+std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all) {
     std::vector<size_t> board[64];
 
     for (size_t i = 0; i < all.size(); ++i) {
@@ -433,6 +433,20 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
             std::string unambig_file = need_file ? std::format("{}", f1) : "";
             std::string unambig_rank = need_rank ? std::format("{}", r1) : "";
 
+            std::string check_suffix = "";
+
+            make_move(m);
+            if (is_in_check(to_move)) {
+                std::array<Move, 256> temp;
+                if (generate_moves(temp).size() == 0) {
+                    check_suffix = "#";
+                }
+                else {
+                    check_suffix = "+";
+                }
+            }
+            unmake_move(m);
+
             std::string name = "";
 
             switch (move_type(m)) {
@@ -443,7 +457,7 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
                     name = "O-O-O";
                     break;
                 default:
-                    name = std::format("{}{}{}{}{}{}{}", piece_alg_table[piece_at[move_from(m)]], unambig_file, unambig_rank, capture_str, to_file, to_rank, promotion_str);
+                    name = std::format("{}{}{}{}{}{}{}{}", piece_alg_table[piece_at[move_from(m)]], unambig_file, unambig_rank, capture_str, to_file, to_rank, promotion_str, check_suffix);
                     break;
             }
 

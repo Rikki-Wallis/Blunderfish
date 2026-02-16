@@ -7,7 +7,7 @@ board.addEventListener('drag-start', (e) => {
   const {source, piece, position, orientation} = e.detail;
 
   // do not pick up pieces if the game is over
-  if (game.game_over()) {
+  if (game.isGameOver()) {
     e.preventDefault();
     return;
   }
@@ -19,18 +19,30 @@ board.addEventListener('drag-start', (e) => {
   }
 });
 
-function makeRandomMove () {
+async function makeMove() {
+  const m = await fetch('/api/bestmove', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({fen: game.fen() })
+  });
+
+  const moveJson = await m.json();
+  const move = moveJson.move;
+
   let possibleMoves = game.moves();
 
-  // game over
   if (possibleMoves.length === 0) {
     return;
   }
 
-  console.log(possibleMoves);
+  if (!possibleMoves.includes(move)) {
+    alert("Engine gave illegal move " + move);
+  }
 
-  const randomIdx = Math.floor(Math.random() * possibleMoves.length);
-  game.move(possibleMoves[randomIdx]);
+  game.move(move);
+  
   board.setPosition(game.fen());
 }
 
@@ -51,7 +63,7 @@ board.addEventListener('drop', (e) => {
   }
 
   // make random legal move for black
-  window.setTimeout(makeRandomMove, 250);
+  window.setTimeout(makeMove, 250);
 });
 
 // update the board position after the piece snap
