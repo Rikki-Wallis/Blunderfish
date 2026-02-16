@@ -236,9 +236,25 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     }
 
     // Castling
-    uint32_t kcastle_flag = to_move == WHITE ? POSITION_FLAG_WHITE_KCASTLE : POSITION_FLAG_BLACK_KCASTLE;
 
-    if (flags & kcastle_flag) {
+    uint32_t kcastle_flag = to_move == WHITE ? POSITION_FLAG_WHITE_KCASTLE : POSITION_FLAG_BLACK_KCASTLE;
+    uint32_t qcastle_flag = to_move == WHITE ? POSITION_FLAG_WHITE_QCASTLE : POSITION_FLAG_BLACK_QCASTLE;
+
+    bool can_kcastle = (flags & kcastle_flag) != 0;
+    bool can_qcastle = (flags & qcastle_flag) != 0;
+
+    if (is_in_check(to_move)) {
+        can_kcastle = false;
+        can_qcastle = false;
+    }
+
+    can_kcastle = can_kcastle && !is_attacked(to_move, to_move == WHITE ? 5 : 61);
+    can_kcastle = can_kcastle && !is_attacked(to_move, to_move == WHITE ? 6 : 62);
+
+    can_qcastle = can_qcastle && !is_attacked(to_move, to_move == WHITE ? 3 : 59);
+    can_qcastle = can_qcastle && !is_attacked(to_move, to_move == WHITE ? 2 : 58);
+
+    if (can_kcastle) {
         uint64_t castle_space = to_move == WHITE ? WHITE_SHORT_SPACING : BLACK_SHORT_SPACING;
         uint8_t from = to_move == WHITE ? 4 : 60;
         uint8_t to   = to_move == WHITE ? 6 : 62;
@@ -249,9 +265,7 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
         }
     }
 
-    uint32_t qcastle_flag = to_move == WHITE ? POSITION_FLAG_WHITE_QCASTLE : POSITION_FLAG_BLACK_QCASTLE;
-
-    if (flags & qcastle_flag) {
+    if (can_qcastle) {
         uint64_t castle_space = to_move == WHITE ? WHITE_LONG_SPACING : BLACK_LONG_SPACING;
         uint8_t from = to_move == WHITE ? 4 : 60;
         uint8_t to   = to_move == WHITE ? 2 : 58;
@@ -346,45 +360,22 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
 }
 
 void Position::filter_moves(std::span<Move>& moves) {
-    int side = to_move; // ALERT! do NOT use to_move because it is altered by make_move
+    int side = to_move;
 
-    bool currently_checked = is_in_check(side);
- 
     for (int i = (int)moves.size()-1; i >= 0; --i) {
-        Move m = moves[i];
+        bool illegal = false;
 
-        bool is_castle = move_type(m) == MOVE_LONG_CASTLE || move_type(m) == MOVE_SHORT_CASTLE;
-        bool illegal = is_castle && currently_checked;
-
-        // Make sure cant move through check when castling
-        if (is_castle) {
-            int pos1;
-            int pos2;
-
-            if (move_type(m) == MOVE_SHORT_CASTLE) {
-                pos1 = side == WHITE ? 5 : 61;
-                pos2 = side == WHITE ? 6 : 62;
-            } else {
-                pos1 = side == WHITE ? 3 : 59;
-                pos2 = side == WHITE ? 2 : 58;
-            }
-
-            if (is_attacked(side, pos1) || is_attacked(side, pos2)) {
-                illegal = true;
-            }
-        }
-
-        make_move(m);
+        make_move(moves[i]);
 
         if (is_in_check(side)) {
             illegal = true;
         }
 
-        unmake_move(m);
+        unmake_move(moves[i]);
 
         if (illegal) {
             moves[i] = moves.back();
-            moves = moves.first(moves.size() - 1);
+            moves = moves.subspan(0, moves.size()-1);
         }
     }
 }

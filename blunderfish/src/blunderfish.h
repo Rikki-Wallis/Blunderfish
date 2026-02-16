@@ -133,7 +133,7 @@ struct Position {
     // omits king
     bool is_attacked(int side, int square) const;
 
-    void filter_moves(std::span<Move>& moves); 
+    void filter_moves(std::span<Move>& moves);
 
     void verify_integrity() const;
 
