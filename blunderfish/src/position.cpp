@@ -11,32 +11,6 @@ enum SideFlags {
 };
 
 
-void Side::set_can_castle_kingside(bool value) {
-    if (value) {
-        flags |= SIDE_FLAG_CAN_CASTLE_KINGSIDE;
-    }
-    else {
-        flags &= ~SIDE_FLAG_CAN_CASTLE_KINGSIDE;
-    }
-}
-
-void Side::set_can_castle_queenside(bool value) {
-    if (value) {
-        flags |= SIDE_FLAG_CAN_CASTLE_QUEENSIDE;
-    }
-    else {
-        flags &= ~SIDE_FLAG_CAN_CASTLE_QUEENSIDE;
-    }
-}
-
-bool Side::can_castle_kingside() const {
-    return (flags & SIDE_FLAG_CAN_CASTLE_KINGSIDE) != 0;
-}
-
-bool Side::can_castle_queenside() const {
-    return (flags & SIDE_FLAG_CAN_CASTLE_QUEENSIDE) != 0;
-}
-
 uint64_t Side::all() const {
     return bb[PIECE_PAWN] | bb[PIECE_ROOK] | bb[PIECE_KNIGHT] | bb[PIECE_BISHOP] | bb[PIECE_QUEEN] | bb[PIECE_KING];
 }
@@ -79,21 +53,20 @@ void Position::display(bool display_metadata) const {
     print("  a b c d e f g h\n");
 
     if (display_metadata) {
-        for (int side = 0; side < 2; ++side) {
-            const char* name_table[] = {
-                "White",
-                "Black"
-            };
+        if (flags & POSITION_FLAG_WHITE_KCASTLE) {
+            print("White can castle kingside.\n");
+        }
 
-            const char* name = name_table[side];
+        if (flags & POSITION_FLAG_WHITE_QCASTLE) {
+            print("White can castle queenside.\n");
+        }
 
-            if (sides[side].can_castle_kingside()) {
-                print("{} can castle kingside.\n", name);
-            }
+        if (flags & POSITION_FLAG_BLACK_KCASTLE) {
+            print("Black can castle kingside.\n");
+        }
 
-            if (sides[side].can_castle_queenside()) {
-                print("{} can castle queenside.\n", name);
-            }
+        if (flags & POSITION_FLAG_BLACK_QCASTLE) {
+            print("Black can castle queenside.\n");
         }
 
         if (en_passant_sq != NULL_SQUARE) {
@@ -222,19 +195,21 @@ std::optional<Position> Position::decode_fen_string(const std::string& fen) {
         while (cursor < fen.size() && !isspace(peek())) {
             char c = next();
 
-            int side = isupper(c) == 0;
-
             switch(c) {
                 default:
                     return std::nullopt;
 
                 case 'k':
+                    pos.flags |= POSITION_FLAG_BLACK_KCASTLE;
+                    break;
                 case 'K':
-                    pos.sides[side].set_can_castle_kingside(true);
+                    pos.flags |= POSITION_FLAG_WHITE_KCASTLE;
                     break;
                 case 'q':
+                    pos.flags |= POSITION_FLAG_BLACK_QCASTLE;
+                    break;
                 case 'Q':
-                    pos.sides[side].set_can_castle_queenside(true);
+                    pos.flags |= POSITION_FLAG_WHITE_QCASTLE;
                     break;
             }
         }

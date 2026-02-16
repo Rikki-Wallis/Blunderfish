@@ -17,7 +17,7 @@ uint64_t perft_search(int depth, Position& position) {
     std::span<Move> moves = position.generate_moves(move_buffer);
     position.filter_moves(moves);
 
-    for (const Move& move : moves) {
+    for (Move move : moves) {
         position.make_move(move);
         nodes += perft_search(depth-1, position);
         position.unmake_move(move);

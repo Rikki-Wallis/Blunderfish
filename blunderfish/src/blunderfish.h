@@ -52,10 +52,15 @@ enum MoveType {
     MOVE_EN_PASSANT,
     MOVE_SHORT_CASTLE,
     MOVE_LONG_CASTLE,
-    MOVE_PROMOTE_QUEEN,
-    MOVE_PROMOTE_BISHOP,
-    MOVE_PROMOTE_ROOK,
-    MOVE_PROMOTE_KNIGHT,
+    MOVE_PROMOTION,
+};
+
+enum PositionFlags {
+    POSITION_FLAG_NONE = 0,
+    POSITION_FLAG_WHITE_QCASTLE = (1 << 0),
+    POSITION_FLAG_WHITE_KCASTLE = (1 << 1),
+    POSITION_FLAG_BLACK_QCASTLE = (1 << 2),
+    POSITION_FLAG_BLACK_KCASTLE = (1 << 3),
 };
 
 static const char* piece_alg_table[NUM_PIECE_TYPES] = {
@@ -68,17 +73,10 @@ static const char* piece_alg_table[NUM_PIECE_TYPES] = {
     "K",
 };
 
-using Move = uint16_t;
+using Move = uint32_t;
 
 struct Side {
     uint64_t bb[NUM_PIECE_TYPES];
-    int flags;
-
-    void set_can_castle_kingside(bool);
-    void set_can_castle_queenside(bool);
-
-    bool can_castle_kingside() const;
-    bool can_castle_queenside() const;
 
     uint64_t all() const;
 
@@ -91,7 +89,7 @@ static constexpr int NULL_SQUARE = 0xffffffff;
 
 struct Undo {
     uint8_t captured_piece;
-    int flags[2];
+    uint32_t flags;
     int en_passant_sq;
 };
 
@@ -100,6 +98,7 @@ struct Position {
     int to_move;
     int en_passant_sq;
     uint8_t piece_at[64];
+    uint32_t flags;
 
     Undo undo_stack[MAX_DEPTH];
     int undo_count;
@@ -125,8 +124,8 @@ struct Position {
 
     uint64_t all_pieces() const;
 
-    void make_move(const Move& move);
-    void unmake_move(const Move& move);
+    void make_move(Move move);
+    void unmake_move(Move move);
 
     std::vector<Side> get_sides() const;  
 
@@ -170,13 +169,19 @@ inline int move_to(Move move) {
 }
 
 inline MoveType move_type(Move move) {
-    int type = (move >> 12) & 0b1111;
+    int type = (move >> 12) & 0b111;
     return (MoveType)type;
 }
 
-inline Move encode_move(int from, int to, MoveType type) {
-    uint16_t mv = (uint16_t)from; 
-    mv         |= ((uint16_t)to) << 6;
-    mv         |= ((uint16_t)type) << 12;
+inline Piece move_end_piece(Move move) {
+    int piece = (move >> 15) & 0b111;
+    return (Piece)piece;
+}
+
+inline Move encode_move(int from, int to, MoveType type, Piece end_piece) {
+    Move mv = (uint32_t)from; 
+    mv     |= ((uint32_t)to) << 6;
+    mv     |= ((uint32_t)type) << 12;
+    mv     |= ((uint32_t)end_piece) << 15;
     return mv;
 }

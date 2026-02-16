@@ -1,5 +1,21 @@
+#include <array>
+
 #include "blunderfish.h"
 #include "generated_tables.h"
+
+static constexpr std::array<std::array<uint32_t, 64>, 2> gen_rook_castle_flag_table() {
+    std::array<std::array<uint32_t, 64>, 2> table{};
+
+    table[WHITE][0] = POSITION_FLAG_WHITE_QCASTLE;
+    table[WHITE][7] = POSITION_FLAG_WHITE_KCASTLE;
+
+    table[BLACK][56] = POSITION_FLAG_BLACK_QCASTLE;
+    table[BLACK][63] = POSITION_FLAG_BLACK_KCASTLE;
+
+    return table;
+}
+
+static const std::array<std::array<uint32_t, 64>, 2> rook_castle_flag_table = gen_rook_castle_flag_table();
 
 // King
 static uint64_t king_moves(int from, uint64_t allies) {
@@ -157,6 +173,11 @@ bool Position::is_attacked(int side, int square) const {
     return false;
 }
 
+template<typename T>
+static T bool_to_mask(bool x) {
+    return -(T)x;
+}
+
 bool Position::is_in_check(int colour) const {
     assert(std::popcount(sides[colour].bb[PIECE_KING]) == 1);
     int square = std::countr_zero(sides[colour].bb[PIECE_KING]);
@@ -166,9 +187,9 @@ bool Position::is_in_check(int colour) const {
 std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     size_t move_count = 0;
 
-    auto new_move = [&](int from, int to, MoveType type) {
+    auto new_move = [&](int from, int to, MoveType type, Piece end_piece) {
         assert("move buffer overflow" && move_count < move_buf.size());
-        move_buf[move_count++] = encode_move(from, to, type);
+        move_buf[move_count++] = encode_move(from, to, type, end_piece);
     };
 
     int opp = opponent(to_move);
@@ -178,54 +199,58 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
 
     for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KING])) {
         for (uint8_t to : set_bits(king_moves(from, allies))) {
-            new_move(from, to, MOVE_NORMAL);
+            new_move(from, to, MOVE_NORMAL, PIECE_KING);
         }
     }
 
     // Castling
-    if (sides[to_move].can_castle_kingside()) {
+    uint32_t kcastle_flag = to_move == WHITE ? POSITION_FLAG_WHITE_KCASTLE : POSITION_FLAG_BLACK_KCASTLE;
+
+    if (flags & kcastle_flag) {
         uint64_t castle_space = to_move == WHITE ? WHITE_SHORT_SPACING : BLACK_SHORT_SPACING;
         uint8_t from = to_move == WHITE ? 4 : 60;
         uint8_t to   = to_move == WHITE ? 6 : 62;
         assert(std::countr_zero(sides[to_move].bb[PIECE_KING]) == from);
         assert(sides[to_move].bb[PIECE_ROOK] & sq_to_bb(to_move == WHITE ? 7 : 63));
         if (!(castle_space & all)) {
-            new_move(from, to, MOVE_SHORT_CASTLE);
+            new_move(from, to, MOVE_SHORT_CASTLE, PIECE_KING);
         }
     }
 
-    if (sides[to_move].can_castle_queenside()) {
+    uint32_t qcastle_flag = to_move == WHITE ? POSITION_FLAG_WHITE_QCASTLE : POSITION_FLAG_BLACK_QCASTLE;
+
+    if (flags & qcastle_flag) {
         uint64_t castle_space = to_move == WHITE ? WHITE_LONG_SPACING : BLACK_LONG_SPACING;
         uint8_t from = to_move == WHITE ? 4 : 60;
         uint8_t to   = to_move == WHITE ? 2 : 58;
         assert(std::countr_zero(sides[to_move].bb[PIECE_KING]) == from);
         assert(sides[to_move].bb[PIECE_ROOK] & sq_to_bb(to_move == WHITE ? 0 : 56));
         if (!(castle_space & all)) {
-            new_move(from, to, MOVE_LONG_CASTLE);
+            new_move(from, to, MOVE_LONG_CASTLE, PIECE_KING);
         }
     }
 
     for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KNIGHT])) {
         for (uint8_t to : set_bits(knight_moves(from, allies))) {
-            new_move(from, to, MOVE_NORMAL);
+            new_move(from, to, MOVE_NORMAL, PIECE_KNIGHT);
         }
     }
 
     for (uint8_t from: set_bits(sides[to_move].bb[PIECE_ROOK])) {
         for (uint8_t to : set_bits(rook_moves(from, all, allies))) {
-            new_move(from, to, MOVE_NORMAL);
+            new_move(from, to, MOVE_NORMAL, PIECE_ROOK);
         }
     }
 
     for (uint8_t from: set_bits(sides[to_move].bb[PIECE_BISHOP])) {
         for (uint8_t to : set_bits(bishop_moves(from, all, allies))) {
-            new_move(from, to, MOVE_NORMAL);
+            new_move(from, to, MOVE_NORMAL, PIECE_BISHOP);
         }
     }
 
     for (uint8_t from: set_bits(sides[to_move].bb[PIECE_QUEEN])) {
         for (uint8_t to : set_bits(queen_moves(from, all, allies))) {
-            new_move(from, to, MOVE_NORMAL);
+            new_move(from, to, MOVE_NORMAL, PIECE_QUEEN);
         }
     }
 
@@ -239,13 +264,13 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
 
     auto new_pawn_single_move = [&](int from, int to) {
         if (sq_to_bb(to) & promotion_rank) {
-            new_move(from, to, MOVE_PROMOTE_KNIGHT);
-            new_move(from, to, MOVE_PROMOTE_BISHOP);
-            new_move(from, to, MOVE_PROMOTE_ROOK);
-            new_move(from, to, MOVE_PROMOTE_QUEEN);
+            new_move(from, to, MOVE_PROMOTION, PIECE_QUEEN);
+            new_move(from, to, MOVE_PROMOTION, PIECE_KNIGHT);
+            new_move(from, to, MOVE_PROMOTION, PIECE_BISHOP);
+            new_move(from, to, MOVE_PROMOTION, PIECE_ROOK);
         } 
         else {
-            new_move(from, to, MOVE_NORMAL);
+            new_move(from, to, MOVE_NORMAL, PIECE_PAWN);
         }
     };
 
@@ -258,7 +283,7 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     for (int to : set_bits(pawn_double_push(sides[to_move].bb[PIECE_PAWN], all))) {
         int offset[] = { -16, 16 };
         int from = to + offset[to_move];
-        new_move(from, to, MOVE_DOUBLE_PUSH);
+        new_move(from, to, MOVE_DOUBLE_PUSH, PIECE_PAWN);
     }
 
     for (int to : set_bits(pawn_left_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & opps)) {
@@ -276,13 +301,13 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     for (int to : set_bits(pawn_left_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & ep_mask)) {
         int offset[] = { -7, 9 };
         int from = to + offset[to_move];
-        new_move(from, to, MOVE_EN_PASSANT);
+        new_move(from, to, MOVE_EN_PASSANT, PIECE_PAWN);
     }
 
     for (int to : set_bits(pawn_right_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & ep_mask)) {
         int offset[] = { -9, 7 };
         int from = to + offset[to_move];
-        new_move(from, to, MOVE_EN_PASSANT);
+        new_move(from, to, MOVE_EN_PASSANT, PIECE_PAWN);
     }
 
     return move_buf.subspan(0, move_count);
@@ -356,7 +381,7 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
                     continue;
                 }
 
-                Move& n = all[moves[j]];
+                Move n = all[moves[j]];
 
                 if (piece_at[move_from(m)] != piece_at[move_from(n)]) {
                     continue;
@@ -375,21 +400,10 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
             auto [to_file, to_rank] = square_alg(move_to(m));
 
             std::string promotion_str = "";
-            switch (move_type(m)) {
-                default:
-                    break;
-                case MOVE_PROMOTE_KNIGHT:
-                    promotion_str = "=N";
-                    break;
-                case MOVE_PROMOTE_BISHOP:
-                    promotion_str = "=B";
-                    break;
-                case MOVE_PROMOTE_QUEEN:
-                    promotion_str = "=Q";
-                    break;
-                case MOVE_PROMOTE_ROOK:
-                    promotion_str = "=R";
-                    break;
+
+            if (move_type(m) == MOVE_PROMOTION) {
+                Piece piece = move_end_piece(m);
+                promotion_str = std::format("={}", piece_alg_table[piece]);
             }
 
             std::string capture_str = is_capture ? "x" : "";
@@ -433,13 +447,16 @@ inline void set_piece(Position& pos, int side, Piece piece, size_t index) {
     pos.piece_at[index] = (uint8_t)piece;
 }
 
-static int get_captured_square(const Move& move, int to_move) {
+static int get_captured_square(Move move, int to_move) {
     int captured_pos = move_to(move); // usually the piece being captured is at the square being moved to
 
-    if (move_type(move) == MOVE_EN_PASSANT) { // en passant is the exception
-        int offsets[] = { -8, 8 };
-        captured_pos = move_to(move) + offsets[to_move];
-    }
+    int offsets[] = {
+        0, 0, -8, 8
+    };
+
+    int is_ep = move_type(move)==MOVE_EN_PASSANT;
+
+    captured_pos = move_to(move) + offsets[is_ep * 2 + to_move];
 
     return captured_pos;
 }
@@ -456,110 +473,73 @@ static std::pair<int, int> long_castle_start_and_end_rook_squares(int side) {
     return {old_pos[side], new_pos[side]};
 }
 
-void Position::make_move(const Move& move) {
+void Position::make_move(Move move) {
     // First, check for a capture and remove the piece
-
-    Piece piece = (Piece)piece_at[move_from(move)];
-
     int captured_pos = get_captured_square(move, to_move);
     Piece captured_piece = (Piece)piece_at[captured_pos];
-
     assert(captured_piece != PIECE_KING);
 
-    // Little aside before we modify anything, record the destroyable data in the undo stack
+    // Before we modify anything, record the destroyable data in the undo stack
 
     Undo undo = {
         .captured_piece = (uint8_t)captured_piece,
-        .flags = {
-            sides[0].flags,
-            sides[1].flags
-        },
+        .flags = flags,
         .en_passant_sq = en_passant_sq
     };
 
     assert(undo_count < MAX_DEPTH);
     undo_stack[undo_count++] = undo;
 
-    if (captured_piece != PIECE_NONE) {
-        remove_piece(*this, opponent(to_move), captured_piece, captured_pos);
+    // remove the captured piece
 
-        if (captured_piece == PIECE_ROOK) {
-            switch (((opponent(to_move)) << 6) | captured_pos) {
-                case (WHITE << 6) | 0:
-                    sides[WHITE].set_can_castle_queenside(false);
-                    break;
-                case (WHITE << 6) | 7:
-                    sides[WHITE].set_can_castle_kingside(false);
-                    break;
-                case (BLACK << 6) | 56:
-                    sides[BLACK].set_can_castle_queenside(false);
-                    break;
-                case (BLACK << 6) | 63:
-                    sides[BLACK].set_can_castle_kingside(false);
-                    break;
-            } 
-        }
-    }
+    uint64_t capture_mask = bool_to_mask<uint64_t>(captured_piece != PIECE_NONE) & sq_to_bb(captured_pos);
+    sides[opponent(to_move)].bb[captured_piece] ^= capture_mask;
+    piece_at[captured_pos] = PIECE_NONE; // if no captured piece, this is okay because it will be updated with the moving piece
 
-    // Then move the piece
-    // The order matters here
+    // move the piece
 
-    Piece start_piece = piece;
-    Piece end_piece = start_piece;
+    Piece start_piece = (Piece)piece_at[move_from(move)];
+    Piece end_piece = move_end_piece(move);
 
-    switch (move_type(move)) {
-        default:
-            break;
-        case MOVE_PROMOTE_BISHOP:
-            end_piece = PIECE_BISHOP;
-            break;
-        case MOVE_PROMOTE_KNIGHT:
-            end_piece = PIECE_KNIGHT;
-            break;
-        case MOVE_PROMOTE_QUEEN:
-            end_piece = PIECE_QUEEN;
-            break;
-        case MOVE_PROMOTE_ROOK:
-            end_piece = PIECE_ROOK;
-            break;
-    }
+    uint64_t from_mask = sq_to_bb(move_from(move));
+    uint64_t to_mask = sq_to_bb(move_to(move));
 
-    remove_piece(*this, to_move, start_piece, move_from(move));
-    set_piece   (*this, to_move, end_piece,   move_to(move));
+    sides[to_move].bb[start_piece] ^= from_mask;
+    sides[to_move].bb[end_piece]   ^= to_mask;
 
-    // Update castling rights
-    
-    switch (piece) {
-        default:
-            break;
-        case PIECE_KING:
-            sides[to_move].set_can_castle_kingside(false);
-            sides[to_move].set_can_castle_queenside(false);
-            break;
+    piece_at[move_from(move)] = PIECE_NONE;
+    piece_at[move_to(move)] = end_piece;
 
-        case PIECE_ROOK:
-            uint8_t kingside_rook_pos = to_move == WHITE ? 7 : 63;
-            uint8_t queenside_rook_pos = to_move == WHITE ? 0 : 56;
+    // Update castling rights when a rook or a king is moved, or a rook is taken
 
-            if (kingside_rook_pos == move_from(move)) {
-                sides[to_move].set_can_castle_kingside(false);
-            } else if (queenside_rook_pos == move_from(move)) {
-                sides[to_move].set_can_castle_queenside(false);
-            }
+    uint32_t castle_flag_removal = 0;
 
-            break;
-    }
+    uint32_t flag_of_captured_rook = rook_castle_flag_table[opponent(to_move)][captured_pos];
+    castle_flag_removal |= bool_to_mask<uint32_t>(captured_piece == PIECE_ROOK) & flag_of_captured_rook;
 
-    en_passant_sq = NULL_SQUARE;
+    uint32_t flag_of_king_move = to_move == WHITE ? (POSITION_FLAG_WHITE_QCASTLE | POSITION_FLAG_WHITE_KCASTLE) : (POSITION_FLAG_BLACK_QCASTLE | POSITION_FLAG_BLACK_KCASTLE);
+    castle_flag_removal |= bool_to_mask<uint32_t>(start_piece == PIECE_KING) & flag_of_king_move; 
+
+    uint32_t flag_of_rook_move = rook_castle_flag_table[to_move][move_from(move)];
+    castle_flag_removal |= bool_to_mask<uint32_t>(start_piece == PIECE_ROOK) & flag_of_rook_move; 
+
+    flags &= ~castle_flag_removal;
+
+    // set the en passant square if a double push has occured
+
+    int en_passant_table[] = {
+        NULL_SQUARE, NULL_SQUARE, move_to(move) - 8, move_to(move) + 8
+    };
+
+    bool is_double_push = move_type(move) == MOVE_DOUBLE_PUSH;
+    en_passant_sq = en_passant_table[is_double_push*2 + to_move];
+
+    // move the rook when a castle is performed
+    // TODO: make this branchless
 
     switch (move_type(move)) {
         default:
             break;
-
-        case MOVE_DOUBLE_PUSH: {
-            int offsets[] = { -8, 8 }; // set en passant marker
-            en_passant_sq = move_to(move) + offsets[to_move];
-        } break;
 
         case MOVE_SHORT_CASTLE: {
             auto [p1, p2] = short_castle_start_and_end_rook_squares(to_move);
@@ -577,24 +557,17 @@ void Position::make_move(const Move& move) {
     to_move = opponent(to_move);
 }
 
-void Position::unmake_move(const Move& move) {
+void Position::unmake_move(Move move) {
     assert(undo_count > 0);
     Undo undo = undo_stack[--undo_count];
 
     to_move = opponent(to_move);
 
-    Piece end_piece = (Piece)piece_at[move_to(move)];
-    Piece start_piece = end_piece;
+    // move the rook if a castle has to be undone
+    // TODO: make this branchless
 
     switch (move_type(move)) {
         default:
-            break;
-
-        case MOVE_PROMOTE_BISHOP:
-        case MOVE_PROMOTE_KNIGHT:
-        case MOVE_PROMOTE_QUEEN:
-        case MOVE_PROMOTE_ROOK:
-            start_piece = PIECE_PAWN;
             break;
 
         case MOVE_SHORT_CASTLE: {
@@ -610,17 +583,27 @@ void Position::unmake_move(const Move& move) {
         } break;
     }
 
-    remove_piece(*this, to_move, end_piece,   move_to(move));
-    set_piece   (*this, to_move, start_piece, move_from(move));
+    // move the piece
 
-    // replace the captured piece must be done AFTER we remove the moving piece
-    if (undo.captured_piece != PIECE_NONE) {
-        int captured_square = get_captured_square(move, to_move);
-        set_piece(*this, opponent(to_move), (Piece)undo.captured_piece, captured_square);
-    }
+    Piece end_piece = (Piece)piece_at[move_to(move)];
+    Piece start_piece = move_type(move) == MOVE_PROMOTION ? PIECE_PAWN : end_piece;
 
-    sides[0].flags = undo.flags[0];
-    sides[1].flags = undo.flags[1];
+    uint64_t to_mask   = sq_to_bb(move_to(move));
+    uint64_t from_mask = sq_to_bb(move_from(move));
 
+    sides[to_move].bb[end_piece] ^= to_mask;
+    sides[to_move].bb[start_piece] ^= from_mask;
+
+    piece_at[move_to(move)] = PIECE_NONE;
+    piece_at[move_from(move)] = start_piece;
+
+    // replace the captured piece
+
+    int captured_square = get_captured_square(move, to_move);
+    uint64_t captured_mask = bool_to_mask<uint64_t>(undo.captured_piece != PIECE_NONE) & sq_to_bb(captured_square);
+    sides[opponent(to_move)].bb[undo.captured_piece] ^= captured_mask;
+    piece_at[captured_square] = undo.captured_piece;
+
+    flags = undo.flags;
     en_passant_sq = undo.en_passant_sq;
 }
