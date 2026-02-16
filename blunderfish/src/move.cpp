@@ -36,24 +36,50 @@ static uint64_t knight_moves(int from, uint64_t allies) {
 }
 
 // Pawns
-uint64_t white_pawn_single_moves(int from, uint64_t opps, uint64_t all_pieces) {
-    uint64_t bb = sq_to_bb(from);
-
+uint64_t white_pawn_single_push(uint64_t bb, uint64_t all_pieces) {
     uint64_t push  = (bb << 8) & (~all_pieces) & (~RANK_1);
-    uint64_t left  = (bb << 7) & (~FILE_H) & opps;
-    uint64_t right = (bb << 9) & (~FILE_A) & opps;
-
-    return push | left | right;
+    return push;
 }
 
-uint64_t black_pawn_single_moves(int from, uint64_t opps, uint64_t all_pieces) {
-    uint64_t bb = sq_to_bb(from);
+uint64_t white_pawn_double_push(uint64_t bb, uint64_t all_pieces) {
+    bb &= RANK_2;
 
+    uint64_t push  = (bb << 8) & (~all_pieces);
+    uint64_t double_push = (push << 8) & (~all_pieces);
+
+    return double_push;
+}
+
+uint64_t white_pawn_left_capture_no_mask(uint64_t bb) {
+    uint64_t left  = (bb << 7) & (~FILE_H);
+    return left;
+}
+
+uint64_t white_pawn_right_capture_no_mask(uint64_t bb) {
+    uint64_t right = (bb << 9) & (~FILE_A);
+    return right;
+}
+
+uint64_t black_pawn_single_push(uint64_t bb, uint64_t all_pieces) {
     uint64_t push  = (bb >> 8) & (~all_pieces) & (~RANK_8);
-    uint64_t left  = (bb >> 9) & (~FILE_H) & opps;
-    uint64_t right = (bb >> 7) & (~FILE_A) & opps;
+    return push;
+}
 
-    return push | left | right;
+uint64_t black_pawn_left_capture_no_mask(uint64_t bb) {
+    uint64_t left  = (bb >> 9) & (~FILE_H);
+    return left;
+}
+
+uint64_t black_pawn_right_capture_no_mask(uint64_t bb) {
+    uint64_t right = (bb >> 7) & (~FILE_A);
+    return right;
+}
+
+uint64_t black_pawn_double_push(uint64_t bb, uint64_t all_pieces) {
+    bb &= RANK_7;
+    uint64_t push  = (bb >> 8) & (~all_pieces);
+    uint64_t double_push = (push >> 8) & (~all_pieces);
+    return double_push;
 }
 
 uint64_t white_pawn_attacks(uint64_t pawns_bb) {
@@ -67,45 +93,6 @@ uint64_t black_pawn_attacks(uint64_t pawns_bb) {
     uint64_t right = (pawns_bb >> 7) & (~FILE_A);
     return left | right;
 }
-
-uint64_t white_pawn_double_moves(uint8_t from, uint64_t all_pieces) {
-    uint64_t bb = sq_to_bb(from) & RANK_2;
-
-    uint64_t push  = (bb << 8) & (~all_pieces);
-    uint64_t double_push = (push << 8) & (~all_pieces);
-
-    return double_push;
-}
-
-uint64_t black_pawn_double_moves(uint8_t from, uint64_t all_pieces) {
-    uint64_t bb = sq_to_bb(from) & RANK_7;
-
-    uint64_t push  = (bb >> 8) & (~all_pieces);
-    uint64_t double_push = (push >> 8) & (~all_pieces);
-
-    return double_push;
-}
-
-uint64_t white_pawn_enpassant_moves(uint8_t from, int enpassant_sq) {
-    uint64_t mask = enpassant_sq == NULL_SQUARE ? 0 : sq_to_bb(enpassant_sq);
-    uint64_t bb = sq_to_bb(from);
-
-    uint64_t left_capture  = (bb << 7) & (~FILE_H) & mask;
-    uint64_t right_capture = (bb << 9) & (~FILE_A) & mask;
-
-    return left_capture | right_capture;
-}
-
-uint64_t black_pawn_enpassant_moves(uint8_t from, int enpassant_sq) {
-    uint64_t mask = enpassant_sq == NULL_SQUARE ? 0 : sq_to_bb(enpassant_sq);
-    uint64_t bb = sq_to_bb(from);
-
-    uint64_t left_capture  = (bb >> 9) & (~FILE_H) & mask;
-    uint64_t right_capture = (bb >> 7) & (~FILE_A) & mask;
-
-    return left_capture | right_capture;
-}
-
 
 // Magic Bitboards
 static size_t magic_index(uint64_t all_pieces, uint64_t mask, uint64_t magic, size_t shift) {
@@ -242,32 +229,60 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
         }
     }
 
-    auto pawn_single_moves    = to_move == WHITE ? white_pawn_single_moves : black_pawn_single_moves;
-    auto pawn_double_moves    = to_move == WHITE ? white_pawn_double_moves : black_pawn_double_moves;
-    auto pawn_enpassant_moves = to_move == WHITE ? white_pawn_enpassant_moves : black_pawn_enpassant_moves;
-    auto promotion_rank       = to_move == WHITE ? RANK_8 : RANK_1;
+    auto pawn_single_push           = to_move == WHITE ? white_pawn_single_push : black_pawn_single_push;
+    auto pawn_double_push           = to_move == WHITE ? white_pawn_double_push : black_pawn_double_push;
+    auto pawn_left_capture_no_mask  = to_move == WHITE ? white_pawn_left_capture_no_mask : black_pawn_left_capture_no_mask;
+    auto pawn_right_capture_no_mask = to_move == WHITE ? white_pawn_right_capture_no_mask : black_pawn_right_capture_no_mask;
 
-    for (uint8_t from : set_bits(sides[to_move].bb[PIECE_PAWN])) {
-        for (uint8_t to : set_bits(pawn_single_moves(from, opps, all))) {
-            
-            if (sq_to_bb(to) & promotion_rank) {
-                new_move(from, to, MOVE_PROMOTE_KNIGHT);
-                new_move(from, to, MOVE_PROMOTE_BISHOP);
-                new_move(from, to, MOVE_PROMOTE_ROOK);
-                new_move(from, to, MOVE_PROMOTE_QUEEN);
-            } 
-            else {
-                new_move(from, to, MOVE_NORMAL);
-            }
-        }
+    uint64_t ep_mask                = en_passant_sq == NULL_SQUARE ? 0 : sq_to_bb(en_passant_sq);
+    uint64_t promotion_rank         = to_move == WHITE ? RANK_8 : RANK_1;
 
-        for (uint8_t to : set_bits(pawn_double_moves(from, all))) {
-            new_move(from, to, MOVE_DOUBLE_PUSH);
+    auto new_pawn_single_move = [&](int from, int to) {
+        if (sq_to_bb(to) & promotion_rank) {
+            new_move(from, to, MOVE_PROMOTE_KNIGHT);
+            new_move(from, to, MOVE_PROMOTE_BISHOP);
+            new_move(from, to, MOVE_PROMOTE_ROOK);
+            new_move(from, to, MOVE_PROMOTE_QUEEN);
+        } 
+        else {
+            new_move(from, to, MOVE_NORMAL);
         }
+    };
 
-        for (uint8_t to : set_bits(pawn_enpassant_moves(from, en_passant_sq))) {
-            new_move(from, to, MOVE_EN_PASSANT);
-        }
+    for (int to : set_bits(pawn_single_push(sides[to_move].bb[PIECE_PAWN], all))) {
+        int offset[] = { -8, 8 };
+        int from = to + offset[to_move];
+        new_pawn_single_move(from, to);
+    }
+
+    for (int to : set_bits(pawn_double_push(sides[to_move].bb[PIECE_PAWN], all))) {
+        int offset[] = { -16, 16 };
+        int from = to + offset[to_move];
+        new_move(from, to, MOVE_DOUBLE_PUSH);
+    }
+
+    for (int to : set_bits(pawn_left_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & opps)) {
+        int offset[] = { -7, 9 };
+        int from = to + offset[to_move];
+        new_pawn_single_move(from, to);
+    }
+
+    for (int to : set_bits(pawn_right_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & opps)) {
+        int offset[] = { -9, 7 };
+        int from = to + offset[to_move];
+        new_pawn_single_move(from, to);
+    }
+
+    for (int to : set_bits(pawn_left_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & ep_mask)) {
+        int offset[] = { -7, 9 };
+        int from = to + offset[to_move];
+        new_move(from, to, MOVE_EN_PASSANT);
+    }
+
+    for (int to : set_bits(pawn_right_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & ep_mask)) {
+        int offset[] = { -9, 7 };
+        int from = to + offset[to_move];
+        new_move(from, to, MOVE_EN_PASSANT);
     }
 
     return move_buf.subspan(0, move_count);
