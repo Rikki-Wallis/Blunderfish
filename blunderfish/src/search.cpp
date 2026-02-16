@@ -4,7 +4,10 @@
 
 constexpr int64_t MATE_SCORE = 0xffffffff;
 
-int64_t Position::negamax(int depth, int ply) {
+// alpha is, the score that the current player can already guarantee so far
+// beta is the score that the opponent can guarantee so far
+
+int64_t Position::negamax(int depth, int ply, int64_t alpha, int64_t beta) {
     if (depth == 0) {
         return eval();
     }
@@ -21,13 +24,24 @@ int64_t Position::negamax(int depth, int ply) {
     for (Move m : moves) {
         make_move(m);
 
+        bool need_to_break = false;
+
         if (!is_in_check(my_side)) {
             n++;
-            int64_t score = -negamax(depth - 1, ply + 1);
+            int64_t score = -negamax(depth - 1, ply + 1, -beta, -alpha);
             best = std::max(best, score);
+            alpha = std::max(score, alpha);
+
+            if (alpha >= beta) { // we are getting a score that is worse for our opponent, than a score they can already guarantee, so all other branches are irrelevant.
+                need_to_break = true;
+            }
         }
 
         unmake_move(m);
+
+        if (need_to_break) {
+            break;
+        }
     }
 
     if (n == 0) { // no legal moves
@@ -50,7 +64,10 @@ int Position::best_move(std::span<Move> moves, uint8_t depth) {
         Move m = moves[i];
 
         make_move(m);
-        int64_t score = -negamax(depth-1, 1);
+
+        //if (!is_in_check()
+
+        int64_t score = -negamax(depth-1, 1, INT64_MIN, INT64_MAX);
         unmake_move(m);
 
         if (score > best_score) {

@@ -59,8 +59,14 @@ static int play_main() {
             pos.make_move(m);
         }
         else {
-            auto move_idx = pos.best_move(moves, 5);
+            size_t move_idx = pos.best_move(moves, 7);
             assert(move_idx != -1);
+
+            for (auto& [name, m] : move_names) {
+                if (m == move_idx) {
+                    print("Blunderfish plays {}\n", name);
+                }
+            }
 
             Move m = moves[move_idx];
             pos.make_move(m);
