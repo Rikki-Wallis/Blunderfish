@@ -19,6 +19,7 @@ uint64_t perft_search(int depth, Position& position) {
 
     for (Move move : moves) {
         position.make_move(move);
+        position.verify_integrity();
         nodes += perft_search(depth-1, position);
         position.unmake_move(move);
         position.verify_integrity();

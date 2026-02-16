@@ -15,7 +15,39 @@ static constexpr std::array<std::array<uint32_t, 64>, 2> gen_rook_castle_flag_ta
     return table;
 }
 
+static constexpr std::array<int, 64> gen_rook_jump_from_table() {
+    std::array<int, 64> table;
+
+    for (int i = 0; i < 64; ++i) {
+        table[i] = i;
+    }
+
+    table[6]  = 7;
+    table[2]  = 0;
+    table[62] = 63;
+    table[58] = 56;
+
+    return table;
+}
+
+static std::array<int, 64> gen_rook_jump_to_table() {
+    std::array<int, 64> table;
+
+    for (int i = 0; i < 64; ++i) {
+        table[i] = i;
+    }
+
+    table[6]  = 5;
+    table[2]  = 3;
+    table[62] = 61;
+    table[58] = 59;
+
+    return table;
+}
+
 static const std::array<std::array<uint32_t, 64>, 2> rook_castle_flag_table = gen_rook_castle_flag_table();
+static const std::array<int, 64> rook_jump_from = gen_rook_jump_from_table();
+static const std::array<int, 64> rook_jump_to = gen_rook_jump_to_table();
 
 // King
 static uint64_t king_moves(int from, uint64_t allies) {
@@ -461,18 +493,6 @@ static int get_captured_square(Move move, int to_move) {
     return captured_pos;
 }
 
-static std::pair<int, int> short_castle_start_and_end_rook_squares(int side) {
-    int old_pos[] = { 7, 63 };
-    int new_pos[] = { 5, 61 };
-    return {old_pos[side], new_pos[side]};
-}
-
-static std::pair<int, int> long_castle_start_and_end_rook_squares(int side) {
-    int old_pos[] = { 0, 56 };
-    int new_pos[] = { 3, 59 };
-    return {old_pos[side], new_pos[side]};
-}
-
 void Position::make_move(Move move) {
     // First, check for a capture and remove the piece
     int captured_pos = get_captured_square(move, to_move);
@@ -535,24 +555,20 @@ void Position::make_move(Move move) {
     en_passant_sq = en_passant_table[is_double_push*2 + to_move];
 
     // move the rook when a castle is performed
-    // TODO: make this branchless
 
-    switch (move_type(move)) {
-        default:
-            break;
+    int rook_from = rook_jump_from[move_to(move)];
+    int rook_to   = rook_jump_to  [move_to(move)];
 
-        case MOVE_SHORT_CASTLE: {
-            auto [p1, p2] = short_castle_start_and_end_rook_squares(to_move);
-            remove_piece(*this, to_move, PIECE_ROOK, p1);
-            set_piece   (*this, to_move, PIECE_ROOK, p2);
-        } break;
+    uint64_t rook_from_mask = sq_to_bb(rook_from);
+    uint64_t rook_to_mask   = sq_to_bb(rook_to);
+    uint64_t rook_jump_mask = bool_to_mask<uint64_t>(move_type(move) == MOVE_SHORT_CASTLE || move_type(move) == MOVE_LONG_CASTLE) & (rook_from_mask ^ rook_to_mask);
 
-        case MOVE_LONG_CASTLE: {
-            auto [p1, p2] = long_castle_start_and_end_rook_squares(to_move);
-            remove_piece(*this, to_move, PIECE_ROOK, p1);
-            set_piece   (*this, to_move, PIECE_ROOK, p2);
-        } break;
-    }
+    sides[to_move].bb[PIECE_ROOK] ^= rook_jump_mask;
+
+    uint8_t castle_mask = bool_to_mask<uint8_t>(move_type(move) == MOVE_SHORT_CASTLE || move_type(move) == MOVE_LONG_CASTLE);
+    
+    piece_at[rook_from] = (~castle_mask & piece_at[rook_from]) | (castle_mask & PIECE_NONE);
+    piece_at[rook_to]   = (~castle_mask & piece_at[rook_to]  ) | (castle_mask & PIECE_ROOK);
 
     to_move = opponent(to_move);
 }
@@ -564,24 +580,20 @@ void Position::unmake_move(Move move) {
     to_move = opponent(to_move);
 
     // move the rook if a castle has to be undone
-    // TODO: make this branchless
 
-    switch (move_type(move)) {
-        default:
-            break;
+    int rook_from = rook_jump_from[move_to(move)];
+    int rook_to   = rook_jump_to  [move_to(move)];
 
-        case MOVE_SHORT_CASTLE: {
-            auto [p1, p2] = short_castle_start_and_end_rook_squares(to_move);
-            remove_piece(*this, to_move, PIECE_ROOK, p2);
-            set_piece   (*this, to_move, PIECE_ROOK, p1);
-        } break;
+    uint64_t rook_from_mask = sq_to_bb(rook_from);
+    uint64_t rook_to_mask   = sq_to_bb(rook_to);
+    uint64_t rook_jump_mask = bool_to_mask<uint64_t>(move_type(move) == MOVE_SHORT_CASTLE || move_type(move) == MOVE_LONG_CASTLE) & (rook_from_mask ^ rook_to_mask);
 
-        case MOVE_LONG_CASTLE: {
-            auto [p1, p2] = long_castle_start_and_end_rook_squares(to_move);
-            remove_piece(*this, to_move, PIECE_ROOK, p2);
-            set_piece   (*this, to_move, PIECE_ROOK, p1);
-        } break;
-    }
+    sides[to_move].bb[PIECE_ROOK] ^= rook_jump_mask;
+
+    uint8_t castle_mask = bool_to_mask<uint8_t>(move_type(move) == MOVE_SHORT_CASTLE || move_type(move) == MOVE_LONG_CASTLE);
+    
+    piece_at[rook_to]   = (~castle_mask & piece_at[rook_to]  ) | (castle_mask & PIECE_NONE);
+    piece_at[rook_from] = (~castle_mask & piece_at[rook_from]) | (castle_mask & PIECE_ROOK);
 
     // move the piece
 
