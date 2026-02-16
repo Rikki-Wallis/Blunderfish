@@ -59,7 +59,7 @@ static int play_main() {
             pos.make_move(m);
         }
         else {
-            auto move_idx = pos.best_move(moves, 4);
+            auto move_idx = pos.best_move(moves, 5);
             assert(move_idx != -1);
 
             Move m = moves[move_idx];

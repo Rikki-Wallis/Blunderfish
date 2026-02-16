@@ -32,5 +32,7 @@ int64_t Side::material_value() const {
 }
 
 int64_t Position::eval() const {
-    return sides[WHITE].material_value() - sides[BLACK].material_value();
+    int64_t value = sides[WHITE].material_value() - sides[BLACK].material_value();
+    int64_t sign = to_move == WHITE ? 1 : -1;
+    return value * sign;
 }
