@@ -438,7 +438,9 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
             make_move(m);
             if (is_in_check(to_move)) {
                 std::array<Move, 256> temp;
-                if (generate_moves(temp).size() == 0) {
+                auto moves = generate_moves(temp);
+                filter_moves(moves);
+                if (moves.size() == 0) {
                     check_suffix = "#";
                 }
                 else {

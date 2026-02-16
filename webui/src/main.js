@@ -41,6 +41,9 @@ async function makeMove() {
     alert("Engine gave illegal move " + move);
   }
 
+  console.log(possibleMoves);
+  console.log("Engine plays " + move);
+
   game.move(move);
   
   board.setPosition(game.fen());
