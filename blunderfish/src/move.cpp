@@ -626,3 +626,8 @@ void Position::unmake_move(Move move) {
     flags = undo.flags;
     en_passant_sq = undo.en_passant_sq;
 }
+
+bool Position::is_capture(Move move) const {
+    int captured_pos = get_captured_square(move, to_move);
+    return piece_at[captured_pos] != PIECE_NONE;
+}
