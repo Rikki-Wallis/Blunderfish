@@ -6,7 +6,7 @@ constexpr int64_t MATE_SCORE = 0xffffff;
 
 int64_t Position::pruned_negamax(int depth, int ply, int64_t alpha, int64_t beta) {
     if (depth == 0) {
-        return eval();
+        return quiescence(ply, alpha, beta);
     }
 
     int my_side = to_move;
@@ -14,7 +14,7 @@ int64_t Position::pruned_negamax(int depth, int ply, int64_t alpha, int64_t beta
     std::array<Move, 256> move_buf;
     std::span<Move> moves = generate_moves(move_buf);
 
-    int n = 0;
+    bool legal_found = false;
 
     for (Move m : moves) {
         bool cutoff = false;
@@ -22,7 +22,7 @@ int64_t Position::pruned_negamax(int depth, int ply, int64_t alpha, int64_t beta
         make_move(m);
 
         if (!is_in_check(my_side)) {
-            n++;
+            legal_found = true;
             int64_t score = -pruned_negamax(depth - 1, ply + 1, -beta, -alpha);
             alpha = std::max(score, alpha);
 
@@ -38,7 +38,7 @@ int64_t Position::pruned_negamax(int depth, int ply, int64_t alpha, int64_t beta
         } 
     }
 
-    if (n == 0) { // no legal moves
+    if (!legal_found) { // no legal moves
         if (is_in_check(my_side)) {
             return -MATE_SCORE + ply; // checkmate
         }
@@ -50,9 +50,63 @@ int64_t Position::pruned_negamax(int depth, int ply, int64_t alpha, int64_t beta
     return alpha;
 }
 
+int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
+    int side = to_move;
+    bool currently_checked = is_in_check(side);
+
+    if (!currently_checked) { // if not checked, we can choose to stay here
+        int64_t stand_pat = eval();
+
+        alpha = std::max(stand_pat, alpha);
+
+        if (alpha >= beta) {
+            return beta;
+        }
+    }
+
+    std::array<Move, 256> move_buf;
+    std::span<Move> moves = generate_moves(move_buf);
+
+    bool legal_found = false;
+
+    for (Move mv : moves) {
+        if (!is_capture(mv) && !currently_checked) {
+            continue;
+        }
+
+        make_move(mv);
+
+        bool cutoff = false;
+
+        if (!is_in_check(side)) {
+            legal_found = true;
+
+            int64_t score = -quiescence(ply+1, -beta, -alpha);
+
+            alpha = std::max(score, alpha);
+
+            if (alpha >= beta) {
+                cutoff = true;
+            }
+        }
+
+        unmake_move(mv);
+
+        if (cutoff) {
+            return beta;
+        }
+    }
+
+    if (currently_checked && !legal_found) {
+        return -MATE_SCORE + ply; // checkmate
+    }
+
+    return alpha;
+}
+
 int64_t Position::negamax(int depth, int ply) {
     if (depth == 0) {
-        return eval();
+        return quiescence(ply, INT32_MIN, INT32_MAX);
     }
 
     int my_side = to_move;
@@ -60,7 +114,7 @@ int64_t Position::negamax(int depth, int ply) {
     std::array<Move, 256> move_buf;
     std::span<Move> moves = generate_moves(move_buf);
 
-    int n = 0;
+    bool legal_found = false;
 
     int64_t alpha = -MATE_SCORE;
 
@@ -68,7 +122,7 @@ int64_t Position::negamax(int depth, int ply) {
         make_move(m);
 
         if (!is_in_check(my_side)) {
-            n++;
+            legal_found = true;
             int64_t score = -negamax(depth - 1, ply + 1);
             alpha = std::max(score, alpha);
         }
@@ -76,7 +130,7 @@ int64_t Position::negamax(int depth, int ply) {
         unmake_move(m);
     }
 
-    if (n == 0) { // no legal moves
+    if (!legal_found) {
         if (is_in_check(my_side)) {
             return -MATE_SCORE + ply; // checkmate
         }
@@ -96,7 +150,7 @@ int Position::best_move(std::span<Move> moves, uint8_t depth) {
         Move m = moves[i];
 
         make_move(m); // no need to filter for check here - assumes filtered moves given
-        int64_t score = -negamax(depth-1, 1);
+        int64_t score = -pruned_negamax(depth-1, 1, INT32_MIN, INT32_MAX);
         unmake_move(m);
 
         if (score > best_score) {

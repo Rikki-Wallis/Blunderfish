@@ -5,7 +5,7 @@
 
 #include "common.h"
 
-#define MAX_DEPTH 128
+#define MAX_DEPTH 64
 
 static constexpr uint64_t RANK_1 = 0x00000000000000ff;
 static constexpr uint64_t RANK_2 = 0x000000000000ff00;
@@ -142,6 +142,7 @@ struct Position {
     int64_t eval() const;
     int64_t negamax(int depth, int ply);
     int64_t pruned_negamax(int depth, int ply, int64_t alpha, int64_t beta);
+    int64_t quiescence(int ply, int64_t alpha, int64_t beta);
 
     int best_move(std::span<Move> moves, uint8_t depth);
 };

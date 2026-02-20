@@ -88,9 +88,9 @@ static void benchmark_best_move() {
 }
 
 template<typename Func>
-static void benchmark_pos_method(Func&& func) {
-    for (int depth = 1; depth <= 5; ++depth) {
-        run_and_report(5, std::format("Raw Negamax Depth {}", depth), [&](){
+static void benchmark_pos_method(const std::string& name, int max_depth, Func&& func) {
+    for (int depth = 1; depth <= max_depth; ++depth) {
+        run_and_report(1, std::format("{} Depth {}", name, depth), [&](){
             Position pos = *Position::decode_fen_string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
             std::array<Move, 256> move_buf;
             std::span<Move> moves = pos.generate_moves(move_buf);
@@ -101,13 +101,13 @@ static void benchmark_pos_method(Func&& func) {
 }
 
 static void benchmark_raw_negamax() {
-    benchmark_pos_method([](Position& pos, int depth){
+    benchmark_pos_method("Raw Negamax", 5, [](Position& pos, int depth){
         pos.negamax(depth, 1);
     });
 }
 
 static void benchmark_pruned_negamax() {
-    benchmark_pos_method([](Position& pos, int depth){
+    benchmark_pos_method("Pruned Negamax", 8, [](Position& pos, int depth){
         pos.pruned_negamax(depth, 1, INT32_MIN, INT32_MAX);
     });
 }
