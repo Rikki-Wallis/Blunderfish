@@ -65,15 +65,11 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
     }
 
     std::array<Move, 256> move_buf;
-    std::span<Move> moves = generate_moves(move_buf);
+    std::span<Move> moves = currently_checked ? generate_moves(move_buf) : generate_captures(move_buf);
 
     bool legal_found = false;
 
     for (Move mv : moves) {
-        if (!is_capture(mv) && !currently_checked) {
-            continue;
-        }
-
         make_move(mv);
 
         bool cutoff = false;

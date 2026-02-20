@@ -127,7 +127,7 @@ uint64_t queen_moves(int from, uint64_t all_pieces, uint64_t allies) {
     return bishop_moves(from, all_pieces, allies) | rook_moves(from, all_pieces, allies);
 }
 
-bool Position::is_attacked(int side, int square) const {
+bool Position::is_king_square_attacked(int side, int square) const {
     int opp = opponent(side);
 
     uint64_t allies = sides[side].all() & ~(sides[side].bb[PIECE_KING]);
@@ -174,7 +174,7 @@ static T bool_to_mask(bool x) {
 bool Position::is_in_check(int colour) const {
     assert(std::popcount(sides[colour].bb[PIECE_KING]) == 1);
     int square = std::countr_zero(sides[colour].bb[PIECE_KING]);
-    return is_attacked(colour, square);
+    return is_king_square_attacked(colour, square);
 }
 
 std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
@@ -209,11 +209,11 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
         can_qcastle = false;
     }
 
-    can_kcastle = can_kcastle && !is_attacked(to_move, to_move == WHITE ? 5 : 61);
-    can_kcastle = can_kcastle && !is_attacked(to_move, to_move == WHITE ? 6 : 62);
+    can_kcastle = can_kcastle && !is_king_square_attacked(to_move, to_move == WHITE ? 5 : 61);
+    can_kcastle = can_kcastle && !is_king_square_attacked(to_move, to_move == WHITE ? 6 : 62);
 
-    can_qcastle = can_qcastle && !is_attacked(to_move, to_move == WHITE ? 3 : 59);
-    can_qcastle = can_qcastle && !is_attacked(to_move, to_move == WHITE ? 2 : 58);
+    can_qcastle = can_qcastle && !is_king_square_attacked(to_move, to_move == WHITE ? 3 : 59);
+    can_qcastle = can_qcastle && !is_king_square_attacked(to_move, to_move == WHITE ? 2 : 58);
 
     if (can_kcastle) {
         uint64_t castle_space = to_move == WHITE ? WHITE_SHORT_SPACING : BLACK_SHORT_SPACING;
@@ -292,6 +292,94 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
         int from = to + offset[to_move];
         new_move(from, to, MOVE_DOUBLE_PUSH, PIECE_PAWN);
     }
+
+    for (int to : set_bits(pawn_left_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & opps)) {
+        int offset[] = { -7, 9 };
+        int from = to + offset[to_move];
+        new_pawn_single_move(from, to);
+    }
+
+    for (int to : set_bits(pawn_right_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & opps)) {
+        int offset[] = { -9, 7 };
+        int from = to + offset[to_move];
+        new_pawn_single_move(from, to);
+    }
+
+    for (int to : set_bits(pawn_left_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & ep_mask)) {
+        int offset[] = { -7, 9 };
+        int from = to + offset[to_move];
+        new_move(from, to, MOVE_EN_PASSANT, PIECE_PAWN);
+    }
+
+    for (int to : set_bits(pawn_right_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & ep_mask)) {
+        int offset[] = { -9, 7 };
+        int from = to + offset[to_move];
+        new_move(from, to, MOVE_EN_PASSANT, PIECE_PAWN);
+    }
+
+    return move_buf.subspan(0, move_count);
+}
+
+std::span<Move> Position::generate_captures(std::span<Move> move_buf) const {
+    size_t move_count = 0;
+
+    auto new_move = [&](int from, int to, MoveType type, Piece end_piece) {
+        assert("move buffer overflow" && move_count < move_buf.size());
+        move_buf[move_count++] = encode_move(from, to, type, end_piece);
+    };
+
+    int opp = opponent(to_move);
+    uint64_t opps = sides[opp].all();
+    uint64_t allies = sides[to_move].all();
+    uint64_t all = all_pieces();
+
+    for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KING])) {
+        for (uint8_t to : set_bits(king_moves(from, allies) & opps)) {
+            new_move(from, to, MOVE_NORMAL, PIECE_KING);
+        }
+    }
+
+    for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KNIGHT])) {
+        for (uint8_t to : set_bits(knight_moves(from, allies) & opps)) {
+            new_move(from, to, MOVE_NORMAL, PIECE_KNIGHT);
+        }
+    }
+
+    for (uint8_t from: set_bits(sides[to_move].bb[PIECE_ROOK])) {
+        for (uint8_t to : set_bits(rook_moves(from, all, allies) & opps)) {
+            new_move(from, to, MOVE_NORMAL, PIECE_ROOK);
+        }
+    }
+
+    for (uint8_t from: set_bits(sides[to_move].bb[PIECE_BISHOP])) {
+        for (uint8_t to : set_bits(bishop_moves(from, all, allies) & opps)) {
+            new_move(from, to, MOVE_NORMAL, PIECE_BISHOP);
+        }
+    }
+
+    for (uint8_t from: set_bits(sides[to_move].bb[PIECE_QUEEN])) {
+        for (uint8_t to : set_bits(queen_moves(from, all, allies) & opps)) {
+            new_move(from, to, MOVE_NORMAL, PIECE_QUEEN);
+        }
+    }
+
+    auto pawn_left_capture_no_mask  = to_move == WHITE ? white_pawn_left_capture_no_mask : black_pawn_left_capture_no_mask;
+    auto pawn_right_capture_no_mask = to_move == WHITE ? white_pawn_right_capture_no_mask : black_pawn_right_capture_no_mask;
+
+    uint64_t ep_mask                = en_passant_sq == NULL_SQUARE ? 0 : sq_to_bb(en_passant_sq);
+    uint64_t promotion_rank         = to_move == WHITE ? RANK_8 : RANK_1;
+
+    auto new_pawn_single_move = [&](int from, int to) {
+        if (sq_to_bb(to) & promotion_rank) {
+            new_move(from, to, MOVE_PROMOTION, PIECE_QUEEN);
+            new_move(from, to, MOVE_PROMOTION, PIECE_KNIGHT);
+            new_move(from, to, MOVE_PROMOTION, PIECE_BISHOP);
+            new_move(from, to, MOVE_PROMOTION, PIECE_ROOK);
+        } 
+        else {
+            new_move(from, to, MOVE_NORMAL, PIECE_PAWN);
+        }
+    };
 
     for (int to : set_bits(pawn_left_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & opps)) {
         int offset[] = { -7, 9 };
@@ -447,7 +535,7 @@ inline void set_piece(Position& pos, int side, Piece piece, size_t index) {
     pos.piece_at[index] = (uint8_t)piece;
 }
 
-static int get_captured_square(Move move, int to_move) {
+int get_captured_square(Move move, int to_move) {
     int captured_pos = move_to(move); // usually the piece being captured is at the square being moved to
 
     int offsets[] = {
@@ -586,9 +674,4 @@ void Position::unmake_move(Move move) {
 
     flags = undo.flags;
     en_passant_sq = undo.en_passant_sq;
-}
-
-bool Position::is_capture(Move move) const {
-    int captured_pos = get_captured_square(move, to_move);
-    return piece_at[captured_pos] != PIECE_NONE;
 }

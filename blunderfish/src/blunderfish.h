@@ -119,6 +119,7 @@ struct Position {
     static std::optional<Position> decode_fen_string(const std::string& fen);
 
     std::span<Move> generate_moves(std::span<Move> move_buf) const;
+    std::span<Move> generate_captures(std::span<Move> move_buf) const;
 
     std::unordered_map<std::string, size_t> name_moves(std::span<Move> moves);
 
@@ -127,13 +128,10 @@ struct Position {
     void make_move(Move move);
     void unmake_move(Move move);
 
-    bool is_capture(Move move) const;
-
     std::vector<Side> get_sides() const;  
 
     bool is_in_check(int colour) const;
-    // omits king
-    bool is_attacked(int side, int square) const;
+    bool is_king_square_attacked(int side, int square) const;
 
     void filter_moves(std::span<Move>& moves);
 
@@ -146,6 +144,8 @@ struct Position {
 
     int best_move(std::span<Move> moves, uint8_t depth);
 };
+
+int get_captured_square(Move move, int to_move);
 
 inline std::pair<char, int> square_alg(size_t sq) {
     char file = sq % 8 + 'a';
