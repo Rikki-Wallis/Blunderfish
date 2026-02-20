@@ -16,10 +16,31 @@ static uint64_t run_and_time(Func&& func) {
     return ms;
 }
 
+template <typename Func>
+static void run_and_report(int runs, const std::string& title, Func&& func) {
+    double sum = 0.0;
+
+    for (int i = 0; i < runs; ++i) {
+        auto start = std::chrono::high_resolution_clock::now();
+        std::forward<Func>(func)(); 
+        auto end = std::chrono::high_resolution_clock::now();
+
+        auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+
+        double ms = (double)duration.count()/1000000.0;
+        sum += ms;
+    }
+
+    double avg = sum/(double)runs;
+
+    print("{}: {}ms\n", title, avg);
+}
+
 static void benchmark_perft() {
     Position pos = *Position::decode_fen_string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 
     std::vector<uint64_t> times;
+
     times.push_back(run_and_time([&] {return perft_search(1, pos);}));
     times.push_back(run_and_time([&] {return perft_search(2, pos);}));
     times.push_back(run_and_time([&] {return perft_search(3, pos);}));
@@ -66,8 +87,35 @@ static void benchmark_best_move() {
     };
 }
 
+template<typename Func>
+static void benchmark_pos_method(Func&& func) {
+    for (int depth = 1; depth <= 5; ++depth) {
+        run_and_report(5, std::format("Raw Negamax Depth {}", depth), [&](){
+            Position pos = *Position::decode_fen_string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+            std::array<Move, 256> move_buf;
+            std::span<Move> moves = pos.generate_moves(move_buf);
+            pos.filter_moves(moves);
+            std::forward<Func>(func)(pos, depth);
+        });
+    }
+}
+
+static void benchmark_raw_negamax() {
+    benchmark_pos_method([](Position& pos, int depth){
+        pos.negamax(depth, 1);
+    });
+}
+
+static void benchmark_pruned_negamax() {
+    benchmark_pos_method([](Position& pos, int depth){
+        pos.pruned_negamax(depth, 1, INT32_MIN, INT32_MAX);
+    });
+}
+
 int main() {
     benchmark_perft();
     benchmark_best_move();
+    benchmark_raw_negamax();
+    benchmark_pruned_negamax();
     return 0;
 }
