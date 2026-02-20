@@ -142,17 +142,22 @@ int Position::best_move(std::span<Move> moves, uint8_t depth) {
     int64_t best_score = INT64_MIN;
     int best_move = -1;
 
+    int64_t alpha = INT32_MIN;
+    int64_t beta = INT32_MAX;
+
     for (int i = 0; i < (int)moves.size(); ++i) {
         Move m = moves[i];
 
         make_move(m); // no need to filter for check here - assumes filtered moves given
-        int64_t score = -pruned_negamax(depth-1, 1, INT32_MIN, INT32_MAX);
+        int64_t score = -pruned_negamax(depth-1, 1, -beta, -alpha);
         unmake_move(m);
 
         if (score > best_score) {
             best_score = score;
             best_move = i;
         }
+
+        alpha = std::max(alpha, score);
     }
 
     if (best_move == -1) {
