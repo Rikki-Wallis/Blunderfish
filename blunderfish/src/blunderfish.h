@@ -141,6 +141,7 @@ struct Position {
 
     int64_t eval() const;
     int64_t negamax(int depth, int ply);
+    int64_t pruned_negamax(int depth, int ply, int64_t alpha, int64_t beta);
 
     int best_move(std::span<Move> moves, uint8_t depth);
 };

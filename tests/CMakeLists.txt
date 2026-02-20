@@ -11,6 +11,9 @@ FetchContent_MakeAvailable(Catch2)
 
 add_executable(test_perft test_perft.cpp)
 target_link_libraries(test_perft PRIVATE blunderfish Catch2::Catch2WithMain)
+add_executable(test_pruning test_pruning.cpp)
+target_link_libraries(test_pruning PRIVATE blunderfish Catch2::Catch2WithMain)
 
 include(Catch)
 catch_discover_tests(test_perft)
+catch_discover_tests(test_pruning)
