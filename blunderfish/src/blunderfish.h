@@ -140,8 +140,7 @@ struct Position {
     void verify_integrity() const;
 
     int64_t eval() const;
-    int64_t negamax(int depth, int ply, int64_t alpha, int64_t beta);
-    int64_t quiescence(int64_t alpha, int64_t beta);
+    int64_t negamax(int depth, int ply);
 
     int best_move(std::span<Move> moves, uint8_t depth);
 };
