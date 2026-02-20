@@ -264,6 +264,68 @@ uint64_t rook_moves_at(size_t sq, uint64_t blockers) {
     return result;
 }
 
+uint64_t knight_moves_at(int from) {
+    uint64_t bb = (uint64_t)1 << from;
+
+    uint64_t ul = (bb >> 17) & ~get_file(7);
+    uint64_t ur = (bb >> 15) & ~get_file(0); 
+    uint64_t lu = (bb >> 10) & ~(get_file(7) | get_file(6)); 
+    uint64_t ru = (bb >> 6)  & ~(get_file(0) | get_file(1)); 
+    uint64_t dl = (bb << 17) & ~get_file(0); 
+    uint64_t dr = (bb << 15) & ~get_file(7); 
+    uint64_t ld = (bb << 10) & ~(get_file(0) | get_file(1)); 
+    uint64_t rd = (bb << 6)  & ~(get_file(7) | get_file(6)); 
+
+    return ul | ur | lu | ru | dl | dr | ld | rd;
+}
+
+uint64_t king_moves_at(int from) {
+    uint64_t bb = (uint64_t)1 << from;
+
+    uint64_t l  = (bb >> 1) & (~get_file(7));
+    uint64_t lu = (bb << 7) & (~get_file(7));
+    uint64_t u  = (bb << 8);
+    uint64_t ru = (bb << 9) & (~get_file(0));
+    uint64_t r  = (bb << 1) & (~get_file(0));
+    uint64_t rd = (bb >> 7) & (~get_file(0));
+    uint64_t d  = (bb >> 8);
+    uint64_t ld = (bb >> 9) & (~get_file(7));
+
+    return l | lu | u | ru | r | rd | d | ld;
+}
+
+uint64_t white_pawn_attacks_at(int from) {
+    uint64_t bb = (uint64_t)1 << from;
+    uint64_t left  = (bb << 7) & (~get_file(7));
+    uint64_t right = (bb << 9) & (~get_file(0));
+    return left | right;
+}
+
+uint64_t black_pawn_attacks_at(int from) {
+    uint64_t bb = (uint64_t)1 << from;
+    uint64_t left  = (bb >> 9) & (~get_file(7));
+    uint64_t right = (bb >> 7) & (~get_file(0));
+    return left | right;
+}
+
+static void dump_trivial_move_table(FILE* file, const std::string& name, uint64_t(*moves_at)(int)) {
+    fprint(file, "const uint64_t {}_table[] = {{\n", name);
+    for (int i = 0; i < 64; ++i) {
+        if (i%8==0) {
+            fprint(file, "  ");
+        }
+
+        uint64_t val = moves_at(i);
+
+        fprint(file, "0x{:x},", val);
+
+        if ((i+1) % 8 == 0) {
+            fprint(file, "\n");
+        }
+    }
+    fprint(file, "}};\n\n");
+}
+
 int main(int argc, char** argv) {
     if (argc < 2) {
         fprint(stderr, "Usage %s <path>\n", argv[0]);
@@ -288,6 +350,11 @@ int main(int argc, char** argv) {
 
     rooks.dump(file, "rook");
     bishops.dump(file, "bishop");
+
+    dump_trivial_move_table(file, "knight_move", knight_moves_at);
+    dump_trivial_move_table(file, "king_move", king_moves_at);
+    dump_trivial_move_table(file, "white_pawn_attacks", white_pawn_attacks_at);
+    dump_trivial_move_table(file, "black_pawn_attacks", black_pawn_attacks_at);
 
     return 0;
 }

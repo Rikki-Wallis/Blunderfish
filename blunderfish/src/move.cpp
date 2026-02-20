@@ -51,36 +51,12 @@ static const std::array<int, 64> rook_jump_to = gen_rook_jump_to_table();
 
 // King
 static uint64_t king_moves(int from, uint64_t allies) {
-    uint64_t bb = sq_to_bb(from);
-
-    uint64_t l  = (bb >> 1) & (~FILE_H);
-    uint64_t lu = (bb << 7) & (~FILE_H);
-    uint64_t u  = (bb << 8);
-    uint64_t ru = (bb << 9) & (~FILE_A);
-    uint64_t r  = (bb << 1) & (~FILE_A);
-    uint64_t rd = (bb >> 7) & (~FILE_A);
-    uint64_t d  = (bb >> 8);
-    uint64_t ld = (bb >> 9) & (~FILE_H);
-
-    uint64_t m = l | lu | u | ru | r | rd | d | ld;
-
-    return m & (~allies);
+    return king_move_table[from] & (~allies);
 }
 
 // Knights
 static uint64_t knight_moves(int from, uint64_t allies) {
-    uint64_t bb = sq_to_bb(from);
-
-    uint64_t ul = (bb >> 17) & ~FILE_H;
-    uint64_t ur = (bb >> 15) & ~FILE_A; 
-    uint64_t lu = (bb >> 10) & ~(FILE_H | FILE_G); 
-    uint64_t ru = (bb >> 6)  & ~(FILE_A | FILE_B); 
-    uint64_t dl = (bb << 17) & ~FILE_A; 
-    uint64_t dr = (bb << 15) & ~FILE_H; 
-    uint64_t ld = (bb << 10) & ~(FILE_A | FILE_B); 
-    uint64_t rd = (bb << 6)  & ~(FILE_H | FILE_G); 
-
-    return (ul | ur | lu | ru | dl | dr | ld | rd) & ~(allies);
+    return knight_move_table[from] & (~allies);
 }
 
 // Pawns
@@ -130,18 +106,6 @@ uint64_t black_pawn_double_push(uint64_t bb, uint64_t all_pieces) {
     return double_push;
 }
 
-uint64_t white_pawn_attacks(uint64_t pawns_bb) {
-    uint64_t left  = (pawns_bb << 7) & (~FILE_H);
-    uint64_t right = (pawns_bb << 9) & (~FILE_A);
-    return left | right;
-}
-
-uint64_t black_pawn_attacks(uint64_t pawns_bb) {
-    uint64_t left  = (pawns_bb >> 9) & (~FILE_H);
-    uint64_t right = (pawns_bb >> 7) & (~FILE_A);
-    return left | right;
-}
-
 // Magic Bitboards
 static size_t magic_index(uint64_t all_pieces, uint64_t mask, uint64_t magic, size_t shift) {
     return static_cast<size_t>(((all_pieces & mask) * magic) >> shift);
@@ -164,18 +128,15 @@ uint64_t queen_moves(int from, uint64_t all_pieces, uint64_t allies) {
 }
 
 bool Position::is_attacked(int side, int square) const {
-    uint64_t bb = sq_to_bb(square);
-
     int opp = opponent(side);
 
     uint64_t allies = sides[side].all() & ~(sides[side].bb[PIECE_KING]);
-    //uint64_t opp_mask = sides[opp].all();
     uint64_t all = all_pieces() & ~(sides[side].bb[PIECE_KING]);
 
     uint64_t diag_mask = bishop_moves(square, all, allies);
     uint64_t straight_mask = rook_moves(square, all, allies);
     uint64_t knight_mask = knight_moves(square, allies);
-    uint64_t pawn_mask = side == WHITE ? white_pawn_attacks(bb) : black_pawn_attacks(bb); // reversed side
+    uint64_t pawn_mask = side == WHITE ? white_pawn_attacks_table[square] : black_pawn_attacks_table[square];
     uint64_t king_mask = king_moves(square, allies);
 
     if (diag_mask & sides[opp].bb[PIECE_BISHOP]) {

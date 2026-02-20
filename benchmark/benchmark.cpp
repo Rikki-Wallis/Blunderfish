@@ -54,7 +54,7 @@ static void benchmark_perft() {
                     
         double seconds = times[i] / 1000.0;
         double nps = seconds > 0 ? nodes[i] / seconds : 0;
-        std::cout << "Depth " << i+1 << ": " << nodes[i] << " nodes in "
+        std::cout << "Perft Depth " << i+1 << ": " << nodes[i] << " nodes in "
                     << seconds << "s (" << nps << " nodes/sec)\n";
         
     };
@@ -81,7 +81,7 @@ static void benchmark_best_move() {
                     
         double seconds = times[i] / 1000.0;
         double nps = seconds > 0 ? nodes[i] / seconds : 0;
-        std::cout << "Depth " << i+1 << ": " << nodes[i] << " nodes in "
+        std::cout << "Best-move Depth " << i+1 << ": " << nodes[i] << " nodes in "
                     << seconds << "s (" << nps << " nodes/sec)\n";
         
     };
@@ -107,7 +107,7 @@ static void benchmark_raw_negamax() {
 }
 
 static void benchmark_pruned_negamax() {
-    benchmark_pos_method("Pruned Negamax", 8, [](Position& pos, int depth){
+    benchmark_pos_method("Pruned Negamax", 7, [](Position& pos, int depth){
         pos.pruned_negamax(depth, 1, INT32_MIN, INT32_MAX);
     });
 }
