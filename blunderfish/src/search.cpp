@@ -4,6 +4,37 @@
 
 constexpr int64_t MATE_SCORE = 0xffffff;
 
+static Move select_best(std::span<Move>& moves, std::span<int32_t>& mvv_lva_scores, int index) {
+    int32_t best_score = INT32_MIN;
+    int best_index = -1;
+
+    for (int i = index; i < (int)moves.size(); ++i) {
+        int32_t score = mvv_lva_scores[i];
+
+        if (score > best_score) {
+            best_score = score;
+            best_index = i;
+        }
+    }
+
+    assert(best_index != -1);
+
+    std::swap(moves[index], moves[best_index]);
+    std::swap(mvv_lva_scores[index], mvv_lva_scores[best_index]);
+
+    return moves[index];
+}
+
+static std::span<int32_t> compute_mvv_lva_scores(Position& pos, std::span<int32_t> buf, std::span<Move> moves) {
+    std::span<int32_t> result = buf.subspan(0, moves.size());
+
+    for (size_t i = 0; i < moves.size(); ++i) {
+        result[i] = pos.mvv_lva_score(moves[i]);
+    }
+
+    return result;
+}
+
 int64_t Position::pruned_negamax(int depth, int ply, int64_t alpha, int64_t beta) {
     if (depth == 0) {
         return quiescence(ply, alpha, beta);
@@ -14,9 +45,14 @@ int64_t Position::pruned_negamax(int depth, int ply, int64_t alpha, int64_t beta
     std::array<Move, 256> move_buf;
     std::span<Move> moves = generate_moves(move_buf);
 
+    std::array<int32_t, 256> score_buf;
+    std::span<int32_t> mvv_lva_scores = compute_mvv_lva_scores(*this, score_buf, moves);
+
     bool legal_found = false;
 
-    for (Move m : moves) {
+    for (int i = 0; i < (int)moves.size(); ++i) {
+        Move m = select_best(moves, mvv_lva_scores, i);
+
         bool cutoff = false;
 
         make_move(m);
@@ -67,12 +103,17 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
     std::array<Move, 256> move_buf;
     std::span<Move> moves = currently_checked ? generate_moves(move_buf) : generate_captures(move_buf);
 
+    std::array<int32_t, 256> score_buf;
+    std::span<int32_t> mvv_lva_scores = compute_mvv_lva_scores(*this, score_buf, moves);
+
     bool legal_found = false;
 
-    for (Move mv : moves) {
-        make_move(mv);
+    for (int i = 0; i < (int)moves.size(); ++i) {
+        Move mv = select_best(moves, mvv_lva_scores, i);
 
         bool cutoff = false;
+
+        make_move(mv);
 
         if (!is_in_check(side)) {
             legal_found = true;

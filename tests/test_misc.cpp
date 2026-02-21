@@ -19,7 +19,7 @@ static void test_capture_gen(const std::string& FEN) {
     for (int i = (int)moves.size()-1; i >= 0; --i) {
         Move mv = moves[i];
 
-        int square = get_captured_square(mv, pos.to_move);
+        int square = get_captured_square(mv);
 
         if (pos.piece_at[square] == PIECE_NONE) {
             moves[i] = moves.back();
@@ -38,7 +38,6 @@ TEST_CASE("Generate-Captures Equals Captures from Generate-Moves") {
     test_capture_gen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -"); 
 }
 
-/*
 TEST_CASE("Pruned Negamax Equals Plain Negamax on start") {
     Position pos = *Position::decode_fen_string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 
@@ -48,4 +47,3 @@ TEST_CASE("Pruned Negamax Equals Plain Negamax on start") {
         REQUIRE(a == b);
     }
 }
-*/

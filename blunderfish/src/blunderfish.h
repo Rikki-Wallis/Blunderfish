@@ -142,10 +142,13 @@ struct Position {
     int64_t pruned_negamax(int depth, int ply, int64_t alpha, int64_t beta);
     int64_t quiescence(int ply, int64_t alpha, int64_t beta);
 
+    int32_t mvv_lva_score(Move mv) const;
+
     int best_move(std::span<Move> moves, uint8_t depth);
 };
 
-int get_captured_square(Move move, int to_move);
+int get_captured_square(Move move);
+int32_t piece_value_centipawns(Piece piece);
 
 inline std::pair<char, int> square_alg(size_t sq) {
     char file = sq % 8 + 'a';
@@ -182,10 +185,16 @@ inline Piece move_end_piece(Move move) {
     return (Piece)piece;
 }
 
-inline Move encode_move(int from, int to, MoveType type, Piece end_piece) {
+inline int move_side(Move move) {
+    int side = (move >> 18) & 1;
+    return side;
+}
+
+inline Move encode_move(int from, int to, MoveType type, Piece end_piece, int side) {
     Move mv = (uint32_t)from; 
     mv     |= ((uint32_t)to) << 6;
     mv     |= ((uint32_t)type) << 12;
     mv     |= ((uint32_t)end_piece) << 15;
+    mv     |= ((uint32_t)side & 1) << 18;
     return mv;
 }

@@ -1,9 +1,11 @@
 #include "blunderfish.h"
 
-inline int64_t piece_value(Piece piece) {
+int32_t piece_value_centipawns(Piece piece) {
     switch (piece) {
         default:
             assert(false);
+            return 0;
+        case PIECE_NONE:
             return 0;
         case PIECE_PAWN:
             return 100;
@@ -25,7 +27,7 @@ int64_t Side::material_value() const {
 
     for (int p = PIECE_PAWN; p < NUM_PIECE_TYPES; ++p) {
         int n = std::popcount(bb[p]);
-        sum += n * piece_value((Piece)p);
+        sum += n * piece_value_centipawns((Piece)p);
     }
 
     return sum;

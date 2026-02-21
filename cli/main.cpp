@@ -107,7 +107,7 @@ static int best_main(const char* FEN) {
     pos.filter_moves(moves);
     auto names = pos.name_moves(moves);
 
-    int best = pos.best_move(moves, 7);
+    int best = pos.best_move(moves, 6);
 
     if (best == -1) {
         print("There is no move.\n");

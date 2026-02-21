@@ -182,7 +182,7 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
 
     auto new_move = [&](int from, int to, MoveType type, Piece end_piece) {
         assert("move buffer overflow" && move_count < move_buf.size());
-        move_buf[move_count++] = encode_move(from, to, type, end_piece);
+        move_buf[move_count++] = encode_move(from, to, type, end_piece, to_move);
     };
 
     int opp = opponent(to_move);
@@ -325,7 +325,7 @@ std::span<Move> Position::generate_captures(std::span<Move> move_buf) const {
 
     auto new_move = [&](int from, int to, MoveType type, Piece end_piece) {
         assert("move buffer overflow" && move_count < move_buf.size());
-        move_buf[move_count++] = encode_move(from, to, type, end_piece);
+        move_buf[move_count++] = encode_move(from, to, type, end_piece, to_move);
     };
 
     int opp = opponent(to_move);
@@ -535,7 +535,7 @@ inline void set_piece(Position& pos, int side, Piece piece, size_t index) {
     pos.piece_at[index] = (uint8_t)piece;
 }
 
-int get_captured_square(Move move, int to_move) {
+int get_captured_square(Move move) {
     int captured_pos = move_to(move); // usually the piece being captured is at the square being moved to
 
     int offsets[] = {
@@ -544,14 +544,22 @@ int get_captured_square(Move move, int to_move) {
 
     int is_ep = move_type(move)==MOVE_EN_PASSANT;
 
-    captured_pos = move_to(move) + offsets[is_ep * 2 + to_move];
+    int side = move_side(move);
+    captured_pos = move_to(move) + offsets[is_ep * 2 + side];
 
     return captured_pos;
 }
 
+int32_t Position::mvv_lva_score(Move mv) const{
+    int captured_sq = get_captured_square(mv);
+    Piece captured_piece = (Piece)piece_at[captured_sq];
+    Piece moving_piece = (Piece)piece_at[move_from(mv)];
+    return piece_value_centipawns(captured_piece) * 10 - piece_value_centipawns(moving_piece);
+}
+
 void Position::make_move(Move move) {
     // First, check for a capture and remove the piece
-    int captured_pos = get_captured_square(move, to_move);
+    int captured_pos = get_captured_square(move);
     Piece captured_piece = (Piece)piece_at[captured_pos];
     assert(captured_piece != PIECE_KING);
 
@@ -667,7 +675,7 @@ void Position::unmake_move(Move move) {
 
     // replace the captured piece
 
-    int captured_square = get_captured_square(move, to_move);
+    int captured_square = get_captured_square(move);
     uint64_t captured_mask = bool_to_mask<uint64_t>(undo.captured_piece != PIECE_NONE) & sq_to_bb(captured_square);
     sides[opponent(to_move)].bb[undo.captured_piece] ^= captured_mask;
     piece_at[captured_square] = undo.captured_piece;
