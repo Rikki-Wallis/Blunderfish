@@ -4,6 +4,7 @@
 
 constexpr int64_t MATE_SCORE = 0xffffff;
 
+constexpr int32_t BEST_MOVE_SCORE   = 1000000;
 constexpr int32_t CAPTURE_SCORE     = 90000;
 constexpr int32_t KILLER_1_SCORE    = 80000;
 constexpr int32_t KILLER_2_SCORE    = 70000;
@@ -220,33 +221,68 @@ int64_t Position::negamax(int depth, int ply) {
     return alpha;
 }
 
-int Position::best_move(std::span<Move> moves, uint8_t depth) {
+Move Position::best_move_internal(std::span<Move> moves, int depth, Move last_best_move, HistoryTable& history, KillerTable& killers) {
+    (void)last_best_move;
+
+    int ply = 1;
+
     int64_t best_score = INT64_MIN;
-    int best_move = -1;
+    int best_move = NULL_MOVE;
 
     int64_t alpha = INT32_MIN;
     int64_t beta = INT32_MAX;
 
-    KillerTable killers{};
-    HistoryTable history{};
+    std::array<int32_t, 256> score_buf;
+    std::span<int32_t> move_scores = std::span(score_buf).subspan(0, moves.size());
+
+    for (size_t i = 0; i < moves.size(); ++i) {
+        Move mv = moves[i];
+
+        if (mv == last_best_move) {
+            move_scores[i] = BEST_MOVE_SCORE;
+        }
+        else if (mv == killers[ply][0]) {
+            move_scores[i] = KILLER_1_SCORE;
+        }
+        else if (mv == killers[ply][1]) {
+            move_scores[i] = KILLER_2_SCORE;
+        }
+        else {
+            int32_t score = mvv_lva_score(mv);
+            Piece piece = (Piece)piece_at[move_from(mv)];
+            int to = move_to(mv);
+            move_scores[i] = score == 0 ? history[piece][to] : score;
+        }
+    }
 
     for (int i = 0; i < (int)moves.size(); ++i) {
-        Move m = moves[i];
+        Move m = select_best(moves, move_scores, i);
 
         make_move(m); // no need to filter for check here - assumes filtered moves given
-        int64_t score = -pruned_negamax(depth-1, history, killers, 1, -beta, -alpha);
+        int64_t score = -pruned_negamax(depth-1, history, killers, ply+1, -beta, -alpha);
         unmake_move(m);
 
         if (score > best_score) {
             best_score = score;
-            best_move = i;
+            best_move = m;
         }
 
         alpha = std::max(alpha, score);
     }
 
-    if (best_move == -1) {
-        return -1;
+    return best_move;
+}
+
+Move Position::best_move(std::span<Move> _moves, int depth) {
+    std::vector<Move> moves(_moves.begin(), _moves.end()); 
+
+    KillerTable killers{};
+    HistoryTable history{};
+
+    Move best_move = NULL_MOVE;
+
+    for (int i = 1; i <= depth; ++i) {
+        best_move = best_move_internal(moves, i, best_move, history, killers);
     }
 
     return best_move;

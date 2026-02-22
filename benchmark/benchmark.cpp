@@ -23,7 +23,6 @@ static void run_and_report(int runs, const std::string& title, Func&& func) {
     print("{}: {}ms\n", title, avg);
 }
 
-/*
 template <typename Func>
 static uint64_t run_and_time(Func&& func) {
     // Time perft search
@@ -61,36 +60,6 @@ static void benchmark_perft() {
     };
 }
 
-static void benchmark_best_move() {
-    Position pos = *Position::decode_fen_string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-
-    std::vector<uint64_t> times;
-    std::array<Move, 256> move_buf;
-    std::span<Move> moves = pos.generate_moves(move_buf);
-    pos.filter_moves(moves);
-
-    times.push_back(run_and_time([&] {return pos.best_move(moves, 1);}));
-    times.push_back(run_and_time([&] {return pos.best_move(moves, 2);}));
-    times.push_back(run_and_time([&] {return pos.best_move(moves, 3);}));
-    times.push_back(run_and_time([&] {return pos.best_move(moves, 4);}));
-    times.push_back(run_and_time([&] {return pos.best_move(moves, 5);}));
-    times.push_back(run_and_time([&] {return pos.best_move(moves, 6);}));
-
-    size_t i = 0;
-    std::vector<uint64_b
-b
-bt> nodes = {20, 400, 8902, 197281, 4865609, 119060324};
-    for (i = 0; i < times.size(); ++i) {
-                    
-        double seconds = times[i] / 1000.0;
-        double nps = seconds > 0 ? nodes[i] / seconds : 0;
-        std::cout << "Best-move Depth " << i+1 << ": " << nodes[i] << " nodes in "
-                    << seconds << "s (" << nps << " nodes/sec)\n";
-        
-    };
-}
-*/
-
 template<typename Func>
 static void benchmark_pos_method(const std::string& name, int max_depth, Func&& func) {
     for (int depth = 1; depth <= max_depth; ++depth) {
@@ -104,13 +73,20 @@ static void benchmark_pos_method(const std::string& name, int max_depth, Func&& 
     }
 }
 
-/*
+static void benchmark_best_move() {
+    benchmark_pos_method("Best-move", 10, [](Position& pos, int depth){
+        std::array<Move, 256> move_buf;
+        std::span<Move> moves = pos.generate_moves(move_buf);
+        pos.filter_moves(moves);
+        pos.best_move(moves, depth);
+    });
+}
+
 static void benchmark_raw_negamax() {
     benchmark_pos_method("Raw Negamax", 5, [](Position& pos, int depth){
         pos.negamax(depth, 1);
     });
 }
-*/
 
 static void benchmark_pruned_negamax() {
     benchmark_pos_method("Pruned Negamax", 10, [](Position& pos, int depth){
@@ -121,9 +97,9 @@ static void benchmark_pruned_negamax() {
 }
 
 int main() {
-    //benchmark_perft();
-    //benchmark_best_move();
-    //benchmark_raw_negamax();
+    benchmark_perft();
+    benchmark_best_move();
+    benchmark_raw_negamax();
     benchmark_pruned_negamax();
     return 0;
 }

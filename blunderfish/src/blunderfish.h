@@ -75,6 +75,8 @@ static const char* piece_alg_table[NUM_PIECE_TYPES] = {
 
 using Move = uint32_t;
 
+static constexpr Move NULL_MOVE = 0;
+
 struct Side {
     uint64_t bb[NUM_PIECE_TYPES];
 
@@ -149,7 +151,8 @@ struct Position {
 
     bool is_capture(Move mv) const;
 
-    int best_move(std::span<Move> moves, uint8_t depth);
+    Move best_move_internal(std::span<Move> moves, int depth, Move last_best_move, HistoryTable& history, KillerTable& killers);
+    Move best_move(std::span<Move> moves, int depth);
 };
 
 int get_captured_square(Move move);

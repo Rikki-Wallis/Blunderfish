@@ -59,17 +59,16 @@ static int play_main() {
             pos.make_move(m);
         }
         else {
-            int move_idx = pos.best_move(moves, 9);
-            assert(move_idx != -1);
+            Move move = pos.best_move(moves, 8);
+            assert(move != NULL_MOVE);
 
-            for (auto& [name, m] : move_names) {
-                if (m == (size_t)move_idx) {
+            for (auto& [name, i] : move_names) {
+                if (moves[i] == move) {
                     print("Blunderfish plays {}\n", name);
                 }
             }
 
-            Move m = moves[move_idx];
-            pos.make_move(m);
+            pos.make_move(move);
         }
     }
 
@@ -107,15 +106,15 @@ static int best_main(const char* FEN) {
     pos.filter_moves(moves);
     auto names = pos.name_moves(moves);
 
-    int best = pos.best_move(moves, 9);
+    Move best = pos.best_move(moves, 8);
 
-    if (best == -1) {
+    if (best == NULL_MOVE) {
         print("There is no move.\n");
         return 0;
     }
 
-    for (auto& [name, move] : names) {
-        if (move == (size_t)best) {
+    for (auto& [name, i] : names) {
+        if (moves[i] == best) {
             print("{}\n", name);
             return 0;
         }
