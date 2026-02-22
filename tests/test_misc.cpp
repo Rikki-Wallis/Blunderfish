@@ -44,8 +44,9 @@ TEST_CASE("Pruned Negamax Equals Plain Negamax on start") {
     for (int depth = 1; depth <= 6; ++depth) {
         int64_t a = pos.negamax(depth, 1);
 
-        KillerTable killers;
-        int64_t b = pos.pruned_negamax(depth, killers, 1, INT32_MIN, INT32_MAX);
+        KillerTable killers{};
+        HistoryTable history{};
+        int64_t b = pos.pruned_negamax(depth, history, killers, 1, INT32_MIN, INT32_MAX);
         REQUIRE(a == b);
     }
 }

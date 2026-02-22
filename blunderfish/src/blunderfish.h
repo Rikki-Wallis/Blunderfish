@@ -94,6 +94,7 @@ struct Undo {
 };
 
 using KillerTable = std::array<std::array<Move, 2>, MAX_DEPTH>;
+using HistoryTable = std::array<std::array<int32_t, 64>, NUM_PIECE_TYPES>;
 
 struct Position {
     Side sides[2];
@@ -141,7 +142,7 @@ struct Position {
 
     int64_t eval() const;
     int64_t negamax(int depth, int ply);
-    int64_t pruned_negamax(int depth, KillerTable& killers, int ply, int64_t alpha, int64_t beta);
+    int64_t pruned_negamax(int depth, HistoryTable& history, KillerTable& killers, int ply, int64_t alpha, int64_t beta);
     int64_t quiescence(int ply, int64_t alpha, int64_t beta);
 
     int32_t mvv_lva_score(Move mv) const;

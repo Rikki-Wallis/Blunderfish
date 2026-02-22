@@ -4,19 +4,6 @@
 #include "blunderfish.h"
 
 template <typename Func>
-static uint64_t run_and_time(Func&& func) {
-    // Time perft search
-    auto start = std::chrono::high_resolution_clock::now();
-    std::forward<Func>(func)(); 
-    auto end = std::chrono::high_resolution_clock::now();
-
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    uint64_t ms = duration.count();
-
-    return ms;
-}
-
-template <typename Func>
 static void run_and_report(int runs, const std::string& title, Func&& func) {
     double sum = 0.0;
 
@@ -34,6 +21,20 @@ static void run_and_report(int runs, const std::string& title, Func&& func) {
     double avg = sum/(double)runs;
 
     print("{}: {}ms\n", title, avg);
+}
+
+/*
+template <typename Func>
+static uint64_t run_and_time(Func&& func) {
+    // Time perft search
+    auto start = std::chrono::high_resolution_clock::now();
+    std::forward<Func>(func)(); 
+    auto end = std::chrono::high_resolution_clock::now();
+
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    uint64_t ms = duration.count();
+
+    return ms;
 }
 
 static void benchmark_perft() {
@@ -76,7 +77,9 @@ static void benchmark_best_move() {
     times.push_back(run_and_time([&] {return pos.best_move(moves, 6);}));
 
     size_t i = 0;
-    std::vector<uint64_t> nodes = {20, 400, 8902, 197281, 4865609, 119060324};
+    std::vector<uint64_b
+b
+bt> nodes = {20, 400, 8902, 197281, 4865609, 119060324};
     for (i = 0; i < times.size(); ++i) {
                     
         double seconds = times[i] / 1000.0;
@@ -86,6 +89,7 @@ static void benchmark_best_move() {
         
     };
 }
+*/
 
 template<typename Func>
 static void benchmark_pos_method(const std::string& name, int max_depth, Func&& func) {
@@ -100,23 +104,26 @@ static void benchmark_pos_method(const std::string& name, int max_depth, Func&& 
     }
 }
 
+/*
 static void benchmark_raw_negamax() {
     benchmark_pos_method("Raw Negamax", 5, [](Position& pos, int depth){
         pos.negamax(depth, 1);
     });
 }
+*/
 
 static void benchmark_pruned_negamax() {
-    benchmark_pos_method("Pruned Negamax", 9, [](Position& pos, int depth){
-        KillerTable killers;
-        pos.pruned_negamax(depth, killers, 1, INT32_MIN, INT32_MAX);
+    benchmark_pos_method("Pruned Negamax", 10, [](Position& pos, int depth){
+        KillerTable killers{};
+        HistoryTable history{};
+        pos.pruned_negamax(depth, history, killers, 1, INT32_MIN, INT32_MAX);
     });
 }
 
 int main() {
-    benchmark_perft();
-    benchmark_best_move();
-    benchmark_raw_negamax();
+    //benchmark_perft();
+    //benchmark_best_move();
+    //benchmark_raw_negamax();
     benchmark_pruned_negamax();
     return 0;
 }

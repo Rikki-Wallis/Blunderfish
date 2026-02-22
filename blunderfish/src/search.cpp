@@ -4,9 +4,10 @@
 
 constexpr int64_t MATE_SCORE = 0xffffff;
 
-constexpr int32_t CAPTURE_SCORE  = 9000;
-constexpr int32_t KILLER_1_SCORE = 8000;
-constexpr int32_t KILLER_2_SCORE = 7000;
+constexpr int32_t CAPTURE_SCORE     = 90000;
+constexpr int32_t KILLER_1_SCORE    = 80000;
+constexpr int32_t KILLER_2_SCORE    = 70000;
+constexpr int32_t MAX_HISTORY_SCORE = 60000;
 
 static Move select_best(std::span<Move>& moves, std::span<int32_t>& move_scores, int index) {
     int32_t best_score = INT32_MIN;
@@ -37,7 +38,7 @@ int32_t Position::mvv_lva_score(Move mv) const{
     return captured_piece == PIECE_NONE ? 0 : score;
 }
 
-int64_t Position::pruned_negamax(int depth, KillerTable& killers, int ply, int64_t alpha, int64_t beta) {
+int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& killers, int ply, int64_t alpha, int64_t beta) {
     if (depth == 0) {
         return quiescence(ply, alpha, beta);
     }
@@ -60,7 +61,10 @@ int64_t Position::pruned_negamax(int depth, KillerTable& killers, int ply, int64
             move_scores[i] = KILLER_2_SCORE;
         }
         else {
-            move_scores[i] = mvv_lva_score(mv);
+            int32_t score = mvv_lva_score(mv);
+            Piece piece = (Piece)piece_at[move_from(mv)];
+            int to = move_to(mv);
+            move_scores[i] = score == 0 ? history[piece][to] : score;
         }
     }
 
@@ -75,7 +79,7 @@ int64_t Position::pruned_negamax(int depth, KillerTable& killers, int ply, int64
 
         if (!is_in_check(my_side)) {
             legal_found = true;
-            int64_t score = -pruned_negamax(depth - 1, killers, ply + 1, -beta, -alpha);
+            int64_t score = -pruned_negamax(depth - 1, history, killers, ply + 1, -beta, -alpha);
             alpha = std::max(score, alpha);
 
             if (alpha >= beta) { // opponent will never allow this; cutoff
@@ -86,9 +90,20 @@ int64_t Position::pruned_negamax(int depth, KillerTable& killers, int ply, int64
         unmake_move(m);
 
         if (cutoff) {
-            if (!is_capture(m) && killers[ply][0] != m) {
-                killers[ply][1] = killers[ply][0];
-                killers[ply][0] = m;
+            if (!is_capture(m)) {
+                if (m != killers[ply][0]) {
+                    killers[ply][1] = killers[ply][0];
+                    killers[ply][0] = m;
+                }
+
+                Piece piece = (Piece)piece_at[move_from(m)];
+                int to = move_to(m);
+
+                history[piece][to] += depth * depth;
+
+                if (history[piece][to] > MAX_HISTORY_SCORE) {
+                    history[piece][to] = MAX_HISTORY_SCORE;
+                }
             }
 
             return beta; // mate detection not relevant on this node because we found legal moves
@@ -212,13 +227,14 @@ int Position::best_move(std::span<Move> moves, uint8_t depth) {
     int64_t alpha = INT32_MIN;
     int64_t beta = INT32_MAX;
 
-    KillerTable killers;
+    KillerTable killers{};
+    HistoryTable history{};
 
     for (int i = 0; i < (int)moves.size(); ++i) {
         Move m = moves[i];
 
         make_move(m); // no need to filter for check here - assumes filtered moves given
-        int64_t score = -pruned_negamax(depth-1, killers, 1, -beta, -alpha);
+        int64_t score = -pruned_negamax(depth-1, history, killers, 1, -beta, -alpha);
         unmake_move(m);
 
         if (score > best_score) {
