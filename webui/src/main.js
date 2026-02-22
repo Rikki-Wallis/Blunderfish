@@ -94,7 +94,7 @@ board.addEventListener('drop', async (e) => {
   check_game_over();
 
   // make random legal move for black
-  window.setTimeout(makeMove, 250);
+  makeMove();
 });
 
 // update the board position after the piece snap

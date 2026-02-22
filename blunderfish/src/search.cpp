@@ -4,7 +4,7 @@
 
 constexpr int64_t MATE_SCORE = 0xffffff;
 
-constexpr int32_t BEST_MOVE_SCORE   = 1000000;
+constexpr int32_t BEST_MOVE_SCORE   = 2000000;
 constexpr int32_t CAPTURE_SCORE     = 90000;
 constexpr int32_t KILLER_1_SCORE    = 80000;
 constexpr int32_t KILLER_2_SCORE    = 70000;
@@ -274,14 +274,13 @@ Move Position::best_move_internal(std::span<Move> moves, int depth, Move last_be
 }
 
 Move Position::best_move(std::span<Move> _moves, int depth) {
-    std::vector<Move> moves(_moves.begin(), _moves.end()); 
-
     KillerTable killers{};
     HistoryTable history{};
 
     Move best_move = NULL_MOVE;
 
     for (int i = 1; i <= depth; ++i) {
+        std::vector<Move> moves(_moves.begin(), _moves.end()); 
         best_move = best_move_internal(moves, i, best_move, history, killers);
     }
 
