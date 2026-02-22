@@ -93,6 +93,8 @@ struct Undo {
     int en_passant_sq;
 };
 
+using KillerTable = std::array<std::array<Move, 2>, MAX_DEPTH>;
+
 struct Position {
     Side sides[2];
     int to_move;
@@ -139,10 +141,12 @@ struct Position {
 
     int64_t eval() const;
     int64_t negamax(int depth, int ply);
-    int64_t pruned_negamax(int depth, int ply, int64_t alpha, int64_t beta);
+    int64_t pruned_negamax(int depth, KillerTable& killers, int ply, int64_t alpha, int64_t beta);
     int64_t quiescence(int ply, int64_t alpha, int64_t beta);
 
     int32_t mvv_lva_score(Move mv) const;
+
+    bool is_capture(Move mv) const;
 
     int best_move(std::span<Move> moves, uint8_t depth);
 };

@@ -108,7 +108,8 @@ static void benchmark_raw_negamax() {
 
 static void benchmark_pruned_negamax() {
     benchmark_pos_method("Pruned Negamax", 9, [](Position& pos, int depth){
-        pos.pruned_negamax(depth, 1, INT32_MIN, INT32_MAX);
+        KillerTable killers;
+        pos.pruned_negamax(depth, killers, 1, INT32_MIN, INT32_MAX);
     });
 }
 

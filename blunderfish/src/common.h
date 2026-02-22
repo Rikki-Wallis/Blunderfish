@@ -48,3 +48,30 @@ struct set_bits {
     Iterator begin() const { return { .v = x }; }
     std::default_sentinel_t end() const { return {}; }
 };
+
+template<size_t N>
+class Bitset {
+public:
+    Bitset() {
+        memset(_data, 0, sizeof(_data));
+    }
+
+    bool get(size_t index) const {
+        assert(index < N);
+        return ((_data[index / 64] >> (index % 64)) & 1) != 0;
+    } 
+
+    void set(size_t index) {
+        assert(index < N);
+        _data[index / 64] |= uint64_t(1) << (index % 64);
+    } 
+
+    void unset(size_t index) {
+        assert(index < N);
+        _data[index / 64] &= ~(uint64_t(1) << (index % 64));
+    } 
+
+private:
+    static constexpr size_t NUM_WORDS = (N + 63) / 64;
+    uint64_t _data[NUM_WORDS];
+};

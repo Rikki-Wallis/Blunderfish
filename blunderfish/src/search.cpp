@@ -4,6 +4,10 @@
 
 constexpr int64_t MATE_SCORE = 0xffffff;
 
+constexpr int32_t CAPTURE_SCORE  = 9000;
+constexpr int32_t KILLER_1_SCORE = 8000;
+constexpr int32_t KILLER_2_SCORE = 7000;
+
 static Move select_best(std::span<Move>& moves, std::span<int32_t>& move_scores, int index) {
     int32_t best_score = INT32_MIN;
     int best_index = -1;
@@ -25,17 +29,15 @@ static Move select_best(std::span<Move>& moves, std::span<int32_t>& move_scores,
     return moves[index];
 }
 
-static std::span<int32_t> compute_move_scores(Position& pos, std::span<int32_t> buf, std::span<Move> moves) {
-    std::span<int32_t> result = buf.subspan(0, moves.size());
-
-    for (size_t i = 0; i < moves.size(); ++i) {
-        result[i] = pos.mvv_lva_score(moves[i]);
-    }
-
-    return result;
+int32_t Position::mvv_lva_score(Move mv) const{
+    int captured_sq = get_captured_square(mv);
+    Piece captured_piece = (Piece)piece_at[captured_sq];
+    Piece moving_piece = (Piece)piece_at[move_from(mv)];
+    int32_t score = CAPTURE_SCORE + piece_value_centipawns(captured_piece) * 1000 - piece_value_centipawns(moving_piece);
+    return captured_piece == PIECE_NONE ? 0 : score;
 }
 
-int64_t Position::pruned_negamax(int depth, int ply, int64_t alpha, int64_t beta) {
+int64_t Position::pruned_negamax(int depth, KillerTable& killers, int ply, int64_t alpha, int64_t beta) {
     if (depth == 0) {
         return quiescence(ply, alpha, beta);
     }
@@ -46,7 +48,21 @@ int64_t Position::pruned_negamax(int depth, int ply, int64_t alpha, int64_t beta
     std::span<Move> moves = generate_moves(move_buf);
 
     std::array<int32_t, 256> score_buf;
-    std::span<int32_t> move_scores = compute_move_scores(*this, score_buf, moves);
+    std::span<int32_t> move_scores = std::span(score_buf).subspan(0, moves.size());
+
+    for (size_t i = 0; i < moves.size(); ++i) {
+        Move mv = moves[i];
+
+        if (mv == killers[ply][0]) {
+            move_scores[i] = KILLER_1_SCORE;
+        }
+        else if (mv == killers[ply][1]) {
+            move_scores[i] = KILLER_2_SCORE;
+        }
+        else {
+            move_scores[i] = mvv_lva_score(mv);
+        }
+    }
 
     bool legal_found = false;
 
@@ -59,7 +75,7 @@ int64_t Position::pruned_negamax(int depth, int ply, int64_t alpha, int64_t beta
 
         if (!is_in_check(my_side)) {
             legal_found = true;
-            int64_t score = -pruned_negamax(depth - 1, ply + 1, -beta, -alpha);
+            int64_t score = -pruned_negamax(depth - 1, killers, ply + 1, -beta, -alpha);
             alpha = std::max(score, alpha);
 
             if (alpha >= beta) { // opponent will never allow this; cutoff
@@ -70,6 +86,11 @@ int64_t Position::pruned_negamax(int depth, int ply, int64_t alpha, int64_t beta
         unmake_move(m);
 
         if (cutoff) {
+            if (!is_capture(m) && killers[ply][0] != m) {
+                killers[ply][1] = killers[ply][0];
+                killers[ply][0] = m;
+            }
+
             return beta; // mate detection not relevant on this node because we found legal moves
         } 
     }
@@ -104,7 +125,12 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
     std::span<Move> moves = currently_checked ? generate_moves(move_buf) : generate_captures(move_buf);
 
     std::array<int32_t, 256> score_buf;
-    std::span<int32_t> move_scores = compute_move_scores(*this, score_buf, moves);
+    std::span<int32_t> move_scores = std::span(score_buf).subspan(0, moves.size());
+
+    for (size_t i = 0; i < moves.size(); ++i) {
+        Move mv = moves[i];
+        move_scores[i] = mvv_lva_score(mv);
+    }
 
     bool legal_found = false;
 
@@ -186,11 +212,13 @@ int Position::best_move(std::span<Move> moves, uint8_t depth) {
     int64_t alpha = INT32_MIN;
     int64_t beta = INT32_MAX;
 
+    KillerTable killers;
+
     for (int i = 0; i < (int)moves.size(); ++i) {
         Move m = moves[i];
 
         make_move(m); // no need to filter for check here - assumes filtered moves given
-        int64_t score = -pruned_negamax(depth-1, 1, -beta, -alpha);
+        int64_t score = -pruned_negamax(depth-1, killers, 1, -beta, -alpha);
         unmake_move(m);
 
         if (score > best_score) {
