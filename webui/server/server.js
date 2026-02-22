@@ -16,10 +16,16 @@ app.post('/api/bestmove', (req, res) => {
       return res.status(500).json({ error: 'Engine failed' })
     }
 
-    console.log("suggesting " + stdout.trim());
+    console.log("Engine plays " + stdout.trim());
 
     res.json({ move: stdout.trim() })
   })
+})
+
+app.post('/api/msg', (req, res) => {
+  const msg = req.body.msg
+  console.log(msg);
+  res.json({result:"okay"})
 })
 
 app.listen(3000, () => {

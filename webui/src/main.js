@@ -19,6 +19,18 @@ board.addEventListener('drag-start', (e) => {
   }
 });
 
+function check_game_over() {
+  if (game.isCheckmate()) {
+    alert("Game over by checkmate.");
+  }
+  else if (game.isStalemate()) {
+    alert("Draw by stalemate.");
+  }
+  else if (game.isDrawByFiftyMoves()) {
+    alert("Draw by 50 moves.");
+  }
+}
+
 async function makeMove() {
   const m = await fetch('/api/bestmove', {
     method: 'POST',
@@ -47,9 +59,21 @@ async function makeMove() {
   game.move(move);
   
   board.setPosition(game.fen());
+
+  window.setTimeout(check_game_over, 500);
 }
 
-board.addEventListener('drop', (e) => {
+async function send_message(msg) {
+  await fetch('/api/msg', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({msg: msg })
+  });
+}
+
+board.addEventListener('drop', async (e) => {
   const {source, target, setAction} = e.detail;
 
   // see if the move is legal
@@ -64,6 +88,10 @@ board.addEventListener('drop', (e) => {
     setAction('snapback');
     return;
   }
+
+  await send_message("Player plays " + move.san);
+
+  check_game_over();
 
   // make random legal move for black
   window.setTimeout(makeMove, 250);

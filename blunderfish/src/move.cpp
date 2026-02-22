@@ -554,7 +554,8 @@ int32_t Position::mvv_lva_score(Move mv) const{
     int captured_sq = get_captured_square(mv);
     Piece captured_piece = (Piece)piece_at[captured_sq];
     Piece moving_piece = (Piece)piece_at[move_from(mv)];
-    return piece_value_centipawns(captured_piece) * 10 - piece_value_centipawns(moving_piece);
+    int32_t score = piece_value_centipawns(captured_piece) * 10 - piece_value_centipawns(moving_piece);
+    return captured_piece == PIECE_NONE ? 0 : score;
 }
 
 void Position::make_move(Move move) {
