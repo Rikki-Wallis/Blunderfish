@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <unordered_map>
+#include <array>
 
 #include "common.h"
 
@@ -105,6 +106,13 @@ struct Position {
     uint8_t piece_at[64];
     uint32_t flags;
 
+    // Zobrist
+    uint64_t zobrist;
+    uint64_t zobrist_side;
+    std::unordered_map<uint8_t, std::unordered_map<uint8_t, std::array<uint64_t, 64>>> zobrist_piece;
+    std::array<uint64_t, 4> zobrist_castling;
+    std::array<uint64_t, 8> zobrist_ep;
+
     Undo undo_stack[MAX_DEPTH];
     int undo_count;
 
@@ -153,6 +161,9 @@ struct Position {
 
     Move best_move_internal(std::span<Move> moves, int depth, Move last_best_move, HistoryTable& history, KillerTable& killers);
     Move best_move(std::span<Move> moves, int depth);
+
+    void initialise_zobrist();
+    void update_zobrist(Move& move);
 };
 
 int get_captured_square(Move move);
