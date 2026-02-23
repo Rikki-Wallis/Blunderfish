@@ -39,12 +39,34 @@ int32_t Position::mvv_lva_score(Move mv) const{
     return captured_piece == PIECE_NONE ? 0 : score;
 }
 
-int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& killers, int ply, int64_t alpha, int64_t beta) {
+int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta) {
     if (depth == 0) {
         return quiescence(ply, alpha, beta);
     }
 
     int my_side = to_move;
+
+    // Null move reduction
+    // if we give the opponent a free move and alpha >= beta, our position is too good, so prune
+
+    bool skip_null = !allow_null || is_in_check(my_side) || (total_non_pawn_value() == 0);
+
+    if (depth >= 3 && !skip_null) { 
+        make_null_move(); 
+
+        int R = 2; // we subtract this from depth to reduce the search depth
+
+        int64_t null_alpha = beta - 1; // we only care if it can beat it, not the actual score
+        int64_t null_beta = beta;
+        
+        int64_t score = -pruned_negamax(depth - 1 - R, history, killers, ply + 1, false, -null_beta, -null_alpha);
+
+        unmake_null_move();
+
+        if (score >= beta) {
+            return beta;
+        }
+    }
 
     std::array<Move, 256> move_buf;
     std::span<Move> moves = generate_moves(move_buf);
@@ -80,7 +102,7 @@ int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& 
 
         if (!is_in_check(my_side)) {
             legal_found = true;
-            int64_t score = -pruned_negamax(depth - 1, history, killers, ply + 1, -beta, -alpha);
+            int64_t score = -pruned_negamax(depth - 1, history, killers, ply + 1, true, -beta, -alpha);
             alpha = std::max(score, alpha);
 
             if (alpha >= beta) { // opponent will never allow this; cutoff
@@ -259,7 +281,7 @@ Move Position::best_move_internal(std::span<Move> moves, int depth, Move last_be
         Move m = select_best(moves, move_scores, i);
 
         make_move(m); // no need to filter for check here - assumes filtered moves given
-        int64_t score = -pruned_negamax(depth-1, history, killers, ply+1, -beta, -alpha);
+        int64_t score = -pruned_negamax(depth-1, history, killers, ply+1, true, -beta, -alpha);
         unmake_move(m);
 
         if (score > best_score) {
