@@ -44,6 +44,8 @@ app.post('/api/bestmove', async (req, res) => {
         const fen = req.body.fen;
         const move = await getBestMove(fen);
 
+        console.log("Engine plays", move);
+
         res.json({ move: move });
     } catch (err) {
         console.error("Engine error:", err);
