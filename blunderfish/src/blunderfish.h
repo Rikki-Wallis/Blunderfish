@@ -113,7 +113,7 @@ struct Position {
     std::array<uint64_t, 4> zobrist_castling;
     std::array<uint64_t, 8> zobrist_ep;
 
-    Undo undo_stack[MAX_DEPTH];
+    std::array<Undo, MAX_DEPTH> undo_stack;
     int undo_count;
 
     Position()
@@ -121,7 +121,7 @@ struct Position {
     {
         memset(sides, 0, sizeof(sides));
         memset(piece_at, 0, sizeof(piece_at));
-        memset(undo_stack, 0, sizeof(undo_stack));
+        memset(undo_stack.data(), 0, sizeof(MAX_DEPTH * sizeof(Undo)));
     }
 
     Position(Position&&) = default;
