@@ -238,6 +238,8 @@ std::optional<Position> Position::decode_fen_string(const std::string& fen) {
         next();
     }
 
+    pos.initialise_zobrist();
+    
     return pos;
 }
 

@@ -94,6 +94,7 @@ struct Undo {
     uint8_t captured_piece;
     uint32_t flags;
     int en_passant_sq;
+    uint64_t zobrist;
 };
 
 using KillerTable = std::array<std::array<Move, 2>, MAX_DEPTH>;
@@ -109,7 +110,7 @@ struct Position {
     // Zobrist
     uint64_t zobrist;
     uint64_t zobrist_side;
-    std::unordered_map<uint8_t, std::unordered_map<uint8_t, std::array<uint64_t, 64>>> zobrist_piece;
+    std::unordered_map<int, std::unordered_map<int, std::array<uint64_t, 64>>> zobrist_piece;
     std::array<uint64_t, 4> zobrist_castling;
     std::array<uint64_t, 8> zobrist_ep;
 
