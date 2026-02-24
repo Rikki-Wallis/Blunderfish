@@ -74,7 +74,7 @@ static void benchmark_pos_method(const std::string& name, int max_depth, Func&& 
 }
 
 static void benchmark_best_move() {
-    benchmark_pos_method("Best-move", 9, [](Position& pos, int depth){
+    benchmark_pos_method("Best-move", 12, [](Position& pos, int depth){
         std::array<Move, 256> move_buf;
         std::span<Move> moves = pos.generate_moves(move_buf);
         pos.filter_moves(moves);

@@ -49,7 +49,9 @@ int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& 
     // Null move reduction
     // if we give the opponent a free move and alpha >= beta, our position is too good, so prune
 
-    bool skip_null = !allow_null || is_in_check(my_side) || (total_non_pawn_value() == 0);
+    bool currently_checked = is_in_check(my_side);
+
+    bool skip_null = !allow_null || currently_checked || (total_non_pawn_value() == 0);
 
     if (depth >= 3 && !skip_null) { 
         make_null_move(); 
@@ -74,7 +76,7 @@ int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& 
     std::array<int32_t, 256> score_buf;
     std::span<int32_t> move_scores = std::span(score_buf).subspan(0, moves.size());
 
-    for (size_t i = 0; i < moves.size(); ++i) {
+    for (size_t i = 0; i < moves.size(); ++i) { 
         Move mv = moves[i];
 
         if (mv == killers[ply][0]) {
@@ -98,11 +100,32 @@ int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& 
 
         bool cutoff = false;
 
+        bool quiet = !is_capture(m);
+        bool late = i >= 3;
+
+        int reduction = int(depth >= 3 && quiet && late && !currently_checked);
+
         make_move(m);
 
         if (!is_in_check(my_side)) {
             legal_found = true;
-            int64_t score = -pruned_negamax(depth - 1, history, killers, ply + 1, true, -beta, -alpha);
+
+            int64_t score;
+
+            if (reduction) {
+                score = -pruned_negamax(depth - 1 - reduction, history, killers, ply + 1, true, -beta, -alpha); // search at a reduced depth
+
+                if (score > alpha) { // if interesting, full depth search
+                    score = -pruned_negamax(depth - 1, history, killers, ply + 1, true, -beta, -alpha);
+                }
+
+                // this preserves alpha-beta correctness because we only allow obviously bad moves to be searched shallow
+                // if its good, we re-search at full depth
+            }
+            else {
+                score = -pruned_negamax(depth - 1, history, killers, ply + 1, true, -beta, -alpha);
+            }
+
             alpha = std::max(score, alpha);
 
             if (alpha >= beta) { // opponent will never allow this; cutoff
@@ -113,7 +136,7 @@ int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& 
         unmake_move(m);
 
         if (cutoff) {
-            if (!is_capture(m)) {
+            if (quiet) {
                 if (m != killers[ply][0]) {
                     killers[ply][1] = killers[ply][0];
                     killers[ply][0] = m;
