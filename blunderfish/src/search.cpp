@@ -2,6 +2,8 @@
 
 #include "blunderfish.h"
 
+constexpr int64_t FUTILITY_MARGIN = 200;
+
 constexpr int64_t MATE_SCORE = 0xffffff;
 
 constexpr int32_t BEST_MOVE_SCORE   = 2000000;
@@ -93,6 +95,8 @@ int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& 
         }
     }
 
+    bool futility_prune = depth == 1 && !currently_checked && ((eval() + FUTILITY_MARGIN) < alpha); // if quiet moves couldn't possibly improve the position at the leaves by enough, don't search them
+
     bool legal_found = false;
 
     for (int i = 0; i < (int)moves.size(); ++i) {
@@ -104,6 +108,10 @@ int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& 
         bool late = i >= 3;
 
         int reduction = int(depth >= 3 && quiet && late && !currently_checked);
+
+        if (futility_prune && quiet) {
+            continue;
+        }
 
         make_move(m);
 
