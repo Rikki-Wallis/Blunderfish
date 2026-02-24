@@ -59,7 +59,7 @@ static int play_main() {
             pos.make_move(m);
         }
         else {
-            Move move = pos.best_move(moves, 10);
+            Move move = pos.best_move(moves, 12);
             assert(move != NULL_MOVE);
 
             for (auto& [name, i] : move_names) {
@@ -106,7 +106,7 @@ static int best_main(const char* FEN) {
     pos.filter_moves(moves);
     auto names = pos.name_moves(moves);
 
-    Move best = pos.best_move(moves, 10);
+    Move best = pos.best_move(moves, 12);
 
     if (best == NULL_MOVE) {
         print("There is no move.\n");

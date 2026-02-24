@@ -1,23 +1,108 @@
 import {Chess} from "chess.js"
 
-const board = document.querySelector('chess-board');
 const game = new Chess();
+let board;
 
-board.addEventListener('drag-start', (e) => {
-  const {source, piece, position, orientation} = e.detail;
+function formatMovesList() {
+  const movesEl = document.getElementById('moves');
+  if (!movesEl) return;
+  movesEl.innerHTML = '';
+  const history = game.history({verbose: false});
+  for (let i = 0; i < history.length; i += 2) {
+    const moveNum = Math.floor(i/2) + 1;
+    const white = history[i] || '';
+    const black = history[i+1] || '';
+    const li = document.createElement('li');
+    li.textContent = `${moveNum}. ${white} ${black}`.trim();
+    movesEl.appendChild(li);
+  }
+}
 
-  // do not pick up pieces if the game is over
-  if (game.isGameOver()) {
-    e.preventDefault();
+function updateStatus() {
+  const status = document.getElementById('status');
+  if (!status) return;
+  if (game.isCheckmate()) status.textContent = 'Checkmate';
+  else if (game.isStalemate()) status.textContent = 'Stalemate';
+  else status.textContent = (game.turn() === 'w') ? 'White to move' : 'Black to move';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  board = document.querySelector('#board');
+
+  // Download PGN button handler
+  const downloadBtn = document.getElementById('download-pgn');
+  if (downloadBtn) {
+    downloadBtn.addEventListener('click', () => {
+      // build PGN with headers and set Black to "Blunderfish"
+      const rawPgn = game.pgn() || '';
+      // strip existing header block if present (headers are separated from moves by a blank line)
+      let movesOnly = rawPgn;
+      const sepIndex = rawPgn.indexOf('\n\n');
+      if (sepIndex !== -1) {
+        movesOnly = rawPgn.slice(sepIndex + 2).trim();
+      }
+      // remove any trailing result from moves (we'll add our own)
+      movesOnly = movesOnly.replace(/\s*(1-0|0-1|1\/2-1\/2|\*)$/,'').trim();
+
+      const d = new Date();
+      const dateStr = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+
+      let result = '*';
+      if (game.isCheckmate()) {
+        result = (game.turn() === 'w') ? '0-1' : '1-0';
+      } else if (game.isStalemate() || game.isDrawByFiftyMoves()) {
+        result = '1/2-1/2';
+      }
+
+      const headers = [
+        '[Event "Casual Game"]',
+        '[Site "?"]',
+        `[Date "${dateStr}"]`,
+        '[Round "?"]',
+        '[White "White"]',
+        '[Black "Blunderfish"]',
+        `[Result "${result}"]`,
+        ''
+      ].join('\n');
+
+      const pgn = headers + (movesOnly ? (movesOnly + ' ') : '') + result;
+      const blob = new Blob([pgn], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'game.pgn';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  if (!board) {
+    console.warn('chess-board element not found');
     return;
   }
 
-  // only pick up pieces for White
-  if (piece.search(/^b/) !== -1) {
-    e.preventDefault();
-    return;
-  }
-});
+  // simple control buttons
+  const newGameBtn = document.getElementById('new-game');
+  if (newGameBtn) newGameBtn.addEventListener('click', () => { game.reset(); board.setPosition(game.fen()); formatMovesList(); updateStatus(); });
+  // undo button removed from UI
+
+  board.addEventListener('drag-start', (e) => {
+    const {source, piece, position, orientation} = e.detail;
+
+    // do not pick up pieces if the game is over
+    if (game.isGameOver()) {
+      e.preventDefault();
+      return;
+    }
+
+    // only pick up pieces for White
+    if (piece.search(/^b/) !== -1) {
+      e.preventDefault();
+      return;
+    }
+  });
 
 function check_game_over() {
   if (game.isCheckmate()) {
@@ -59,6 +144,8 @@ async function makeMove() {
   game.move(move);
   
   board.setPosition(game.fen());
+  formatMovesList();
+  updateStatus();
 
   window.setTimeout(check_game_over, 500);
 }
@@ -93,6 +180,9 @@ board.addEventListener('drop', async (e) => {
 
   check_game_over();
 
+  formatMovesList();
+  updateStatus();
+
   // make random legal move for black
   makeMove();
 });
@@ -101,4 +191,11 @@ board.addEventListener('drop', async (e) => {
 // for castling, en passant, pawn promotion
 board.addEventListener('snap-end', (e) => {
   board.setPosition(game.fen());
+});
+
+  // initialize UI state
+  board.setPosition(game.fen());
+  formatMovesList();
+  updateStatus();
+
 });
