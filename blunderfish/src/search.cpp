@@ -2,6 +2,8 @@
 
 #include "blunderfish.h"
 
+constexpr int64_t FUTILITY_MARGIN = 200;
+
 constexpr int64_t MATE_SCORE = 0xffffff;
 
 constexpr int32_t BEST_MOVE_SCORE   = 2000000;
@@ -39,12 +41,36 @@ int32_t Position::mvv_lva_score(Move mv) const{
     return captured_piece == PIECE_NONE ? 0 : score;
 }
 
-int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& killers, int ply, int64_t alpha, int64_t beta) {
+int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta) {
     if (depth == 0) {
         return quiescence(ply, alpha, beta);
     }
 
     int my_side = to_move;
+
+    // Null move reduction
+    // if we give the opponent a free move and alpha >= beta, our position is too good, so prune
+
+    bool currently_checked = is_in_check(my_side);
+
+    bool skip_null = !allow_null || currently_checked || (total_non_pawn_value() == 0);
+
+    if (depth >= 3 && !skip_null) { 
+        make_null_move(); 
+
+        int R = 2; // we subtract this from depth to reduce the search depth
+
+        int64_t null_alpha = beta - 1; // we only care if it can beat it, not the actual score
+        int64_t null_beta = beta;
+        
+        int64_t score = -pruned_negamax(depth - 1 - R, history, killers, ply + 1, false, -null_beta, -null_alpha);
+
+        unmake_null_move();
+
+        if (score >= beta) {
+            return beta;
+        }
+    }
 
     std::array<Move, 256> move_buf;
     std::span<Move> moves = generate_moves(move_buf);
@@ -52,7 +78,7 @@ int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& 
     std::array<int32_t, 256> score_buf;
     std::span<int32_t> move_scores = std::span(score_buf).subspan(0, moves.size());
 
-    for (size_t i = 0; i < moves.size(); ++i) {
+    for (size_t i = 0; i < moves.size(); ++i) { 
         Move mv = moves[i];
 
         if (mv == killers[ply][0]) {
@@ -69,6 +95,8 @@ int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& 
         }
     }
 
+    bool futility_prune = depth == 1 && !currently_checked && ((eval() + FUTILITY_MARGIN) < alpha); // if quiet moves couldn't possibly improve the position at the leaves by enough, don't search them
+
     bool legal_found = false;
 
     for (int i = 0; i < (int)moves.size(); ++i) {
@@ -76,11 +104,36 @@ int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& 
 
         bool cutoff = false;
 
+        bool quiet = !is_capture(m);
+        bool late = i >= 3;
+
+        int reduction = int(depth >= 3 && quiet && late && !currently_checked);
+
+        if (futility_prune && quiet) {
+            continue;
+        }
+
         make_move(m);
 
         if (!is_in_check(my_side)) {
             legal_found = true;
-            int64_t score = -pruned_negamax(depth - 1, history, killers, ply + 1, -beta, -alpha);
+
+            int64_t score;
+
+            if (reduction) {
+                score = -pruned_negamax(depth - 1 - reduction, history, killers, ply + 1, true, -beta, -alpha); // search at a reduced depth
+
+                if (score > alpha) { // if interesting, full depth search
+                    score = -pruned_negamax(depth - 1, history, killers, ply + 1, true, -beta, -alpha);
+                }
+
+                // this preserves alpha-beta correctness because we only allow obviously bad moves to be searched shallow
+                // if its good, we re-search at full depth
+            }
+            else {
+                score = -pruned_negamax(depth - 1, history, killers, ply + 1, true, -beta, -alpha);
+            }
+
             alpha = std::max(score, alpha);
 
             if (alpha >= beta) { // opponent will never allow this; cutoff
@@ -91,7 +144,7 @@ int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& 
         unmake_move(m);
 
         if (cutoff) {
-            if (!is_capture(m)) {
+            if (quiet) {
                 if (m != killers[ply][0]) {
                     killers[ply][1] = killers[ply][0];
                     killers[ply][0] = m;
@@ -259,7 +312,7 @@ Move Position::best_move_internal(std::span<Move> moves, int depth, Move last_be
         Move m = select_best(moves, move_scores, i);
 
         make_move(m); // no need to filter for check here - assumes filtered moves given
-        int64_t score = -pruned_negamax(depth-1, history, killers, ply+1, -beta, -alpha);
+        int64_t score = -pruned_negamax(depth-1, history, killers, ply+1, true, -beta, -alpha);
         unmake_move(m);
 
         if (score > best_score) {

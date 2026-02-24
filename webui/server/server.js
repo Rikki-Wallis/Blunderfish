@@ -10,7 +10,7 @@ app.use(express.json())
 app.post('/api/bestmove', (req, res) => {
   const fen = req.body.fen
 
-  exec(`../../engine/blunderfish best "${fen}"`, (err, stdout, stderr) => {
+  exec(`../../engine/cli best "${fen}"`, (err, stdout, stderr) => {
     if (err) {
       console.error(err)
       return res.status(500).json({ error: 'Engine failed' })

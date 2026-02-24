@@ -6,7 +6,7 @@
 
 #include "common.h"
 
-#define MAX_DEPTH 64
+#define MAX_DEPTH 128
 
 static constexpr uint64_t RANK_1 = 0x00000000000000ff;
 static constexpr uint64_t RANK_2 = 0x000000000000ff00;
@@ -36,7 +36,7 @@ enum Colour : uint8_t {
     BLACK
 };
 
-enum Piece {
+enum Piece { // DO NOT CHANGE THE ORDER OF THIS
     PIECE_NONE,
     PIECE_PAWN,
     PIECE_ROOK,
@@ -114,7 +114,7 @@ struct Position {
     std::array<uint64_t, 4> zobrist_castling;
     std::array<uint64_t, 8> zobrist_ep;
 
-    Undo undo_stack[MAX_DEPTH];
+    std::array<Undo, MAX_DEPTH> undo_stack;
     int undo_count;
 
     Position()
@@ -122,7 +122,7 @@ struct Position {
     {
         memset(sides, 0, sizeof(sides));
         memset(piece_at, 0, sizeof(piece_at));
-        memset(undo_stack, 0, sizeof(undo_stack));
+        memset(undo_stack.data(), 0, sizeof(MAX_DEPTH * sizeof(Undo)));
     }
 
     Position(Position&&) = default;
@@ -142,6 +142,9 @@ struct Position {
     void make_move(Move move);
     void unmake_move(Move move);
 
+    void make_null_move();
+    void unmake_null_move();
+
     std::vector<Side> get_sides() const;  
 
     bool is_in_check(int colour) const;
@@ -153,7 +156,7 @@ struct Position {
 
     int64_t eval() const;
     int64_t negamax(int depth, int ply);
-    int64_t pruned_negamax(int depth, HistoryTable& history, KillerTable& killers, int ply, int64_t alpha, int64_t beta);
+    int64_t pruned_negamax(int depth, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta);
     int64_t quiescence(int ply, int64_t alpha, int64_t beta);
 
     int32_t mvv_lva_score(Move mv) const;
@@ -165,6 +168,8 @@ struct Position {
 
     void initialise_zobrist();
     void update_zobrist(Move& move);
+
+    int64_t total_non_pawn_value() const; // used for null move reduction heuristic
 };
 
 int get_captured_square(Move move);

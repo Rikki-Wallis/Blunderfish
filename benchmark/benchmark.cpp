@@ -74,7 +74,7 @@ static void benchmark_pos_method(const std::string& name, int max_depth, Func&& 
 }
 
 static void benchmark_best_move() {
-    benchmark_pos_method("Best-move", 10, [](Position& pos, int depth){
+    benchmark_pos_method("Best-move", 12, [](Position& pos, int depth){
         std::array<Move, 256> move_buf;
         std::span<Move> moves = pos.generate_moves(move_buf);
         pos.filter_moves(moves);
@@ -89,10 +89,10 @@ static void benchmark_raw_negamax() {
 }
 
 static void benchmark_pruned_negamax() {
-    benchmark_pos_method("Pruned Negamax", 10, [](Position& pos, int depth){
+    benchmark_pos_method("Pruned Negamax", 12, [](Position& pos, int depth){
         KillerTable killers{};
         HistoryTable history{};
-        pos.pruned_negamax(depth, history, killers, 1, INT32_MIN, INT32_MAX);
+        pos.pruned_negamax(depth, history, killers, 1, true, INT32_MIN, INT32_MAX);
     });
 }
 

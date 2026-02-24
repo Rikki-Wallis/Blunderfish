@@ -741,3 +741,11 @@ void Position::unmake_move(Move move) {
     en_passant_sq = undo.en_passant_sq;
     zobrist = undo.zobrist;
 }
+
+void Position::make_null_move() {
+    to_move = opponent(to_move);
+}
+
+void Position::unmake_null_move(){
+    to_move = opponent(to_move);
+}
