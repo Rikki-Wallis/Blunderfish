@@ -105,6 +105,19 @@ struct Undo {
 using KillerTable = std::array<std::array<Move, 2>, MAX_DEPTH>;
 using HistoryTable = std::array<std::array<int32_t, 64>, NUM_PIECE_TYPES>;
 
+struct ZobristTable {
+    uint64_t side;
+    std::array<uint64_t, 64> piece[2][NUM_PIECE_TYPES];
+    uint64_t flags[255];
+    uint64_t ep_table[65];
+
+    uint64_t ep(int sq) const {
+        return ep_table[sq + 1];
+    }
+};
+
+extern const ZobristTable zobrist_table;
+
 struct Position {
     Side sides[2];
     int to_move;
@@ -112,12 +125,7 @@ struct Position {
     uint8_t piece_at[64];
     uint32_t flags;
 
-    // Zobrist
     uint64_t zobrist;
-    uint64_t zobrist_side;
-    std::array<uint64_t, 64> zobrist_piece[2][NUM_PIECE_TYPES];
-    uint64_t zobrist_flags[255];
-    uint64_t zobrist_ep_buffer[65];
 
     std::array<Undo, MAX_DEPTH> undo_stack;
     int undo_count;
@@ -128,7 +136,6 @@ struct Position {
         memset(sides, 0, sizeof(sides));
         memset(piece_at, 0, sizeof(piece_at));
         memset(undo_stack.data(), 0, sizeof(MAX_DEPTH * sizeof(Undo)));
-        initialize_zobrist_tables();
         zobrist = compute_zobrist();
     }
 
@@ -173,14 +180,11 @@ struct Position {
     Move best_move_internal(std::span<Move> moves, int depth, Move last_best_move, HistoryTable& history, KillerTable& killers);
     Move best_move(std::span<Move> moves, int depth);
 
-    void initialize_zobrist_tables();
     uint64_t compute_zobrist() const;
 
     void update_en_passant_sq(int sq);
 
     int64_t total_non_pawn_value() const; // used for null move reduction heuristic
-
-    uint64_t zobrist_ep(int sq) const;
 };
 
 int get_captured_square(Move move);

@@ -552,13 +552,13 @@ int get_captured_square(Move move) {
 
 void Position::update_en_passant_sq(int sq) {
 #ifdef ZOBRIST_INCLUDE_EN_PASSANT_SQ
-    zobrist ^= zobrist_ep(en_passant_sq);
+    zobrist ^= zobrist_table.ep(en_passant_sq);
 #endif
 
     en_passant_sq = sq;
 
 #ifdef ZOBRIST_INCLUDE_EN_PASSANT_SQ
-    zobrist ^= zobrist_ep(en_passant_sq);
+    zobrist ^= zobrist_table.ep(en_passant_sq);
 #endif
 }
 
@@ -578,7 +578,7 @@ void Position::make_move(Move move) {
 
     // ZOBRIST, remove any captured piece
 #ifdef ZOBRIST_INCLUDE_PIECES
-    zobrist ^= bool_to_mask<uint64_t>(captured_piece != PIECE_NONE) & zobrist_piece[opponent(to_move)][captured_piece][captured_pos];
+    zobrist ^= bool_to_mask<uint64_t>(captured_piece != PIECE_NONE) & zobrist_table.piece[opponent(to_move)][captured_piece][captured_pos];
 #endif
 
     // Before we modify anything, record the destroyable data in the undo stack
@@ -603,8 +603,8 @@ void Position::make_move(Move move) {
 
     // update zobrist for moving piece
 #ifdef ZOBRIST_INCLUDE_PIECES
-    zobrist ^= zobrist_piece[to_move][start_piece][move_from(move)];
-    zobrist ^= zobrist_piece[to_move][end_piece][move_to(move)];
+    zobrist ^= zobrist_table.piece[to_move][start_piece][move_from(move)];
+    zobrist ^= zobrist_table.piece[to_move][end_piece][move_to(move)];
 #endif
 
     uint64_t from_mask = sq_to_bb(move_from(move));
@@ -634,7 +634,7 @@ void Position::make_move(Move move) {
     flags &= ~remove_flags;
 
 #ifdef ZOBRIST_INCLUDE_FLAGS
-    zobrist ^= zobrist_flags[diff];
+    zobrist ^= zobrist_table.flags[diff];
 #endif
 
     // set the en passant square if a double push has occured
@@ -665,8 +665,8 @@ void Position::make_move(Move move) {
     piece_at[rook_to]   = (~castle_mask_u8 & piece_at[rook_to]  ) | (castle_mask_u8 & PIECE_ROOK);
 
 #ifdef ZOBRIST_INCLUDE_FLAGS
-    zobrist ^= castle_mask_u64 & zobrist_piece[to_move][PIECE_ROOK][rook_from];
-    zobrist ^= castle_mask_u64 & zobrist_piece[to_move][PIECE_ROOK][rook_to];
+    zobrist ^= castle_mask_u64 & zobrist_table.piece[to_move][PIECE_ROOK][rook_from];
+    zobrist ^= castle_mask_u64 & zobrist_table.piece[to_move][PIECE_ROOK][rook_to];
 #endif
 
     // update to_move
@@ -674,7 +674,7 @@ void Position::make_move(Move move) {
     to_move = opponent(to_move);
 
 #ifdef ZOBRIST_INCLUDE_SIDE
-    zobrist ^= zobrist_side;
+    zobrist ^= zobrist_table.side;
 #endif
 }
 

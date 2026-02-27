@@ -7,7 +7,7 @@ void zobrist_search(int depth, Position& position) {
     uint64_t incremental_hash = position.zobrist;
     uint64_t new_hash = position.compute_zobrist();
 
-    //print("{}, {}\n", incremental_hash, new_hash);
+    print("{}, {}\n", incremental_hash, new_hash);
 
     if (new_hash != incremental_hash) {
         position.display();
