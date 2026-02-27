@@ -27,4 +27,7 @@ body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;marg
 #status{font-size:14px;color:var(--muted);margin-bottom:8px}
 .fen-display{width:100%;padding:8px;border-radius:6px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.08);color:var(--text);font-family:monospace;font-size:12px;line-height:1.4;margin-top:6px}
 .fen-display:focus{outline:none;border-color:var(--accent);background:rgba(0,0,0,0.5)}
+.depth-control{display:flex;align-items:center;gap:10px}
+.depth-control input[type=range]{flex:1;accent-color:var(--accent);cursor:pointer}
+.depth-control span{font-size:14px;font-weight:600;min-width:20px;text-align:center;color:var(--text)}
 @media(max-width:900px){.main{flex-direction:column}.board-area{flex-basis:auto}}

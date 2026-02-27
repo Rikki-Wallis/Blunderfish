@@ -59,7 +59,7 @@ static int play_main() {
             pos.make_move(m);
         }
         else {
-            Move move = pos.best_move(moves, 10);
+            Move move = pos.best_move(moves, 12);
             assert(move != NULL_MOVE);
 
             for (auto& [name, i] : move_names) {
@@ -91,7 +91,7 @@ static int eval_main(const char* FEN) {
     return 0;
 }
 
-static int best_main(const char* FEN) {
+static int best_main(const char* FEN, int depth) {
     auto maybe_pos = Position::decode_fen_string(FEN);
 
     if (!maybe_pos) {
@@ -106,7 +106,7 @@ static int best_main(const char* FEN) {
     pos.filter_moves(moves);
     auto names = pos.name_moves(moves);
 
-    Move best = pos.best_move(moves, 10);
+    Move best = pos.best_move(moves, depth);
 
     if (best == NULL_MOVE) {
         print("There is no move.\n");
@@ -149,7 +149,16 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        return best_main(argv[2]);
+        int depth = 10;
+
+        if (argc >= 4) {
+            depth = atoi(argv[3]);
+            if (depth < 6) {
+                depth = 6;
+            }
+        }
+
+        return best_main(argv[2], depth);
     }
 
     print("Invalid mode given '{}'\n", argv[1]);

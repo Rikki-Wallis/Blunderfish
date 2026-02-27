@@ -94,7 +94,7 @@ async function makeMove() {
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({fen: game.fen() })
+      body: JSON.stringify({fen: game.fen(), depth: parseInt(document.getElementById('depth').value) })
     });
 
     if (!m.ok) {
@@ -278,6 +278,14 @@ document.addEventListener('DOMContentLoaded', () => {
 board.addEventListener('snap-end', (e) => {
   board.setPosition(game.fen());
 });
+
+  // depth slider label sync
+  const depthSlider = document.getElementById('depth');
+  const depthLabel = document.getElementById('depth-label');
+  if (depthSlider && depthLabel) {
+    depthLabel.textContent = depthSlider.value; // sync on load in case browser restored a previous value
+    depthSlider.addEventListener('input', () => { depthLabel.textContent = depthSlider.value; });
+  }
 
   // initialize UI state
   board.setPosition(game.fen());
