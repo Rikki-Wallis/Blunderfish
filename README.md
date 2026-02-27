@@ -20,6 +20,8 @@ A chess engine written in C++20, featuring bitboard-based board representation, 
 ### Search
 - **Negamax** with alpha-beta pruning
 - **Iterative deepening** — searches from depth 1 up to the target, reusing the best move from the previous iteration for move ordering
+- **Aspiration windows** — after the first iteration, subsequent searches use a narrow window (±50 cp) around the previous score; on fail-high or fail-low the window doubles and re-searches until the true score is found
+- **Transposition table** — a hash table (2²⁰ entries) indexed by Zobrist key stores exact, upper-bound, or lower-bound scores with depth, best move, and mate-score adjustment; used for cutoffs and move ordering (TT move searched first)
 - **Quiescence search** — extends captures (and checks when in check) beyond the horizon to mitigate the horizon effect
 - **Null move pruning** — if giving the opponent a free move still results in a beta cutoff, the branch is pruned (R=2 reduction, skipped when in check or no non-pawn material)
 - **Late move reductions (LMR)** — quiet moves searched after the first 3 are reduced by 1 ply; re-searched at full depth if they beat alpha
