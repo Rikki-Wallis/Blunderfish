@@ -737,7 +737,6 @@ void Position::make_null_move() {
 
     update_en_passant_sq(NULL_SQUARE);
     to_move = opponent(to_move);
-
 }
 
 void Position::unmake_null_move(){

@@ -120,7 +120,6 @@ async function makeMove() {
 
     if (!possibleMoves.includes(move)) {
       console.error('Engine gave illegal move ' + move);
-      alert("Engine gave illegal move " + move);
       return;
     }
 

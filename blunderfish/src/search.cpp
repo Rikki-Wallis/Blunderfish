@@ -4,8 +4,6 @@
 
 constexpr int64_t FUTILITY_MARGIN = 200;
 
-constexpr int64_t MATE_SCORE = 0xffffff;
-
 constexpr int32_t BEST_MOVE_SCORE   = 2000000;
 constexpr int32_t CAPTURE_SCORE     = 90000;
 constexpr int32_t KILLER_1_SCORE    = 80000;
@@ -50,7 +48,7 @@ int32_t Position::mvv_lva_score(Move mv) const{
 }
 
 bool update_tt_entry(TTEntry& entry, uint64_t zobrist, int depth, int64_t score, int ply, int64_t alpha_original, int64_t beta_original, Move best_move) {
-    if (entry.key != zobrist || depth >= entry.depth) {
+    if (entry.key != zobrist || depth > entry.depth) {
         entry.key = zobrist;
         entry.depth = depth;
         entry.raw_score = score;
@@ -107,6 +105,8 @@ static std::span<int32_t> compute_move_scores(Position* pos, HistoryTable& histo
 }
 
 int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta) {
+    (void)allow_null;
+
     if (depth == 0) {
         return quiescence(ply, alpha, beta);
     }
@@ -154,19 +154,19 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
         tt_move = entry.best_move;
     }
 
+    int64_t best_score = -MATE_SCORE;
+    bool currently_checked = is_in_check(my_side);
+
     // Null move pruning
     // if we give the opponent a free move and alpha >= beta, our position is too good, so prune
 
-    int64_t best_score = -MATE_SCORE;
+    bool low_material = total_non_pawn_value() <= 2 * piece_value_centipawns(PIECE_KNIGHT);
+    bool skip_null = !allow_null || currently_checked || low_material;
 
-    bool currently_checked = is_in_check(my_side);
+    int R = 2; // we subtract this from depth to reduce the search depth
 
-    bool skip_null = !allow_null || currently_checked || (total_non_pawn_value() == 0);
-
-    if (depth >= 3 && !skip_null) { 
+    if (depth > R + 1 && !skip_null) { 
         make_null_move(); 
-
-        int R = 2; // we subtract this from depth to reduce the search depth
 
         int64_t null_alpha = beta - 1; // we only care if it can beat it, not the actual score
         int64_t null_beta = beta;
@@ -176,11 +176,9 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
         unmake_null_move();
 
         if (score >= beta) {
-            bool changed = update_tt_entry(entry, zobrist, depth, score, ply, alpha_original, beta_original, NULL_MOVE);
-            if (changed) {
-                entry.flag = TT_SCORE_LOWER;
-            }
-            return score;
+            bool changed = update_tt_entry(entry, zobrist, depth, beta, ply, alpha_original, beta_original, NULL_MOVE);
+            if (changed) { entry.flag = TT_SCORE_LOWER; }
+            return beta;
         }
     }
 
@@ -204,8 +202,15 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
 
         int reduction = 0;
 
-        if (depth >= 3 && quiet && !currently_checked && i >= 3) {
-            reduction = 1 + (depth >= 6 && i >= 6);
+        if (depth >= 3 &&
+            quiet &&
+            !currently_checked &&
+            i >= 3) {
+
+            reduction = 1;
+
+            if (depth >= 6 && i >= 6)
+                reduction = 2;
         }
 
         if (futility_prune && quiet) {
@@ -220,7 +225,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
             int64_t score;
 
             if (reduction) {
-                score = -pruned_negamax(depth - 1 - reduction, tt, history, killers, ply + 1, true, -beta, -alpha); // search at a reduced depth
+                score = -pruned_negamax(depth - 1 - reduction, tt, history, killers, ply + 1, true, -alpha-1, -alpha); // search at a reduced depth
 
                 if (score > alpha) { // if interesting, full depth search
                     score = -pruned_negamax(depth - 1, tt, history, killers, ply + 1, true, -beta, -alpha);
@@ -355,7 +360,7 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
 
 int64_t Position::negamax(int depth, int ply) {
     if (depth == 0) {
-        return quiescence(ply, INT32_MIN, INT32_MAX);
+        return quiescence(ply, -INF, INF);
     }
 
     int my_side = to_move;
@@ -396,7 +401,7 @@ std::pair<Move, int64_t> Position::best_move_internal(std::span<Move> moves, int
 
     int ply = 1;
 
-    int64_t best_score = INT64_MIN;
+    int64_t best_score = -INF;
     int best_move = NULL_MOVE;
 
     std::array<int32_t, 256> score_buf;
@@ -436,16 +441,21 @@ Move Position::best_move(std::span<Move> _moves, int depth) {
         int64_t alpha = best_score - window;
         int64_t beta  = best_score + window;
 
+        alpha = std::max(-INF, alpha - window);
+        beta  = std::min( INF, beta  + window);
+
         while (true) {
             auto [move, score] = best_move_internal(moves, i, tt, best_move, history, killers, alpha, beta);
 
             if (score <= alpha) {
-                alpha -= window; // fail-high, widen downwards
-                window *= 2; // expand window
+                // fail low
+                alpha -= window;
+                window *= 2;
             }
             else if (score >= beta) {
-                beta += window; // fail-low, widen upwards
-                window *= 2; // expand window
+                // fail high
+                beta += window;
+                window *= 2;
             }
             else {
                 best_move = move;

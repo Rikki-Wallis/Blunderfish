@@ -13,6 +13,9 @@
 
 #define MAX_DEPTH 128
 
+constexpr int64_t INF        = 400000000;
+constexpr int64_t MATE_SCORE = 200000000;
+
 static constexpr size_t TRANSPOSITION_TABLE_SIZE = 1 << 20;
 
 static constexpr uint64_t RANK_1 = 0x00000000000000ff;
