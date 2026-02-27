@@ -49,7 +49,7 @@ int32_t Position::mvv_lva_score(Move mv) const{
     return captured_piece == PIECE_NONE ? 0 : score;
 }
 
-bool update_tt_entry(TTEntry& entry, uint64_t zobrist, int depth, int64_t score, int ply, int64_t alpha_original, int64_t beta_original) {
+bool update_tt_entry(TTEntry& entry, uint64_t zobrist, int depth, int64_t score, int ply, int64_t alpha_original, int64_t beta_original, Move best_move) {
     if (entry.key != zobrist || depth >= entry.depth) {
         entry.key = zobrist;
         entry.depth = depth;
@@ -72,10 +72,38 @@ bool update_tt_entry(TTEntry& entry, uint64_t zobrist, int depth, int64_t score,
             entry.flag = TT_SCORE_EXACT; // best_score IS the true score
         }
 
+        entry.best_move = best_move;
+
         return true;
     }
 
     return false;
+}
+
+static std::span<int32_t> compute_move_scores(Position* pos, HistoryTable& history, KillerTable& killers, int ply, std::span<int32_t> score_buf, std::span<Move> moves, Move best_move) {
+    std::span<int32_t> move_scores = score_buf.subspan(0, moves.size());
+
+    for (size_t i = 0; i < moves.size(); ++i) {
+        Move mv = moves[i];
+
+        if (mv == best_move) {
+            move_scores[i] = BEST_MOVE_SCORE;
+        }
+        else if (mv == killers[ply][0]) {
+            move_scores[i] = KILLER_1_SCORE;
+        }
+        else if (mv == killers[ply][1]) {
+            move_scores[i] = KILLER_2_SCORE;
+        }
+        else {
+            int32_t score = pos->mvv_lva_score(mv);
+            Piece piece = (Piece)pos->piece_at[move_from(mv)];
+            int to = move_to(mv);
+            move_scores[i] = score == 0 ? history[piece][to] : score;
+        }
+    }
+
+    return move_scores;
 }
 
 int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta) {
@@ -92,32 +120,38 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     int64_t alpha_original = alpha; // store this for when we update the transposition table
     int64_t beta_original  = beta; // store this for when we update the transposition table
 
-    if (entry.key == zobrist && entry.depth >= depth) {
-        int64_t entry_score = entry.raw_score;
+    Move tt_move = NULL_MOVE;
 
-        if (entry_score < -MATE_SCORE + 1000) {
-            entry_score += ply;
+    if (entry.key == zobrist) {
+        if (entry.depth >= depth) {
+            int64_t entry_score = entry.raw_score;
+
+            if (entry_score < -MATE_SCORE + 1000) {
+                entry_score += ply;
+            }
+            else if (entry_score >  MATE_SCORE - 1000) {
+                entry_score -= ply; // reapply the ply to mate scores to restore them to relative to the root
+            }
+
+            switch (entry.flag) {
+                case TT_SCORE_EXACT:
+                    return entry_score; // exact store stored, we can just return it
+
+                case TT_SCORE_LOWER:
+                    alpha = std::max(alpha, entry_score);
+                    break;
+
+                case TT_SCORE_UPPER:
+                    beta = std::min(beta, entry_score);
+                    break;
+            }
+
+            if (alpha >= beta) {
+                return entry_score;
+            }
         }
-        else if (entry_score >  MATE_SCORE - 1000) {
-            entry_score -= ply; // reapply the ply to mate scores to restore them to relative to the root
-        }
 
-        switch (entry.flag) {
-            case TT_SCORE_EXACT:
-                return entry_score; // exact store stored, we can just return it
-
-            case TT_SCORE_LOWER:
-                alpha = std::max(alpha, entry_score);
-                break;
-
-            case TT_SCORE_UPPER:
-                beta = std::min(beta, entry_score);
-                break;
-        }
-
-        if (alpha >= beta) {
-            return entry_score;
-        }
+        tt_move = entry.best_move;
     }
 
     // Null move pruning
@@ -142,7 +176,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
         unmake_null_move();
 
         if (score >= beta) {
-            bool changed = update_tt_entry(entry, zobrist, depth, score, ply, alpha_original, beta_original);
+            bool changed = update_tt_entry(entry, zobrist, depth, score, ply, alpha_original, beta_original, NULL_MOVE);
             if (changed) {
                 entry.flag = TT_SCORE_LOWER;
             }
@@ -154,28 +188,13 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     std::span<Move> moves = generate_moves(move_buf);
 
     std::array<int32_t, 256> score_buf;
-    std::span<int32_t> move_scores = std::span(score_buf).subspan(0, moves.size());
-
-    for (size_t i = 0; i < moves.size(); ++i) { 
-        Move mv = moves[i];
-
-        if (mv == killers[ply][0]) {
-            move_scores[i] = KILLER_1_SCORE;
-        }
-        else if (mv == killers[ply][1]) {
-            move_scores[i] = KILLER_2_SCORE;
-        }
-        else {
-            int32_t score = mvv_lva_score(mv);
-            Piece piece = (Piece)piece_at[move_from(mv)];
-            int to = move_to(mv);
-            move_scores[i] = score == 0 ? history[piece][to] : score;
-        }
-    }
+    std::span<int32_t> move_scores = compute_move_scores(this, history, killers, ply, score_buf, moves, tt_move);
 
     bool futility_prune = depth == 1 && !currently_checked && ((eval() + FUTILITY_MARGIN) < alpha); // if quiet moves couldn't possibly improve the position at the leaves by enough, don't search them
 
     bool legal_found = false;
+
+    Move best_move = NULL_MOVE;
 
     for (int i = 0; i < (int)moves.size(); ++i) {
         Move m = select_best(moves, move_scores, i);
@@ -214,6 +233,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
 
             if (score > best_score) {
                 best_score = score;
+                best_move = m;
             }
 
             if (score > alpha) {
@@ -257,7 +277,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
         }
     }
 
-    update_tt_entry(entry, zobrist, depth, best_score, ply, alpha_original, beta_original);
+    update_tt_entry(entry, zobrist, depth, best_score, ply, alpha_original, beta_original, best_move);
 
     return best_score;
 }
@@ -381,27 +401,7 @@ Move Position::best_move_internal(std::span<Move> moves, int depth, Transpositio
     int64_t beta = INT32_MAX;
 
     std::array<int32_t, 256> score_buf;
-    std::span<int32_t> move_scores = std::span(score_buf).subspan(0, moves.size());
-
-    for (size_t i = 0; i < moves.size(); ++i) {
-        Move mv = moves[i];
-
-        if (mv == last_best_move) {
-            move_scores[i] = BEST_MOVE_SCORE;
-        }
-        else if (mv == killers[ply][0]) {
-            move_scores[i] = KILLER_1_SCORE;
-        }
-        else if (mv == killers[ply][1]) {
-            move_scores[i] = KILLER_2_SCORE;
-        }
-        else {
-            int32_t score = mvv_lva_score(mv);
-            Piece piece = (Piece)piece_at[move_from(mv)];
-            int to = move_to(mv);
-            move_scores[i] = score == 0 ? history[piece][to] : score;
-        }
-    }
+    std::span<int32_t> move_scores = compute_move_scores(this, history, killers, ply, score_buf, moves, last_best_move);
 
     for (int i = 0; i < (int)moves.size(); ++i) {
         Move m = select_best(moves, move_scores, i);

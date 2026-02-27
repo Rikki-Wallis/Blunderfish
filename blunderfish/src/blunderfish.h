@@ -109,6 +109,7 @@ struct TTEntry {
     int depth;
     int64_t raw_score;
     uint8_t flag;
+    Move best_move;
 };
 
 using KillerTable = std::array<std::array<Move, 2>, MAX_DEPTH>;
