@@ -227,7 +227,7 @@ std::optional<Position> Position::decode_fen_string(const std::string& fen) {
         int file = next() - 'a';
         if (cursor >= fen.size()) return std::nullopt;
 
-        int rank = next() - '0'; 
+        int rank = next() - '1'; 
         if (rank > 7 || rank < 0) {
             return std::nullopt;
         }
@@ -238,7 +238,7 @@ std::optional<Position> Position::decode_fen_string(const std::string& fen) {
         next();
     }
 
-    pos.initialise_zobrist();
+    pos.zobrist = pos.compute_zobrist();
     
     return pos;
 }

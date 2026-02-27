@@ -4,24 +4,21 @@
 #include <random>
 #include "blunderfish.h"
 
-void Position::initialise_zobrist() {
+void Position::initialize_zobrist_tables() {
     /** 
         VERY IMPORTANT TO ONLY RUN AT START OF PROGRAM.
         This method sets up all of the piece tables and
         initialises the zobrist hash and thus is very slow.
     */
-    std::vector<uint8_t> pieces = {PIECE_PAWN, PIECE_ROOK, PIECE_KNIGHT, PIECE_BISHOP, PIECE_QUEEN, PIECE_KING};
-    std::vector<uint8_t> sides_loop = {WHITE, BLACK};
-
     // Create and seed rand num gen
     std::mt19937_64 rng(8008135);
     std::uniform_int_distribution<uint64_t> dist(std::numeric_limits<std::uint64_t>::min(), std::numeric_limits<std::uint64_t>::max());
 
     // Set random numbers for each square for each piece
-    for (uint8_t side : sides_loop) {
-        for (uint8_t piece : pieces) {
-            for (int i=0; i<64; ++i) {
-                zobrist_piece[side][piece][i] = rng();
+    for (int side = 0; side < 2; ++side) {
+        for (int piece = PIECE_PAWN; piece < NUM_PIECE_TYPES; ++piece) {
+            for (int sq = 0; sq < 64; ++sq) {
+                zobrist_piece[side][piece][sq] = rng();
             }
         }
     }      
@@ -29,55 +26,68 @@ void Position::initialise_zobrist() {
     // Set random number for black to move
     zobrist_side = rng();
 
-    // Set random numbers for castling
-    std::vector<uint8_t> castle_flags = {POSITION_FLAG_WHITE_QCASTLE, POSITION_FLAG_WHITE_KCASTLE, POSITION_FLAG_BLACK_QCASTLE, POSITION_FLAG_BLACK_KCASTLE};
-    for (uint8_t flag : castle_flags) {
-        zobrist_castling[flag] = rng();
+    // Set random numbers for position flags
+
+    for (int i = 0; i < 8; ++i) { // all singular bits
+        zobrist_flags[1 << i] = rng();
     }
 
-    // Set random numbers for each row for enpassant
-    for (int i=0; i<8; ++i) {
-        zobrist_ep[i] = rng();
-    }
+    for (size_t i = 0; i < std::size(zobrist_flags); ++i) { // all combinations of singular bits
+        uint64_t x = 0;
 
-    // Now we can begin forming the hash
-    zobrist = 0;
-
-    // Begin by going through each square and xoring into the hash
-    uint64_t all_white = sides[WHITE].all();
-    uint64_t all_black = sides[BLACK].all();
-    for (int i=0; i<64; ++i) {
-        if (all_white & sq_to_bb(i)) {
-            zobrist ^= zobrist_piece[WHITE][piece_at[i]][i];
-        } else if (all_black & sq_to_bb(i)) {
-            zobrist ^= zobrist_piece[BLACK][piece_at[i]][i];
+        for (int b : set_bits((uint64_t)i)) {
+            x ^= zobrist_flags[1 << b];
         }
+
+        zobrist_flags[i] = x;
     }
 
-    // xor with castling permissions
-    if (flags & POSITION_FLAG_WHITE_KCASTLE) {
-        zobrist ^= zobrist_castling[POSITION_FLAG_WHITE_KCASTLE];
-    }
-    if (flags & POSITION_FLAG_WHITE_QCASTLE) {
-        zobrist ^= zobrist_castling[POSITION_FLAG_WHITE_QCASTLE];
-    }
-    if (flags & POSITION_FLAG_BLACK_KCASTLE) {
-        zobrist ^= zobrist_castling[POSITION_FLAG_BLACK_KCASTLE];
-    }
-    if (flags & POSITION_FLAG_BLACK_QCASTLE) {
-        zobrist ^= zobrist_castling[POSITION_FLAG_BLACK_QCASTLE];
-    }
+    zobrist_flags[0] = 0; // if no flag changes, should be no change
 
-    // Only xor side if it is blacks turn to move
-    if (to_move == BLACK) {
-        zobrist ^= zobrist_side;
-    }
-
-    // If enpassant present xor aswell
-    if (en_passant_sq) {
-        zobrist ^= zobrist_ep[en_passant_sq/8];
+    // Set random numbers for each square for enpassant
+    for (size_t i = 0; i < std::size(zobrist_ep_buffer); ++i) {
+        zobrist_ep_buffer[i] = rng();
     }
 }
 
-// void Position::update_zobrist(Move& move) {
-// }
+uint64_t Position::compute_zobrist() const {
+    // Now we can begin forming the hash
+    uint64_t hash = 0;
+
+#ifdef ZOBRIST_INCLUDE_PIECES
+    // Begin by going through each square and xoring into the hash
+    uint64_t all_white = sides[WHITE].all();
+    uint64_t all_black = sides[BLACK].all();
+
+    for (int sq = 0; sq < 64; ++sq) {
+        if (all_white & sq_to_bb(sq)) {
+            hash ^= zobrist_piece[WHITE][piece_at[sq]][sq];
+        } else if (all_black & sq_to_bb(sq)) {
+            hash ^= zobrist_piece[BLACK][piece_at[sq]][sq];
+        }
+    }
+#endif
+
+#ifdef ZOBRIST_INCLUDE_FLAGS
+    // xor with flags
+    hash ^= zobrist_flags[flags];
+
+#endif
+
+#ifdef ZOBRIST_INCLUDE_SIDE
+    // xor side if it is blacks turn to move
+    if (to_move == BLACK) {
+        hash ^= zobrist_side;
+    }
+#endif
+
+#ifdef ZOBRIST_INCLUDE_EN_PASSANT_SQ
+    hash ^= zobrist_ep(en_passant_sq);
+#endif
+
+    return hash;
+}
+
+uint64_t Position::zobrist_ep(int sq) const {
+    return zobrist_ep_buffer[sq + 1];
+};

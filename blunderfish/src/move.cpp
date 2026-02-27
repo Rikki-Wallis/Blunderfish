@@ -550,6 +550,18 @@ int get_captured_square(Move move) {
     return captured_pos;
 }
 
+void Position::update_en_passant_sq(int sq) {
+#ifdef ZOBRIST_INCLUDE_EN_PASSANT_SQ
+    zobrist ^= zobrist_ep(en_passant_sq);
+#endif
+
+    en_passant_sq = sq;
+
+#ifdef ZOBRIST_INCLUDE_EN_PASSANT_SQ
+    zobrist ^= zobrist_ep(en_passant_sq);
+#endif
+}
+
 bool Position::is_capture(Move mv) const {
     int captured_sq = get_captured_square(mv);
     Piece captured_piece = (Piece)piece_at[captured_sq];
@@ -557,39 +569,17 @@ bool Position::is_capture(Move mv) const {
 }
 
 void Position::make_move(Move move) {
-
     uint64_t initial_zobrist = zobrist;
-    
-    // ZOBRIST, side to move
-    zobrist ^= zobrist_side;
-    
-    // ZOBRIST, remove old enpassant if any
-    if (en_passant_sq != NULL_SQUARE) {
-        zobrist ^= zobrist_ep[en_passant_sq/8];
-    }
-    
-    // ZOBRIST, xor moving piece from source sq
-    zobrist ^= zobrist_piece[to_move][move_end_piece(move)][move_from(move)];
-    
-    // ZOBRIST, if capture xor captured piece
-    if (piece_at[move_to(move)] != PIECE_NONE ) {
-        zobrist ^= zobrist_piece[opponent(to_move)][piece_at[move_to(move)]][move_to(move)];
-    }
-    
-    // ZOBRIST, xor moving piece to target sq
-    zobrist ^= zobrist_piece[to_move][move_end_piece(move)][move_to(move)];
-
-    // TODO: ZOBRIST, if castled handle seperately
-
-    // ZOBRIST, if pawn double push add ep square
-    if (move_type(move) == MOVE_EN_PASSANT) {
-        zobrist ^= zobrist_ep[move_to(move)/8];
-    }
 
     // First, check for a capture and remove the piece
     int captured_pos = get_captured_square(move);
     Piece captured_piece = (Piece)piece_at[captured_pos];
     assert(captured_piece != PIECE_KING);
+
+    // ZOBRIST, remove any captured piece
+#ifdef ZOBRIST_INCLUDE_PIECES
+    zobrist ^= bool_to_mask<uint64_t>(captured_piece != PIECE_NONE) & zobrist_piece[opponent(to_move)][captured_piece][captured_pos];
+#endif
 
     // Before we modify anything, record the destroyable data in the undo stack
     Undo undo = {
@@ -611,6 +601,12 @@ void Position::make_move(Move move) {
     Piece start_piece = (Piece)piece_at[move_from(move)];
     Piece end_piece = move_end_piece(move);
 
+    // update zobrist for moving piece
+#ifdef ZOBRIST_INCLUDE_PIECES
+    zobrist ^= zobrist_piece[to_move][start_piece][move_from(move)];
+    zobrist ^= zobrist_piece[to_move][end_piece][move_to(move)];
+#endif
+
     uint64_t from_mask = sq_to_bb(move_from(move));
     uint64_t to_mask = sq_to_bb(move_to(move));
 
@@ -620,53 +616,26 @@ void Position::make_move(Move move) {
     piece_at[move_from(move)] = PIECE_NONE;
     piece_at[move_to(move)] = static_cast<uint8_t>(end_piece);
 
-    // ZOBRIST, xor old castling rights out
-    if (POSITION_FLAG_WHITE_QCASTLE & flags) {
-        zobrist ^= zobrist_castling[POSITION_FLAG_WHITE_QCASTLE];
-    }
-
-    if (POSITION_FLAG_WHITE_KCASTLE & flags) {
-        zobrist ^= zobrist_castling[POSITION_FLAG_WHITE_KCASTLE];
-    }
-
-    if (POSITION_FLAG_BLACK_QCASTLE & flags) {
-        zobrist ^= zobrist_castling[POSITION_FLAG_BLACK_QCASTLE];
-    }
-
-    if (POSITION_FLAG_BLACK_KCASTLE & flags) {
-        zobrist ^= zobrist_castling[POSITION_FLAG_BLACK_KCASTLE];
-    }
-
     // Update castling rights when a rook or a king is moved, or a rook is taken
-    uint32_t castle_flag_removal = 0;
+
+    uint32_t remove_flags = 0;
 
     uint32_t flag_of_captured_rook = rook_castle_flag_table[opponent(to_move)][captured_pos];
-    castle_flag_removal |= bool_to_mask<uint32_t>(captured_piece == PIECE_ROOK) & flag_of_captured_rook;
+    remove_flags |= bool_to_mask<uint32_t>(captured_piece == PIECE_ROOK) & flag_of_captured_rook;
 
     uint32_t flag_of_king_move = to_move == WHITE ? (POSITION_FLAG_WHITE_QCASTLE | POSITION_FLAG_WHITE_KCASTLE) : (POSITION_FLAG_BLACK_QCASTLE | POSITION_FLAG_BLACK_KCASTLE);
-    castle_flag_removal |= bool_to_mask<uint32_t>(start_piece == PIECE_KING) & flag_of_king_move; 
+    remove_flags |= bool_to_mask<uint32_t>(start_piece == PIECE_KING) & flag_of_king_move;
 
     uint32_t flag_of_rook_move = rook_castle_flag_table[to_move][move_from(move)];
-    castle_flag_removal |= bool_to_mask<uint32_t>(start_piece == PIECE_ROOK) & flag_of_rook_move; 
+    remove_flags |= bool_to_mask<uint32_t>(start_piece == PIECE_ROOK) & flag_of_rook_move;
 
-    flags &= ~castle_flag_removal;
+    uint32_t diff = remove_flags & flags;
+    (void)diff;
+    flags &= ~remove_flags;
 
-    // ZOBRIST, xor new ones in
-    if (POSITION_FLAG_WHITE_QCASTLE & flags) {
-        zobrist ^= zobrist_castling[POSITION_FLAG_WHITE_QCASTLE];
-    }
-
-    if (POSITION_FLAG_WHITE_KCASTLE & flags) {
-        zobrist ^= zobrist_castling[POSITION_FLAG_WHITE_KCASTLE];
-    }
-
-    if (POSITION_FLAG_BLACK_QCASTLE & flags) {
-        zobrist ^= zobrist_castling[POSITION_FLAG_BLACK_QCASTLE];
-    }
-
-    if (POSITION_FLAG_BLACK_KCASTLE & flags) {
-        zobrist ^= zobrist_castling[POSITION_FLAG_BLACK_KCASTLE];
-    }
+#ifdef ZOBRIST_INCLUDE_FLAGS
+    zobrist ^= zobrist_flags[diff];
+#endif
 
     // set the en passant square if a double push has occured
     int en_passant_table[] = {
@@ -674,24 +643,39 @@ void Position::make_move(Move move) {
     };
 
     bool is_double_push = move_type(move) == MOVE_DOUBLE_PUSH;
-    en_passant_sq = en_passant_table[is_double_push*2 + to_move];
+
+    update_en_passant_sq(en_passant_table[is_double_push*2 + to_move]);
 
     // move the rook when a castle is performed
+    bool is_castle = move_type(move) == MOVE_SHORT_CASTLE || move_type(move) == MOVE_LONG_CASTLE;
+
+    uint8_t  castle_mask_u8  = bool_to_mask<uint8_t>(is_castle);
+    uint64_t castle_mask_u64 = bool_to_mask<uint64_t>(is_castle);
+
     int rook_from = rook_jump_from[move_to(move)];
     int rook_to   = rook_jump_to  [move_to(move)];
 
     uint64_t rook_from_mask = sq_to_bb(rook_from);
     uint64_t rook_to_mask   = sq_to_bb(rook_to);
-    uint64_t rook_jump_mask = bool_to_mask<uint64_t>(move_type(move) == MOVE_SHORT_CASTLE || move_type(move) == MOVE_LONG_CASTLE) & (rook_from_mask ^ rook_to_mask);
+    uint64_t rook_jump_mask = castle_mask_u64 & (rook_from_mask ^ rook_to_mask);
 
     sides[to_move].bb[PIECE_ROOK] ^= rook_jump_mask;
-
-    uint8_t castle_mask = bool_to_mask<uint8_t>(move_type(move) == MOVE_SHORT_CASTLE || move_type(move) == MOVE_LONG_CASTLE);
     
-    piece_at[rook_from] = (~castle_mask & piece_at[rook_from]) | (castle_mask & PIECE_NONE);
-    piece_at[rook_to]   = (~castle_mask & piece_at[rook_to]  ) | (castle_mask & PIECE_ROOK);
+    piece_at[rook_from] = (~castle_mask_u8 & piece_at[rook_from]) | (castle_mask_u8 & PIECE_NONE);
+    piece_at[rook_to]   = (~castle_mask_u8 & piece_at[rook_to]  ) | (castle_mask_u8 & PIECE_ROOK);
 
+#ifdef ZOBRIST_INCLUDE_FLAGS
+    zobrist ^= castle_mask_u64 & zobrist_piece[to_move][PIECE_ROOK][rook_from];
+    zobrist ^= castle_mask_u64 & zobrist_piece[to_move][PIECE_ROOK][rook_to];
+#endif
+
+    // update to_move
+    
     to_move = opponent(to_move);
+
+#ifdef ZOBRIST_INCLUDE_SIDE
+    zobrist ^= zobrist_side;
+#endif
 }
 
 void Position::unmake_move(Move move) {
@@ -743,9 +727,26 @@ void Position::unmake_move(Move move) {
 }
 
 void Position::make_null_move() {
+    assert(undo_count < MAX_DEPTH);
+    undo_stack[undo_count++] = Undo {
+        .captured_piece = PIECE_NONE,
+        .flags = flags,
+        .en_passant_sq = en_passant_sq,
+        .zobrist = zobrist
+    };
+
+    update_en_passant_sq(NULL_SQUARE);
     to_move = opponent(to_move);
+
 }
 
 void Position::unmake_null_move(){
     to_move = opponent(to_move);
+
+    assert(undo_count > 0);
+    Undo undo = undo_stack[--undo_count];
+
+    flags = undo.flags;
+    en_passant_sq = undo.en_passant_sq;
+    zobrist = undo.zobrist;
 }

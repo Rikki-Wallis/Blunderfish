@@ -6,6 +6,11 @@
 
 #include "common.h"
 
+#define ZOBRIST_INCLUDE_PIECES
+#define ZOBRIST_INCLUDE_FLAGS
+#define ZOBRIST_INCLUDE_EN_PASSANT_SQ
+#define ZOBRIST_INCLUDE_SIDE
+
 #define MAX_DEPTH 128
 
 static constexpr uint64_t RANK_1 = 0x00000000000000ff;
@@ -88,7 +93,7 @@ struct Side {
     std::vector<uint64_t> get_bbs() const; 
 };
 
-static constexpr int NULL_SQUARE = 0xffffffff;
+static constexpr int NULL_SQUARE = -1;
 
 struct Undo {
     uint8_t captured_piece;
@@ -110,19 +115,21 @@ struct Position {
     // Zobrist
     uint64_t zobrist;
     uint64_t zobrist_side;
-    std::unordered_map<int, std::unordered_map<int, std::array<uint64_t, 64>>> zobrist_piece;
-    std::array<uint64_t, 4> zobrist_castling;
-    std::array<uint64_t, 8> zobrist_ep;
+    std::array<uint64_t, 64> zobrist_piece[2][NUM_PIECE_TYPES];
+    uint64_t zobrist_flags[255];
+    uint64_t zobrist_ep_buffer[65];
 
     std::array<Undo, MAX_DEPTH> undo_stack;
     int undo_count;
 
     Position()
-        : to_move(WHITE), en_passant_sq(NULL_SQUARE), undo_count(0)
+        : to_move(WHITE), en_passant_sq(NULL_SQUARE), flags(0), undo_count(0)
     {
         memset(sides, 0, sizeof(sides));
         memset(piece_at, 0, sizeof(piece_at));
         memset(undo_stack.data(), 0, sizeof(MAX_DEPTH * sizeof(Undo)));
+        initialize_zobrist_tables();
+        zobrist = compute_zobrist();
     }
 
     Position(Position&&) = default;
@@ -166,10 +173,14 @@ struct Position {
     Move best_move_internal(std::span<Move> moves, int depth, Move last_best_move, HistoryTable& history, KillerTable& killers);
     Move best_move(std::span<Move> moves, int depth);
 
-    void initialise_zobrist();
-    void update_zobrist(Move& move);
+    void initialize_zobrist_tables();
+    uint64_t compute_zobrist() const;
+
+    void update_en_passant_sq(int sq);
 
     int64_t total_non_pawn_value() const; // used for null move reduction heuristic
+
+    uint64_t zobrist_ep(int sq) const;
 };
 
 int get_captured_square(Move move);

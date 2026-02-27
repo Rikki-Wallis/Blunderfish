@@ -23,6 +23,7 @@ static void run_and_report(int runs, const std::string& title, Func&& func) {
     print("{}: {}ms\n", title, avg);
 }
 
+/*
 template <typename Func>
 static uint64_t run_and_time(Func&& func) {
     // Time perft search
@@ -59,6 +60,7 @@ static void benchmark_perft() {
         
     };
 }
+*/
 
 template<typename Func>
 static void benchmark_pos_method(const std::string& name, int max_depth, Func&& func) {
@@ -97,7 +99,7 @@ static void benchmark_pruned_negamax() {
 }
 
 int main() {
-    benchmark_perft();
+    //benchmark_perft();
     benchmark_best_move();
     benchmark_raw_negamax();
     benchmark_pruned_negamax();
