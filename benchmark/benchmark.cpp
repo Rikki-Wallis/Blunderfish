@@ -94,7 +94,7 @@ static void benchmark_pruned_negamax() {
     benchmark_pos_method("Pruned Negamax", 12, [](Position& pos, int depth){
         KillerTable killers{};
         HistoryTable history{};
-        TranspositionTable tt(TRANSPOSITION_TABLE_SIZE);
+        TranspositionTable tt;
         pos.pruned_negamax(depth, tt, history, killers, 1, true, -INF, INF);
     });
 }

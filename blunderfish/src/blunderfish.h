@@ -115,9 +115,24 @@ struct TTEntry {
     Move best_move;
 };
 
+struct TTCluster {
+    TTEntry entries[4];
+};
+
 using KillerTable = std::array<std::array<Move, 2>, MAX_DEPTH>;
 using HistoryTable = std::array<std::array<int32_t, 64>, NUM_PIECE_TYPES>;
-using TranspositionTable = std::vector<TTEntry>;
+
+class TranspositionTable {
+public:
+    std::vector<TTCluster> table;
+
+    TranspositionTable()
+        : table(TRANSPOSITION_TABLE_SIZE) {}
+
+    TTCluster& operator[](uint64_t index) {
+        return table[index];
+    }
+};
 
 struct ZobristTable {
     uint64_t side;

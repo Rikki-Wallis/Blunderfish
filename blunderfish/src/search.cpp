@@ -104,10 +104,39 @@ static std::span<int32_t> compute_move_scores(Position* pos, HistoryTable& histo
     return move_scores;
 }
 
+static TTEntry& find_entry(TranspositionTable& tt, uint64_t zobrist) {
+    TTCluster& cluster = tt[zobrist & TT_MASK];
+
+    // find match
+    for (auto& e : cluster.entries) {
+        if (e.key == zobrist) {
+            return e;
+        }
+    }
+
+    // find empty
+    for (auto& e : cluster.entries) {
+        if (e.key == 0) {
+            return e;
+        }
+    }
+
+    size_t shallowest = 0;
+
+    for (size_t i = 1; i < std::size(cluster.entries); ++i) {
+        if (cluster.entries[i].depth < cluster.entries[shallowest].depth) {
+            shallowest = i;
+        }
+    }
+    
+    return cluster.entries[shallowest];
+}
+
 int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta) {
     (void)allow_null;
 
     if (depth == 0) {
+        //return eval();
         return quiescence(ply, alpha, beta);
     }
 
@@ -115,16 +144,16 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
 
     // First check TT
 
-    TTEntry& entry = tt[zobrist & TT_MASK];
+    TTEntry& match = find_entry(tt, zobrist);
 
     int64_t alpha_original = alpha; // store this for when we update the transposition table
     int64_t beta_original  = beta; // store this for when we update the transposition table
 
     Move tt_move = NULL_MOVE;
 
-    if (entry.key == zobrist) {
-        if (entry.depth >= depth) {
-            int64_t entry_score = entry.raw_score;
+    if (match.key == zobrist) { // exact match
+        if (match.depth >= depth) {
+            int64_t entry_score = match.raw_score;
 
             if (entry_score < -MATE_SCORE + 1000) {
                 entry_score += ply;
@@ -133,7 +162,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
                 entry_score -= ply; // reapply the ply to mate scores to restore them to relative to the root
             }
 
-            switch (entry.flag) {
+            switch (match.flag) {
                 case TT_SCORE_EXACT:
                     return entry_score; // exact store stored, we can just return it
 
@@ -151,7 +180,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
             }
         }
 
-        tt_move = entry.best_move;
+        tt_move = match.best_move;
     }
 
     int64_t best_score = -MATE_SCORE;
@@ -176,8 +205,9 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
         unmake_null_move();
 
         if (score >= beta) {
-            bool changed = update_tt_entry(entry, zobrist, depth, beta, ply, alpha_original, beta_original, NULL_MOVE);
-            if (changed) { entry.flag = TT_SCORE_LOWER; }
+            TTEntry& target = find_entry(tt, zobrist);
+            bool changed = update_tt_entry(target, zobrist, depth, beta, ply, alpha_original, beta_original, NULL_MOVE);
+            if (changed) { target.flag = TT_SCORE_LOWER; }
             return beta;
         }
     }
@@ -284,7 +314,8 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
         }
     }
 
-    update_tt_entry(entry, zobrist, depth, best_score, ply, alpha_original, beta_original, best_move);
+    TTEntry& target = find_entry(tt, zobrist);
+    update_tt_entry(target, zobrist, depth, best_score, ply, alpha_original, beta_original, best_move);
 
     return best_score;
 }
@@ -425,24 +456,19 @@ std::pair<Move, int64_t> Position::best_move_internal(std::span<Move> moves, int
     return {best_move, best_score};
 }
 
-Move Position::best_move(std::span<Move> _moves, int depth) {
+Move Position::best_move(std::span<Move> moves, int depth) {
     KillerTable killers{};
     HistoryTable history{};
-    TranspositionTable tt(TRANSPOSITION_TABLE_SIZE);
+    TranspositionTable tt;
 
     Move best_move = NULL_MOVE;
     int64_t best_score = 0;
 
     for (int i = 1; i <= depth; ++i) {
-        std::vector<Move> moves(_moves.begin(), _moves.end()); 
-
         int64_t window = 50; // start the window small
 
         int64_t alpha = best_score - window;
         int64_t beta  = best_score + window;
-
-        alpha = std::max(-INF, alpha - window);
-        beta  = std::min( INF, beta  + window);
 
         while (true) {
             auto [move, score] = best_move_internal(moves, i, tt, best_move, history, killers, alpha, beta);

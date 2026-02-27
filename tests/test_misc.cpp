@@ -46,7 +46,7 @@ TEST_CASE("Pruned Negamax Equals Plain Negamax on start") {
 
         KillerTable killers{};
         HistoryTable history{};
-        TranspositionTable tt(TRANSPOSITION_TABLE_SIZE);
+        TranspositionTable tt;
         int64_t b = pos.pruned_negamax(depth, tt, history, killers, 1, true, -INF, INF);
         REQUIRE(a == b);
     }
