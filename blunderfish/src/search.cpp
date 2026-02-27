@@ -391,16 +391,13 @@ int64_t Position::negamax(int depth, int ply) {
     return best_score;
 }
 
-Move Position::best_move_internal(std::span<Move> moves, int depth, TranspositionTable& tt, Move last_best_move, HistoryTable& history, KillerTable& killers) {
+std::pair<Move, int64_t> Position::best_move_internal(std::span<Move> moves, int depth, TranspositionTable& tt, Move last_best_move, HistoryTable& history, KillerTable& killers, int64_t alpha, int64_t beta) {
     (void)last_best_move;
 
     int ply = 1;
 
     int64_t best_score = INT64_MIN;
     int best_move = NULL_MOVE;
-
-    int64_t alpha = INT32_MIN;
-    int64_t beta = INT32_MAX;
 
     std::array<int32_t, 256> score_buf;
     std::span<int32_t> move_scores = compute_move_scores(this, history, killers, ply, score_buf, moves, last_best_move);
@@ -420,7 +417,7 @@ Move Position::best_move_internal(std::span<Move> moves, int depth, Transpositio
         alpha = std::max(alpha, score);
     }
 
-    return best_move;
+    return {best_move, best_score};
 }
 
 Move Position::best_move(std::span<Move> _moves, int depth) {
@@ -429,10 +426,33 @@ Move Position::best_move(std::span<Move> _moves, int depth) {
     TranspositionTable tt(TRANSPOSITION_TABLE_SIZE);
 
     Move best_move = NULL_MOVE;
+    int64_t best_score = 0;
 
     for (int i = 1; i <= depth; ++i) {
         std::vector<Move> moves(_moves.begin(), _moves.end()); 
-        best_move = best_move_internal(moves, i, tt, best_move, history, killers);
+
+        int64_t window = 50; // start the window small
+
+        int64_t alpha = best_score - window;
+        int64_t beta  = best_score + window;
+
+        while (true) {
+            auto [move, score] = best_move_internal(moves, i, tt, best_move, history, killers, alpha, beta);
+
+            if (score <= alpha) {
+                alpha -= window; // fail-high, widen downwards
+                window *= 2; // expand window
+            }
+            else if (score >= beta) {
+                beta += window; // fail-low, widen upwards
+                window *= 2; // expand window
+            }
+            else {
+                best_move = move;
+                best_score = score;
+                break;
+            }
+        }
     }
 
     return best_move;

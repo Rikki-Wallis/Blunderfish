@@ -188,7 +188,7 @@ struct Position {
 
     bool is_capture(Move mv) const;
 
-    Move best_move_internal(std::span<Move> moves, int depth, TranspositionTable& tt, Move last_best_move, HistoryTable& history, KillerTable& killers);
+    std::pair<Move, int64_t> best_move_internal(std::span<Move> moves, int depth, TranspositionTable& tt, Move last_best_move, HistoryTable& history, KillerTable& killers, int64_t alpha, int64_t beta);
     Move best_move(std::span<Move> moves, int depth);
 
     uint64_t compute_zobrist() const;
