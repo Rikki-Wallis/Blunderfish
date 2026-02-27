@@ -737,6 +737,9 @@ void Position::make_null_move() {
 
     update_en_passant_sq(NULL_SQUARE);
     to_move = opponent(to_move);
+#ifdef ZOBRIST_INCLUDE_SIDE
+    zobrist ^= zobrist_table.side;
+#endif
 }
 
 void Position::unmake_null_move(){

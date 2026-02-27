@@ -35,6 +35,14 @@ void zobrist_search(int depth, Position& position) {
             position.unmake_move(move);
             position.verify_integrity();
         }
+
+        position.make_null_move();
+
+        if (!position.is_in_check(my_side)) {
+            zobrist_search(depth-1, position);
+        }
+
+        position.unmake_null_move();
     }
 }
 
