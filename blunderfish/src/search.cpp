@@ -12,6 +12,14 @@ constexpr int32_t KILLER_1_SCORE    = 80000;
 constexpr int32_t KILLER_2_SCORE    = 70000;
 constexpr int32_t MAX_HISTORY_SCORE = 60000;
 
+constexpr uint64_t TT_MASK = TRANSPOSITION_TABLE_SIZE - 1;
+
+enum TTScoreFlag {
+    TT_SCORE_EXACT,
+    TT_SCORE_UPPER,
+    TT_SCORE_LOWER
+};
+
 static Move select_best(std::span<Move>& moves, std::span<int32_t>& move_scores, int index) {
     int32_t best_score = INT32_MIN;
     int best_index = -1;
@@ -41,15 +49,81 @@ int32_t Position::mvv_lva_score(Move mv) const{
     return captured_piece == PIECE_NONE ? 0 : score;
 }
 
-int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta) {
+bool update_tt_entry(TTEntry& entry, uint64_t zobrist, int depth, int64_t score, int ply, int64_t alpha_original, int64_t beta_original) {
+    if (entry.key != zobrist || depth >= entry.depth) {
+        entry.key = zobrist;
+        entry.depth = depth;
+        entry.raw_score = score;
+
+        if (entry.raw_score < -MATE_SCORE + 1000) {
+            entry.raw_score -= ply;
+        }
+        else if (entry.raw_score > MATE_SCORE - 1000) {
+            entry.raw_score += ply; // remove the current ply so that the mate score is relative to here rather than the root
+        }
+
+        if (score <= alpha_original) {
+            entry.flag = TT_SCORE_UPPER; // 
+        }
+        else if (score >= beta_original) {
+            entry.flag = TT_SCORE_LOWER; // true score is AT LEAST best_score
+        }
+        else {
+            entry.flag = TT_SCORE_EXACT; // best_score IS the true score
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
+int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta) {
     if (depth == 0) {
         return quiescence(ply, alpha, beta);
     }
 
     int my_side = to_move;
 
-    // Null move reduction
+    // First check TT
+
+    TTEntry& entry = tt[zobrist & TT_MASK];
+
+    int64_t alpha_original = alpha; // store this for when we update the transposition table
+    int64_t beta_original  = beta; // store this for when we update the transposition table
+
+    if (entry.key == zobrist && entry.depth >= depth) {
+        int64_t entry_score = entry.raw_score;
+
+        if (entry_score < -MATE_SCORE + 1000) {
+            entry_score += ply;
+        }
+        else if (entry_score >  MATE_SCORE - 1000) {
+            entry_score -= ply; // reapply the ply to mate scores to restore them to relative to the root
+        }
+
+        switch (entry.flag) {
+            case TT_SCORE_EXACT:
+                return entry_score; // exact store stored, we can just return it
+
+            case TT_SCORE_LOWER:
+                alpha = std::max(alpha, entry_score);
+                break;
+
+            case TT_SCORE_UPPER:
+                beta = std::min(beta, entry_score);
+                break;
+        }
+
+        if (alpha >= beta) {
+            return entry_score;
+        }
+    }
+
+    // Null move pruning
     // if we give the opponent a free move and alpha >= beta, our position is too good, so prune
+
+    int64_t best_score = -MATE_SCORE;
 
     bool currently_checked = is_in_check(my_side);
 
@@ -63,12 +137,16 @@ int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& 
         int64_t null_alpha = beta - 1; // we only care if it can beat it, not the actual score
         int64_t null_beta = beta;
         
-        int64_t score = -pruned_negamax(depth - 1 - R, history, killers, ply + 1, false, -null_beta, -null_alpha);
+        int64_t score = -pruned_negamax(depth - 1 - R, tt, history, killers, ply + 1, false, -null_beta, -null_alpha);
 
         unmake_null_move();
 
         if (score >= beta) {
-            return beta;
+            bool changed = update_tt_entry(entry, zobrist, depth, score, ply, alpha_original, beta_original);
+            if (changed) {
+                entry.flag = TT_SCORE_LOWER;
+            }
+            return score;
         }
     }
 
@@ -121,20 +199,26 @@ int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& 
             int64_t score;
 
             if (reduction) {
-                score = -pruned_negamax(depth - 1 - reduction, history, killers, ply + 1, true, -beta, -alpha); // search at a reduced depth
+                score = -pruned_negamax(depth - 1 - reduction, tt, history, killers, ply + 1, true, -beta, -alpha); // search at a reduced depth
 
                 if (score > alpha) { // if interesting, full depth search
-                    score = -pruned_negamax(depth - 1, history, killers, ply + 1, true, -beta, -alpha);
+                    score = -pruned_negamax(depth - 1, tt, history, killers, ply + 1, true, -beta, -alpha);
                 }
 
                 // this preserves alpha-beta correctness because we only allow obviously bad moves to be searched shallow
                 // if its good, we re-search at full depth
             }
             else {
-                score = -pruned_negamax(depth - 1, history, killers, ply + 1, true, -beta, -alpha);
+                score = -pruned_negamax(depth - 1, tt, history, killers, ply + 1, true, -beta, -alpha);
             }
 
-            alpha = std::max(score, alpha);
+            if (score > best_score) {
+                best_score = score;
+            }
+
+            if (score > alpha) {
+                alpha = score;
+            }
 
             if (alpha >= beta) { // opponent will never allow this; cutoff
                 cutoff = true;
@@ -160,33 +244,38 @@ int64_t Position::pruned_negamax(int depth, HistoryTable& history, KillerTable& 
                 }
             }
 
-            return beta; // mate detection not relevant on this node because we found legal moves
+            break;
         } 
     }
 
     if (!legal_found) { // no legal moves
         if (is_in_check(my_side)) {
-            return -MATE_SCORE + ply; // checkmate
+            best_score = -MATE_SCORE + ply; // checkmate
         }
         else {
-            return 0; // stalemate
+            best_score = 0; // stalemate
         }
     }
 
-    return alpha;
+    update_tt_entry(entry, zobrist, depth, best_score, ply, alpha_original, beta_original);
+
+    return best_score;
 }
 
 int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
     int side = to_move;
     bool currently_checked = is_in_check(side);
 
+    int64_t best_score = -MATE_SCORE;
+
     if (!currently_checked) { // if not checked, we can choose to stay here
         int64_t stand_pat = eval();
+        best_score = stand_pat;
 
         alpha = std::max(stand_pat, alpha);
 
         if (alpha >= beta) {
-            return beta;
+            return stand_pat;
         }
     }
 
@@ -215,7 +304,13 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
 
             int64_t score = -quiescence(ply+1, -beta, -alpha);
 
-            alpha = std::max(score, alpha);
+            if (score > best_score) {
+                best_score = score;
+            }
+
+            if (score > alpha) {
+                alpha = score;
+            }
 
             if (alpha >= beta) {
                 cutoff = true;
@@ -225,7 +320,7 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
         unmake_move(mv);
 
         if (cutoff) {
-            return beta;
+            return best_score;
         }
     }
 
@@ -233,7 +328,7 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
         return -MATE_SCORE + ply; // checkmate
     }
 
-    return alpha;
+    return best_score;
 }
 
 int64_t Position::negamax(int depth, int ply) {
@@ -248,7 +343,7 @@ int64_t Position::negamax(int depth, int ply) {
 
     bool legal_found = false;
 
-    int64_t alpha = -MATE_SCORE;
+    int64_t best_score = -MATE_SCORE;
 
     for (Move m : moves) {
         make_move(m);
@@ -256,7 +351,7 @@ int64_t Position::negamax(int depth, int ply) {
         if (!is_in_check(my_side)) {
             legal_found = true;
             int64_t score = -negamax(depth - 1, ply + 1);
-            alpha = std::max(score, alpha);
+            best_score = std::max(score, best_score);
         }
 
         unmake_move(m);
@@ -271,10 +366,10 @@ int64_t Position::negamax(int depth, int ply) {
         }
     }
 
-    return alpha;
+    return best_score;
 }
 
-Move Position::best_move_internal(std::span<Move> moves, int depth, Move last_best_move, HistoryTable& history, KillerTable& killers) {
+Move Position::best_move_internal(std::span<Move> moves, int depth, TranspositionTable& tt, Move last_best_move, HistoryTable& history, KillerTable& killers) {
     (void)last_best_move;
 
     int ply = 1;
@@ -312,7 +407,7 @@ Move Position::best_move_internal(std::span<Move> moves, int depth, Move last_be
         Move m = select_best(moves, move_scores, i);
 
         make_move(m); // no need to filter for check here - assumes filtered moves given
-        int64_t score = -pruned_negamax(depth-1, history, killers, ply+1, true, -beta, -alpha);
+        int64_t score = -pruned_negamax(depth-1, tt, history, killers, ply+1, true, -beta, -alpha);
         unmake_move(m);
 
         if (score > best_score) {
@@ -329,12 +424,13 @@ Move Position::best_move_internal(std::span<Move> moves, int depth, Move last_be
 Move Position::best_move(std::span<Move> _moves, int depth) {
     KillerTable killers{};
     HistoryTable history{};
+    TranspositionTable tt(TRANSPOSITION_TABLE_SIZE);
 
     Move best_move = NULL_MOVE;
 
     for (int i = 1; i <= depth; ++i) {
         std::vector<Move> moves(_moves.begin(), _moves.end()); 
-        best_move = best_move_internal(moves, i, best_move, history, killers);
+        best_move = best_move_internal(moves, i, tt, best_move, history, killers);
     }
 
     return best_move;

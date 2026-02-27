@@ -13,6 +13,8 @@
 
 #define MAX_DEPTH 128
 
+static constexpr size_t TRANSPOSITION_TABLE_SIZE = 1 << 20;
+
 static constexpr uint64_t RANK_1 = 0x00000000000000ff;
 static constexpr uint64_t RANK_2 = 0x000000000000ff00;
 static constexpr uint64_t RANK_3 = 0x0000000000ff0000;
@@ -102,8 +104,16 @@ struct Undo {
     uint64_t zobrist;
 };
 
+struct TTEntry {
+    uint64_t key;
+    int depth;
+    int64_t raw_score;
+    uint8_t flag;
+};
+
 using KillerTable = std::array<std::array<Move, 2>, MAX_DEPTH>;
 using HistoryTable = std::array<std::array<int32_t, 64>, NUM_PIECE_TYPES>;
+using TranspositionTable = std::vector<TTEntry>;
 
 struct ZobristTable {
     uint64_t side;
@@ -170,14 +180,14 @@ struct Position {
 
     int64_t eval() const;
     int64_t negamax(int depth, int ply);
-    int64_t pruned_negamax(int depth, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta);
+    int64_t pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta);
     int64_t quiescence(int ply, int64_t alpha, int64_t beta);
 
     int32_t mvv_lva_score(Move mv) const;
 
     bool is_capture(Move mv) const;
 
-    Move best_move_internal(std::span<Move> moves, int depth, Move last_best_move, HistoryTable& history, KillerTable& killers);
+    Move best_move_internal(std::span<Move> moves, int depth, TranspositionTable& tt, Move last_best_move, HistoryTable& history, KillerTable& killers);
     Move best_move(std::span<Move> moves, int depth);
 
     uint64_t compute_zobrist() const;
