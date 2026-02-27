@@ -200,11 +200,13 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
         Move m = select_best(moves, move_scores, i);
 
         bool cutoff = false;
-
         bool quiet = !is_capture(m);
-        bool late = i >= 3;
 
-        int reduction = int(depth >= 3 && quiet && late && !currently_checked);
+        int reduction = 0;
+
+        if (depth >= 3 && quiet && !currently_checked && i >= 3) {
+            reduction = 1 + (depth >= 6 && i >= 6);
+        }
 
         if (futility_prune && quiet) {
             continue;
