@@ -178,7 +178,7 @@ struct Position {
     std::span<Move> generate_moves(std::span<Move> move_buf) const;
     std::span<Move> generate_captures(std::span<Move> move_buf) const;
 
-    std::unordered_map<std::string, size_t> name_moves(std::span<Move> moves);
+    std::unordered_map<std::string, Move> name_moves(std::span<Move> moves);
 
     uint64_t all_pieces() const;
 

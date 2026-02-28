@@ -4,7 +4,7 @@
 
 #include "blunderfish.h"
 
-static size_t select_move(const std::unordered_map<std::string, size_t>& moves) {
+static Move select_move(const std::unordered_map<std::string, Move>& moves) {
     for (;;) {
         print("Enter a valid move: ");
 
@@ -34,7 +34,8 @@ static int play_main() {
         std::array<Move, 256> move_buffer;
         std::span<Move> moves = pos.generate_moves(move_buffer);
         pos.filter_moves(moves);
-        std::unordered_map<std::string, size_t> move_names = pos.name_moves(moves); 
+
+        std::unordered_map<std::string, Move> names = pos.name_moves(moves); 
 
         if (moves.size() == 0) {
             print("Game over.\n");
@@ -45,7 +46,7 @@ static int play_main() {
             int count = 0;
 
             print("Available moves: ");
-            for (auto& [name, i] : move_names) {
+            for (auto& [name, mv] : names) {
                 if (count++ > 0) {
                     print(", ");
                 }
@@ -53,22 +54,20 @@ static int play_main() {
             }
             print("\n");
 
-            size_t selected = select_move(move_names); 
-
-            Move m = moves[selected];
+            Move m = select_move(names); 
             pos.make_move(m);
         }
         else {
-            Move move = pos.best_move(moves, 12);
-            assert(move != NULL_MOVE);
+            Move best = pos.best_move(moves, 12);
+            assert(best != NULL_MOVE);
 
-            for (auto& [name, i] : move_names) {
-                if (moves[i] == move) {
+            for (auto& [name, mv] : names) {
+                if (mv == best) {
                     print("Blunderfish plays {}\n", name);
                 }
             }
 
-            pos.make_move(move);
+            pos.make_move(best);
         }
     }
 
@@ -113,8 +112,8 @@ static int best_main(const char* FEN, int depth) {
         return 0;
     }
 
-    for (auto& [name, i] : names) {
-        if (moves[i] == best) {
+    for (auto& [name, mv] : names) {
+        if (mv == best) {
             print("{}\n", name);
             return 0;
         }
