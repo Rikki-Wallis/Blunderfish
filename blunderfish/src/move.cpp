@@ -429,18 +429,18 @@ void Position::filter_moves(std::span<Move>& moves) {
     }
 }
 
-std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all) {
-    std::vector<size_t> board[64];
+std::unordered_map<std::string, Move> Position::name_moves(std::span<Move> moves_in) {
+    std::vector<Move> at[64];
 
-    for (size_t i = 0; i < all.size(); ++i) {
-        board[move_to(all[i])].push_back(i);
+    for (Move mv : moves_in) {
+        at[move_to(mv)].push_back(mv);
     }
 
-    std::unordered_map<std::string, size_t> lookup;
+    std::unordered_map<std::string, Move> names;
 
-    for (auto& moves : board) {
+    for (auto& moves : at) {
         for (size_t i = 0; i < moves.size(); ++i) {
-            Move m = all[moves[i]];
+            Move m = moves[i];
 
             auto [f1, r1] = square_alg(move_from(m));
 
@@ -453,7 +453,7 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
                     continue;
                 }
 
-                Move n = all[moves[j]];
+                Move n = moves[j];
 
                 if (piece_at[move_from(m)] != piece_at[move_from(n)]) {
                     continue;
@@ -512,11 +512,11 @@ std::unordered_map<std::string, size_t> Position::name_moves(std::span<Move> all
                     break;
             }
 
-            lookup.emplace(std::move(name), moves[i]);
+            names.emplace(std::move(name), m);
         } 
     }
 
-    return lookup;
+    return names;
 }
 
 // hopefully these functions get inlined and the rewrites get optimized away
