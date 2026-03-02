@@ -60,6 +60,7 @@ static void benchmark_pos_method(const std::string& name, int start_depth, int m
         double ms = (double)duration.count()/1000000.0;
         double nps = (double)pos.node_count/(ms/1000.0);
         double ebf = pow((double)pos.node_count, 1.0/(double)depth);
+        double avg_cutoff_index = (double)pos.cutoff_index_sum/(double)pos.cutoff_index_count;
 
         print("{} (depth={}):\n", name, depth);
         print("  time: {}ms\n", ms);
@@ -69,6 +70,7 @@ static void benchmark_pos_method(const std::string& name, int start_depth, int m
         print("  null-prunes: {}\n", pos.null_prunes);
         print("  NPS: {:.2}\n", nps);
         print("  EBF: {:.2}\n", ebf);
+        print("  avg-cutoff-idx: {:.2}\n", avg_cutoff_index);
         print("\n");
     }
 }

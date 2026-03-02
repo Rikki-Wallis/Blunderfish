@@ -163,6 +163,8 @@ struct Position {
     int qnode_count;
     int beta_cutoffs;
     int null_prunes; 
+    int cutoff_index_count;
+    int cutoff_index_sum;
 
     std::array<Undo, MAX_DEPTH> undo_stack;
     int undo_count;

@@ -298,4 +298,6 @@ void Position::reset_benchmarking_statistics() {
     qnode_count = 0;
     beta_cutoffs = 0;
     null_prunes = 0;
+    cutoff_index_count = 0;
+    cutoff_index_sum = 0;
 }

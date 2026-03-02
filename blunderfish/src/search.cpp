@@ -6,9 +6,9 @@ constexpr int64_t FUTILITY_MARGIN = 200;
 
 constexpr int32_t BEST_MOVE_SCORE   = 2000000;
 constexpr int32_t CAPTURE_SCORE     = 90000;
-constexpr int32_t KILLER_1_SCORE    = 80000;
-constexpr int32_t KILLER_2_SCORE    = 70000;
-constexpr int32_t MAX_HISTORY_SCORE = 60000;
+constexpr int32_t MAX_HISTORY_SCORE = 80000;
+constexpr int32_t KILLER_1_SCORE    = 70000;
+constexpr int32_t KILLER_2_SCORE    = 60000;
 
 constexpr uint64_t TT_MASK = TRANSPOSITION_TABLE_SIZE - 1;
 
@@ -230,6 +230,9 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     for (int i = 0; i < (int)moves.size(); ++i) {
         Move m = select_best(moves, move_scores, i);
 
+        Piece piece = (Piece)piece_at[move_from(m)];
+        int to = move_to(m);
+
         bool cutoff = false;
         bool quiet = !is_capture(m);
 
@@ -257,18 +260,15 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
 
             int64_t score;
 
-            if (reduction) {
-                score = -pruned_negamax(depth - 1 - reduction, tt, history, killers, ply + 1, true, -alpha-1, -alpha); // search at a reduced depth
-
-                if (score > alpha) { // if interesting, full depth search
-                    score = -pruned_negamax(depth - 1, tt, history, killers, ply + 1, true, -beta, -alpha);
-                }
-
-                // this preserves alpha-beta correctness because we only allow obviously bad moves to be searched shallow
-                // if its good, we re-search at full depth
+            if (i == 0) {
+                score = -pruned_negamax(depth - 1, tt, history, killers, ply + 1, true, -beta, -alpha);
             }
             else {
-                score = -pruned_negamax(depth - 1, tt, history, killers, ply + 1, true, -beta, -alpha);
+                score = -pruned_negamax(depth - 1 - reduction, tt, history, killers, ply + 1, true, -alpha-1, -alpha); // do null-window search
+
+                if (score > alpha) { // if beats alpha do full-window
+                    score = -pruned_negamax(depth - 1, tt, history, killers, ply + 1, true, -beta, -alpha);
+                }
             }
 
             if (score > best_score) {
@@ -294,9 +294,6 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
                     killers[ply][0] = m;
                 }
 
-                Piece piece = (Piece)piece_at[move_from(m)];
-                int to = move_to(m);
-
                 history[piece][to] += depth * depth;
 
                 if (history[piece][to] > MAX_HISTORY_SCORE) {
@@ -304,6 +301,8 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
                 }
             }
 
+            cutoff_index_count++;
+            cutoff_index_sum += i;
             beta_cutoffs++;
 
             break;
