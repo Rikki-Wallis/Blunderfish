@@ -158,6 +158,12 @@ struct Position {
 
     uint64_t zobrist;
 
+    // benchmarking statistics
+    int node_count;
+    int qnode_count;
+    int beta_cutoffs;
+    int null_prunes; 
+
     std::array<Undo, MAX_DEPTH> undo_stack;
     int undo_count;
 
@@ -168,6 +174,7 @@ struct Position {
         memset(piece_at, 0, sizeof(piece_at));
         memset(undo_stack.data(), 0, sizeof(MAX_DEPTH * sizeof(Undo)));
         zobrist = compute_zobrist();
+        reset_benchmarking_statistics();
     }
 
     Position(Position&&) = default;
@@ -206,7 +213,6 @@ struct Position {
     void eval_remove_piece(Piece piece, int sq, int side);
     void eval_add_piece(Piece piece, int sq, int side);
 
-    int64_t negamax(int depth, int ply);
     int64_t pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta);
     int64_t quiescence(int ply, int64_t alpha, int64_t beta);
 
@@ -222,6 +228,8 @@ struct Position {
     void update_en_passant_sq(int sq);
 
     int64_t total_non_pawn_value() const; // used for null move reduction heuristic
+
+    void reset_benchmarking_statistics();
 };
 
 int get_captured_square(Move move);

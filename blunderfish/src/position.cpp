@@ -292,3 +292,10 @@ int64_t Position::total_non_pawn_value() const {
 
     return value;
 }
+
+void Position::reset_benchmarking_statistics() {
+    node_count = 0;
+    qnode_count = 0;
+    beta_cutoffs = 0;
+    null_prunes = 0;
+}

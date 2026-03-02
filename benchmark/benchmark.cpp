@@ -1,27 +1,8 @@
 #include <iostream>
 #include <chrono>
+#include <cmath>
 
 #include "blunderfish.h"
-
-template <typename Func>
-static void run_and_report(int runs, const std::string& title, Func&& func) {
-    double sum = 0.0;
-
-    for (int i = 0; i < runs; ++i) {
-        auto start = std::chrono::high_resolution_clock::now();
-        std::forward<Func>(func)(); 
-        auto end = std::chrono::high_resolution_clock::now();
-
-        auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-
-        double ms = (double)duration.count()/1000000.0;
-        sum += ms;
-    }
-
-    double avg = sum/(double)runs;
-
-    print("{}: {}ms\n", title, avg);
-}
 
 /*
 template <typename Func>
@@ -63,20 +44,37 @@ static void benchmark_perft() {
 */
 
 template<typename Func>
-static void benchmark_pos_method(const std::string& name, int max_depth, Func&& func) {
-    for (int depth = 1; depth <= max_depth; ++depth) {
-        run_and_report(1, std::format("{} Depth {}", name, depth), [&](){
-            Position pos = *Position::decode_fen_string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-            std::array<Move, 256> move_buf;
-            std::span<Move> moves = pos.generate_moves(move_buf);
-            pos.filter_moves(moves);
-            std::forward<Func>(func)(pos, depth);
-        });
+static void benchmark_pos_method(const std::string& name, int start_depth, int max_depth, Func&& func)
+{
+    for (int depth = start_depth; depth <= max_depth; ++depth) {
+        auto start = std::chrono::high_resolution_clock::now();
+
+        Position pos = *Position::decode_fen_string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+
+        pos.reset_benchmarking_statistics();
+        std::forward<Func>(func)(pos, depth);
+
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+
+        double ms = (double)duration.count()/1000000.0;
+        double nps = (double)pos.node_count/(ms/1000.0);
+        double ebf = pow((double)pos.node_count, 1.0/(double)depth);
+
+        print("{} (depth={}):\n", name, depth);
+        print("  time: {}ms\n", ms);
+        print("  nodes: {}\n", pos.node_count);
+        print("  qnodes: {}\n", pos.qnode_count);
+        print("  beta_cutoffs: {}\n", pos.beta_cutoffs);
+        print("  null-prunes: {}\n", pos.null_prunes);
+        print("  NPS: {:.2}\n", nps);
+        print("  EBF: {:.2}\n", ebf);
+        print("\n");
     }
 }
 
 static void benchmark_best_move() {
-    benchmark_pos_method("Best-move", 14, [](Position& pos, int depth){
+    benchmark_pos_method("Best-move", 7, 14, [](Position& pos, int depth){
         std::array<Move, 256> move_buf;
         std::span<Move> moves = pos.generate_moves(move_buf);
         pos.filter_moves(moves);
@@ -84,14 +82,8 @@ static void benchmark_best_move() {
     });
 }
 
-static void benchmark_raw_negamax() {
-    benchmark_pos_method("Raw Negamax", 5, [](Position& pos, int depth){
-        pos.negamax(depth, 1);
-    });
-}
-
 static void benchmark_pruned_negamax() {
-    benchmark_pos_method("Pruned Negamax", 12, [](Position& pos, int depth){
+    benchmark_pos_method("Pruned Negamax", 7, 12, [](Position& pos, int depth){
         KillerTable killers{};
         HistoryTable history{};
         TranspositionTable tt;
@@ -102,7 +94,6 @@ static void benchmark_pruned_negamax() {
 int main() {
     //benchmark_perft();
     benchmark_best_move();
-    benchmark_raw_negamax();
     benchmark_pruned_negamax();
     return 0;
 }

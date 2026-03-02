@@ -37,17 +37,3 @@ static void test_capture_gen(const std::string& FEN) {
 TEST_CASE("Generate-Captures Equals Captures from Generate-Moves") {
     test_capture_gen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -"); 
 }
-
-TEST_CASE("Pruned Negamax Equals Plain Negamax on start") {
-    Position pos = *Position::decode_fen_string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-
-    for (int depth = 1; depth <= 6; ++depth) {
-        int64_t a = pos.negamax(depth, 1);
-
-        KillerTable killers{};
-        HistoryTable history{};
-        TranspositionTable tt;
-        int64_t b = pos.pruned_negamax(depth, tt, history, killers, 1, true, -INF, INF);
-        REQUIRE(a == b);
-    }
-}

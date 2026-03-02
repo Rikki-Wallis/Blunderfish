@@ -133,7 +133,7 @@ static TTEntry& find_entry(TranspositionTable& tt, uint64_t zobrist) {
 }
 
 int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta) {
-    (void)allow_null;
+    node_count++;
 
     if (depth == 0) {
         //return eval();
@@ -176,6 +176,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
             }
 
             if (alpha >= beta) {
+                beta_cutoffs++;
                 return entry_score;
             }
         }
@@ -208,6 +209,8 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
             TTEntry& target = find_entry(tt, zobrist);
             bool changed = update_tt_entry(target, zobrist, depth, beta, ply, alpha_original, beta_original, NULL_MOVE);
             if (changed) { target.flag = TT_SCORE_LOWER; }
+            beta_cutoffs++;
+            null_prunes++;
             return beta;
         }
     }
@@ -301,6 +304,8 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
                 }
             }
 
+            beta_cutoffs++;
+
             break;
         } 
     }
@@ -321,6 +326,9 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
 }
 
 int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
+    node_count++;
+    qnode_count++;
+
     int side = to_move;
     bool currently_checked = is_in_check(side);
 
@@ -333,6 +341,7 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
         alpha = std::max(stand_pat, alpha);
 
         if (alpha >= beta) {
+            beta_cutoffs++;
             return stand_pat;
         }
     }
@@ -378,50 +387,13 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
         unmake_move(mv);
 
         if (cutoff) {
+            beta_cutoffs++;
             return best_score;
         }
     }
 
     if (currently_checked && !legal_found) {
         return -MATE_SCORE + ply; // checkmate
-    }
-
-    return best_score;
-}
-
-int64_t Position::negamax(int depth, int ply) {
-    if (depth == 0) {
-        return quiescence(ply, -INF, INF);
-    }
-
-    int my_side = to_move;
-
-    std::array<Move, 256> move_buf;
-    std::span<Move> moves = generate_moves(move_buf);
-
-    bool legal_found = false;
-
-    int64_t best_score = -MATE_SCORE;
-
-    for (Move m : moves) {
-        make_move(m);
-
-        if (!is_in_check(my_side)) {
-            legal_found = true;
-            int64_t score = -negamax(depth - 1, ply + 1);
-            best_score = std::max(score, best_score);
-        }
-
-        unmake_move(m);
-    }
-
-    if (!legal_found) {
-        if (is_in_check(my_side)) {
-            return -MATE_SCORE + ply; // checkmate
-        }
-        else {
-            return 0; // stalemate
-        }
     }
 
     return best_score;
@@ -453,6 +425,7 @@ std::pair<Move, int64_t> Position::best_move_internal(std::span<Move> moves, int
         alpha = std::max(alpha, score);
 
         if (alpha >= beta) {
+            beta_cutoffs++;
             break;
         }
     }
