@@ -569,6 +569,8 @@ bool Position::is_capture(Move mv) const {
 }
 
 void Position::make_move(Move move) {
+    // Update eval
+    increment_eval(move);
     uint64_t initial_zobrist = zobrist;
 
     // First, check for a capture and remove the piece
@@ -586,7 +588,8 @@ void Position::make_move(Move move) {
         .captured_piece = (uint8_t)captured_piece,
         .flags = flags,
         .en_passant_sq = en_passant_sq,
-        .zobrist = initial_zobrist
+        .zobrist = initial_zobrist,
+        .incremental_eval = incremental_eval
     };
 
     assert(undo_count < MAX_DEPTH);
@@ -715,7 +718,6 @@ void Position::unmake_move(Move move) {
     piece_at[move_from(move)] = static_cast<uint8_t>(start_piece);
 
     // replace the captured piece
-
     int captured_square = get_captured_square(move);
     uint64_t captured_mask = bool_to_mask<uint64_t>(undo.captured_piece != PIECE_NONE) & sq_to_bb(captured_square);
     sides[opponent(to_move)].bb[undo.captured_piece] ^= captured_mask;
@@ -724,6 +726,7 @@ void Position::unmake_move(Move move) {
     flags = undo.flags;
     en_passant_sq = undo.en_passant_sq;
     zobrist = undo.zobrist;
+    incremental_eval = undo.incremental_eval;
 }
 
 void Position::make_null_move() {
@@ -732,7 +735,8 @@ void Position::make_null_move() {
         .captured_piece = PIECE_NONE,
         .flags = flags,
         .en_passant_sq = en_passant_sq,
-        .zobrist = zobrist
+        .zobrist = zobrist,
+        .incremental_eval = incremental_eval
     };
 
     update_en_passant_sq(NULL_SQUARE);
@@ -751,4 +755,5 @@ void Position::unmake_null_move(){
     flags = undo.flags;
     en_passant_sq = undo.en_passant_sq;
     zobrist = undo.zobrist;
+    incremental_eval = undo.incremental_eval;
 }

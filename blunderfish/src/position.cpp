@@ -239,7 +239,8 @@ std::optional<Position> Position::decode_fen_string(const std::string& fen) {
     }
 
     pos.zobrist = pos.compute_zobrist();
-    
+    pos.incremental_eval = pos.eval();
+
     return pos;
 }
 

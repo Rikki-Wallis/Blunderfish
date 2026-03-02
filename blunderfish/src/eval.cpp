@@ -80,7 +80,7 @@ static const int ROOK_PST[64] = {
 };
 
 static const int QUEEN_PST[64] = {
-    -20,-10,-10, -5, -5,-10,-10,-20
+    -20,-10,-10, -5, -5,-10,-10,-20,
     -10,  0,  5,  0,  0,  0,  0,-10,
     -10,  5,  5,  5,  5,  5,  0,-10,
       0,  0,  5,  5,  5,  5,  0, -5,
@@ -126,7 +126,62 @@ int64_t Position::eval() const {
         }
     }
 
-    int64_t sign = to_move == WHITE ? 1 : -1;
+    //int64_t sign = to_move == WHITE ? 1 : -1;
 
-    return value * sign;
+    return value;
+}
+
+void Position::increment_eval(Move& move) {
+    // Define useful vars
+    int opp_colour = opponent(move);
+    int ally_colour = to_move;
+    int from = move_from(move);
+    int to = move_to(move);
+    uint8_t moved_piece = piece_at[from];
+    int from_pst_sq = move_side(move) == WHITE ? from : from ^ 56;
+    int to_pst_sq   = move_side(move) == WHITE ? to : to ^ 56;
+
+    // Remove material and update PST if capture has occured
+    if (is_capture(move)) {
+        int capture_sq = get_captured_square(move);
+        Piece captured_piece = static_cast<Piece>(piece_at[capture_sq]);
+        // White is - as we would be removing a white piece from the board
+        int32_t captured_value = opp_colour == WHITE ? -piece_value_centipawns(captured_piece) : piece_value_centipawns(captured_piece);
+
+        // Modify evaluation of material
+        incremental_eval += captured_value;
+        // Modify evaluation of PST table
+        int pst_sq = ally_colour == WHITE ? capture_sq : capture_sq ^ 56;
+        incremental_eval -= PST[captured_piece][pst_sq];
+    }
+
+    // DONT UNDERSTAND WHY THIS IMPROVED THE TESTS BUT IT DID
+    if (ally_colour == WHITE) {
+        std::printf("fired WHITE\n");
+        // Remove moved piece from square from PST
+        incremental_eval -= PST[moved_piece][from_pst_sq];
+        // Add moved piece to square to PST
+        incremental_eval += PST[move_end_piece(move)][to_pst_sq];
+    } else {
+        std::printf("fired BLACK\n");
+        // Remove moved piece from square from PST
+        incremental_eval += PST[moved_piece][from_pst_sq];
+        // Add moved piece to square to PST
+        incremental_eval -= PST[move_end_piece(move)][to_pst_sq];
+    }
+
+    // 2. update piece square tables (handle, ep, castling, promotions)
+    if (move_type(move) & MOVE_SHORT_CASTLE) {
+        int rook_old_pos = 7; 
+        int rook_new_pos = 5;
+
+        incremental_eval -= PST[PIECE_ROOK][rook_old_pos];
+        incremental_eval += PST[PIECE_ROOK][rook_new_pos];
+
+    } else if (move_type(move) & MOVE_LONG_CASTLE) {
+        int rook_old_pos = 0;
+        int rook_new_pos = 3;
+        incremental_eval -= PST[PIECE_ROOK][rook_old_pos];
+        incremental_eval += PST[PIECE_ROOK][rook_new_pos];
+    }
 }

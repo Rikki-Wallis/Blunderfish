@@ -105,6 +105,7 @@ struct Undo {
     uint32_t flags;
     int en_passant_sq;
     uint64_t zobrist;
+    int64_t incremental_eval;
 };
 
 struct TTEntry {
@@ -153,6 +154,7 @@ struct Position {
     int en_passant_sq;
     uint8_t piece_at[64];
     uint32_t flags;
+    int64_t incremental_eval;
 
     uint64_t zobrist;
 
@@ -198,6 +200,7 @@ struct Position {
     void verify_integrity() const;
 
     int64_t eval() const;
+    void increment_eval(Move& move);
     int64_t negamax(int depth, int ply);
     int64_t pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta);
     int64_t quiescence(int ply, int64_t alpha, int64_t beta);

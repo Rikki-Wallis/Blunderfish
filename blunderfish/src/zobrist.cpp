@@ -50,14 +50,14 @@ constexpr ZobristTable initialize_zobrist_table() {
     // Set random numbers for position flags
 
     for (int i = 0; i < 8; ++i) { // all singular bits
-        table.flags[1 << i] = rand64(&rng);
+        table.flags[static_cast<uint64_t>(1) << i] = rand64(&rng);
     }
 
     for (size_t i = 0; i < std::size(table.flags); ++i) { // all combinations of singular bits
         uint64_t x = 0;
 
         for (int b : set_bits((uint64_t)i)) {
-            x ^= table.flags[1 << b];
+            x ^= table.flags[static_cast<uint64_t>(1) << b];
         }
 
         table.flags[i] = x;
