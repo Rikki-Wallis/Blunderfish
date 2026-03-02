@@ -1,8 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include "blunderfish.h"
 
-void eval_search(int depth, Position& position, Move prev_move) {
-    (void)prev_move;
+void eval_search(int depth, Position& position) {
     int64_t new_eval = position.compute_eval();
 
     if (new_eval != position.incremental_eval) {
@@ -24,21 +23,31 @@ void eval_search(int depth, Position& position, Move prev_move) {
             position.verify_integrity();
 
             if (!position.is_in_check(my_side)) {
-                eval_search(depth-1, position, move);
+                eval_search(depth-1, position);
             }
             
             position.unmake_move(move);
             position.verify_integrity();
+        }
+
+        if (!position.is_in_check(my_side)) {
+            position.make_null_move();
+
+            if (!position.is_in_check(my_side)) {
+                eval_search(depth-1, position);
+            }
+
+            position.unmake_null_move();
         }
     }
 }
 
 TEST_CASE("Eval - increment_eval equals eval | STARTING POSITION") {
     Position pos = *Position::decode_fen_string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-    eval_search(5, pos, NULL_MOVE);
+    eval_search(5, pos);
 }
 
 TEST_CASE("Eval - increment_eval equals eval | KIWIPETE_POSITION") {
     Position pos = *Position::decode_fen_string("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -");
-    eval_search(5, pos, NULL_MOVE);
+    eval_search(5, pos);
 }
