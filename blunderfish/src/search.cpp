@@ -136,7 +136,6 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     node_count++;
 
     if (depth == 0) {
-        //return eval();
         return quiescence(ply, alpha, beta);
     }
 
@@ -184,8 +183,29 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
         tt_move = match.best_move;
     }
 
+    // we didn't find a TT move; search at a lower depth to try and populate a best move
+    if (tt_move == NULL_MOVE && depth >= 4) {
+        pruned_negamax(depth-2, tt, history, killers, ply, true, alpha, beta);
+
+        TTEntry& e = find_entry(tt, zobrist);
+        if (e.key == zobrist) {
+            tt_move = e.best_move;
+        }
+    }
+
     int64_t best_score = -MATE_SCORE;
     bool currently_checked = is_in_check(my_side);
+
+    // Reverse futility pruning - 
+
+    if (depth <= 3 && !currently_checked && std::abs(beta) < MATE_SCORE - 1000) { // we disable this if we are mating or we are being mated
+        int64_t margin = 120 * depth;
+        int64_t ev = signed_eval();
+        if (ev - margin >= beta) {
+            beta_cutoffs++;
+            return ev - margin; 
+        }
+    }
 
     // Null move pruning
     // if we give the opponent a free move and alpha >= beta, our position is too good, so prune
@@ -238,15 +258,11 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
 
         int reduction = 0;
 
-        if (depth >= 3 &&
-            quiet &&
-            !currently_checked &&
-            i >= 3) {
-
-            reduction = 1;
-
-            if (depth >= 6 && i >= 6)
-                reduction = 2;
+        if (depth >= 3 && quiet && !currently_checked && i >= 3) {
+            // reduction = 0.5 + log(depth) * log(index) / 2.0
+            reduction = 1 + (depth / 3) + (i / 8); 
+            // Don't reduce so much that we hit the leaf (depth 0) immediately
+            if (reduction >= depth) reduction = depth - 1;
         }
 
         if (futility_prune && quiet) {
@@ -443,7 +459,7 @@ Move Position::best_move(std::span<Move> _moves, int depth) {
     std::vector<Move> moves(_moves.begin(), _moves.end());
 
     for (int i = 1; i <= depth; ++i) {
-        int64_t window = 50; // start the window small
+        int64_t window = 30; // start the window small
 
         int64_t alpha = best_score - window;
         int64_t beta  = best_score + window;
