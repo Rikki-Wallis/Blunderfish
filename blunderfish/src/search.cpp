@@ -410,6 +410,16 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
             beta_cutoffs++;
             return stand_pat;
         }
+
+        uint64_t promotion_rank = side == WHITE ? RANK_7 : RANK_2;
+        uint64_t pawns = sides[side].bb[PIECE_PAWN];
+        
+        bool can_delta_prune = (pawns & promotion_rank) == 0;
+
+        int BIG_DELTA = 1100;
+        if (can_delta_prune && (stand_pat < alpha - BIG_DELTA)) { // even a queen capture can't save us
+            return alpha;
+        }
     }
 
     std::array<Move, 256> move_buf;
