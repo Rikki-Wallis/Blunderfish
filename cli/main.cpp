@@ -58,7 +58,7 @@ static int play_main() {
             pos.make_move(m);
         }
         else {
-            Move best = pos.best_move(moves, 12);
+            Move best = pos.best_move(moves, 14);
             assert(best != NULL_MOVE);
 
             for (auto& [name, mv] : names) {
@@ -148,7 +148,7 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        int depth = 10;
+        int depth = 14;
 
         if (argc >= 4) {
             depth = atoi(argv[3]);
