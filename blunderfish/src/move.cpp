@@ -158,6 +158,45 @@ bool Position::is_king_square_attacked(int side, int square) const {
     return false;
 }
 
+Piece Position::lowest_value_defender(int side, int square, int attacker_sq) const {
+    int opp = opponent(side);
+
+    uint64_t allies = sides[side].all();
+    uint64_t all = all_pieces() & (~sq_to_bb(attacker_sq));
+
+    uint64_t diag_mask = bishop_moves(square, all, allies);
+    uint64_t straight_mask = rook_moves(square, all, allies);
+    uint64_t knight_mask = knight_moves(square, allies);
+    uint64_t pawn_mask = side == WHITE ? white_pawn_attacks_table[square] : black_pawn_attacks_table[square];
+    uint64_t king_mask = king_moves(square, allies);
+
+    if (pawn_mask & sides[opp].bb[PIECE_PAWN]) {
+        return PIECE_PAWN;
+    }
+
+    if (knight_mask & sides[opp].bb[PIECE_KNIGHT]) {
+        return PIECE_KNIGHT;
+    }
+
+    if (diag_mask & sides[opp].bb[PIECE_BISHOP]) {
+        return PIECE_BISHOP;
+    }
+
+    if (straight_mask & sides[opp].bb[PIECE_ROOK]) {
+        return PIECE_ROOK;
+    }
+
+    if ((straight_mask | diag_mask) & sides[opp].bb[PIECE_QUEEN]) {
+        return PIECE_QUEEN;
+    }
+
+    if (king_mask & sides[opp].bb[PIECE_KING]) {
+        return PIECE_KING;
+    }
+
+    return PIECE_NONE;
+}
+
 bool Position::is_in_check(int colour) const {
     assert(std::popcount(sides[colour].bb[PIECE_KING]) == 1);
     int square = std::countr_zero(sides[colour].bb[PIECE_KING]);

@@ -1,4 +1,5 @@
 #include <array>
+#include <cmath>
 
 #include "blunderfish.h"
 
@@ -11,6 +12,23 @@ constexpr int32_t KILLER_1_SCORE    = 70000;
 constexpr int32_t KILLER_2_SCORE    = 60000;
 
 constexpr uint64_t TT_MASK = TRANSPOSITION_TABLE_SIZE - 1;
+
+using LMRTable = std::array<std::array<int, 64>,64>;
+
+constexpr LMRTable generate_lmr_table() {
+    LMRTable table;
+
+    for (int d = 1; d < 64; d++) {
+        for (int i = 1; i < 64; i++) {
+            // Standard logarithmic reduction table
+            table[d][i] = int(0.5 + std::log(d) * std::log(i) / 2.0);
+        }
+    }
+
+    return table;
+}
+
+static const LMRTable lmr_table = generate_lmr_table();
 
 enum TTScoreFlag {
     TT_SCORE_EXACT,
@@ -256,11 +274,23 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
         bool cutoff = false;
         bool quiet = !is_capture(m);
 
+        // Late move pruning
+
+        if (depth <= 4 && !currently_checked && quiet) {
+            if (i > (3 + 2 * depth * depth)) { 
+                continue; 
+            }
+        }
+
         int reduction = 0;
 
         if (depth >= 3 && quiet && !currently_checked && i >= 3) {
-            // reduction = 0.5 + log(depth) * log(index) / 2.0
-            reduction = 1 + (depth / 3) + (i / 8); 
+            int idx = i;
+            if (idx > 63) {
+                idx = 63;
+            }
+            reduction = (int)lmr_table[depth][idx];
+            //reduction = 1 + (depth / 3) + (i / 8); 
             // Don't reduce so much that we hit the leaf (depth 0) immediately
             if (reduction >= depth) reduction = depth - 1;
         }
@@ -340,6 +370,27 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     return best_score;
 }
 
+// simple SEE
+static bool is_bad_capture(Position& pos, Move m, int my_side) {
+    Piece captured = (Piece)pos.piece_at[get_captured_square(m)];
+    Piece attacker = (Piece)pos.piece_at[move_from(m)];
+
+    // If we are capturing a bigger or equal piece with a smaller one, it's always good.
+    if (piece_value_centipawns(attacker) <= piece_value_centipawns(captured)) {
+        return false;
+    }
+
+    // If we are capturing a same-sized or bigger piece, check if it's defended.
+    // If it's defended by a piece, bad trade
+    Piece defender = pos.lowest_value_defender(opponent(my_side), get_captured_square(m), move_from(m));
+
+    if (defender != PIECE_NONE) {
+        return true;
+    }
+
+    return false;
+}
+
 int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
     node_count++;
     qnode_count++;
@@ -376,6 +427,10 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
 
     for (int i = 0; i < (int)moves.size(); ++i) {
         Move mv = select_best(moves, move_scores, i);
+
+        if (!currently_checked && is_bad_capture(*this, mv, side)) {
+            continue;
+        }
 
         bool cutoff = false;
 

@@ -204,6 +204,8 @@ struct Position {
     bool is_in_check(int colour) const;
     bool is_king_square_attacked(int side, int square) const;
 
+    Piece lowest_value_defender(int side, int sq, int attacker_sq) const;
+
     void filter_moves(std::span<Move>& moves);
 
     void verify_integrity() const;
