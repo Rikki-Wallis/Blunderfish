@@ -101,8 +101,10 @@ static const int KING_PST[64] = {
     -30,-40,-40,-50,-50,-40,-40,-30,
 };
 
+static const int ZEROED_PST[64] = {};
+
 static const int* PST[NUM_PIECE_TYPES] = {
-    nullptr,
+    ZEROED_PST,
     PAWN_PST,
     ROOK_PST,
     KNIGHT_PST,
@@ -111,77 +113,41 @@ static const int* PST[NUM_PIECE_TYPES] = {
     KING_PST,
 };
 
-int64_t Position::eval() const {
+int32_t unsigned_pst_value(Piece piece, int square, int side) {
+    return PST[piece][square ^ (bool_to_mask<int>(side==BLACK) & 56)];
+}
+
+int64_t Position::compute_eval() const {
     int64_t value = sides[WHITE].material_value() - sides[BLACK].material_value();
 
     for (int p = PIECE_PAWN; p < NUM_PIECE_TYPES; ++p) {
         for (int sq : set_bits(sides[WHITE].bb[p])) {
-            value += PST[p][sq];
+            value += unsigned_pst_value((Piece)p, sq, WHITE);
         }
     }
 
     for (int p = PIECE_PAWN; p < NUM_PIECE_TYPES; ++p) {
         for (int sq : set_bits(sides[BLACK].bb[p])) {
-            value -= PST[p][sq^56];
+            value -= unsigned_pst_value((Piece)p, sq, BLACK);
         }
     }
-
-    //int64_t sign = to_move == WHITE ? 1 : -1;
 
     return value;
 }
 
-void Position::increment_eval(Move& move) {
-    // Define useful vars
-    int opp_colour = opponent(move);
-    int ally_colour = to_move;
-    int from = move_from(move);
-    int to = move_to(move);
-    uint8_t moved_piece = piece_at[from];
-    int from_pst_sq = move_side(move) == WHITE ? from : from ^ 56;
-    int to_pst_sq   = move_side(move) == WHITE ? to : to ^ 56;
+int64_t Position::signed_eval() const {
+    int64_t sign = to_move == WHITE ? 1 : -1;
+    return incremental_eval * sign;
+}
+ 
+void Position::eval_remove_piece(Piece piece, int sq, int side) {
+    int32_t sign = side == BLACK ? -1 : 1;
+    incremental_eval -= sign * unsigned_pst_value(piece, sq, side);
+    incremental_eval -= sign * piece_value_centipawns(piece);
+}
 
-    // Remove material and update PST if capture has occured
-    if (is_capture(move)) {
-        int capture_sq = get_captured_square(move);
-        Piece captured_piece = static_cast<Piece>(piece_at[capture_sq]);
-        // White is - as we would be removing a white piece from the board
-        int32_t captured_value = opp_colour == WHITE ? -piece_value_centipawns(captured_piece) : piece_value_centipawns(captured_piece);
-
-        // Modify evaluation of material
-        incremental_eval += captured_value;
-        // Modify evaluation of PST table
-        int pst_sq = ally_colour == WHITE ? capture_sq : capture_sq ^ 56;
-        incremental_eval -= PST[captured_piece][pst_sq];
-    }
-
-    // DONT UNDERSTAND WHY THIS IMPROVED THE TESTS BUT IT DID
-    if (ally_colour == WHITE) {
-        std::printf("fired WHITE\n");
-        // Remove moved piece from square from PST
-        incremental_eval -= PST[moved_piece][from_pst_sq];
-        // Add moved piece to square to PST
-        incremental_eval += PST[move_end_piece(move)][to_pst_sq];
-    } else {
-        std::printf("fired BLACK\n");
-        // Remove moved piece from square from PST
-        incremental_eval += PST[moved_piece][from_pst_sq];
-        // Add moved piece to square to PST
-        incremental_eval -= PST[move_end_piece(move)][to_pst_sq];
-    }
-
-    // 2. update piece square tables (handle, ep, castling, promotions)
-    if (move_type(move) & MOVE_SHORT_CASTLE) {
-        int rook_old_pos = 7; 
-        int rook_new_pos = 5;
-
-        incremental_eval -= PST[PIECE_ROOK][rook_old_pos];
-        incremental_eval += PST[PIECE_ROOK][rook_new_pos];
-
-    } else if (move_type(move) & MOVE_LONG_CASTLE) {
-        int rook_old_pos = 0;
-        int rook_new_pos = 3;
-        incremental_eval -= PST[PIECE_ROOK][rook_old_pos];
-        incremental_eval += PST[PIECE_ROOK][rook_new_pos];
-    }
+void Position::eval_add_piece(Piece piece, int sq, int side) {
+    int32_t sign = side == BLACK ? -1 : 1;
+    incremental_eval += sign * unsigned_pst_value(piece, sq, side);
+    incremental_eval += sign * piece_value_centipawns(piece);
 }

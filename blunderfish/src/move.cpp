@@ -16,11 +16,7 @@ static constexpr std::array<std::array<uint32_t, 64>, 2> gen_rook_castle_flag_ta
 }
 
 static constexpr std::array<int, 64> gen_rook_jump_from_table() {
-    std::array<int, 64> table;
-
-    for (int i = 0; i < 64; ++i) {
-        table[i] = i;
-    }
+    std::array<int, 64> table{};
 
     table[6]  = 7;
     table[2]  = 0;
@@ -31,11 +27,7 @@ static constexpr std::array<int, 64> gen_rook_jump_from_table() {
 }
 
 static std::array<int, 64> gen_rook_jump_to_table() {
-    std::array<int, 64> table;
-
-    for (int i = 0; i < 64; ++i) {
-        table[i] = i;
-    }
+    std::array<int, 64> table{};
 
     table[6]  = 5;
     table[2]  = 3;
@@ -164,11 +156,6 @@ bool Position::is_king_square_attacked(int side, int square) const {
     }
 
     return false;
-}
-
-template<typename T>
-static T bool_to_mask(bool x) {
-    return static_cast<T>(-static_cast<int>(x));
 }
 
 bool Position::is_in_check(int colour) const {
@@ -570,7 +557,7 @@ bool Position::is_capture(Move mv) const {
 
 void Position::make_move(Move move) {
     // Update eval
-    increment_eval(move);
+    int64_t initial_eval = incremental_eval;
     uint64_t initial_zobrist = zobrist;
 
     // First, check for a capture and remove the piece
@@ -589,7 +576,7 @@ void Position::make_move(Move move) {
         .flags = flags,
         .en_passant_sq = en_passant_sq,
         .zobrist = initial_zobrist,
-        .incremental_eval = incremental_eval
+        .incremental_eval = initial_eval
     };
 
     assert(undo_count < MAX_DEPTH);
@@ -599,6 +586,7 @@ void Position::make_move(Move move) {
     uint64_t capture_mask = bool_to_mask<uint64_t>(captured_piece != PIECE_NONE) & sq_to_bb(captured_pos);
     sides[opponent(to_move)].bb[captured_piece] ^= capture_mask;
     piece_at[captured_pos] = PIECE_NONE; // if no captured piece, this is okay because it will be updated with the moving piece
+    eval_remove_piece(captured_piece, captured_pos, opponent(to_move)); // can call this function on empty square
 
     // move the piece
     Piece start_piece = (Piece)piece_at[move_from(move)];
@@ -618,6 +606,9 @@ void Position::make_move(Move move) {
 
     piece_at[move_from(move)] = PIECE_NONE;
     piece_at[move_to(move)] = static_cast<uint8_t>(end_piece);
+
+    eval_remove_piece(start_piece, move_from(move), to_move);
+    eval_add_piece(end_piece, move_to(move), to_move);
 
     // Update castling rights when a rook or a king is moved, or a rook is taken
 
@@ -652,24 +643,23 @@ void Position::make_move(Move move) {
     // move the rook when a castle is performed
     bool is_castle = move_type(move) == MOVE_SHORT_CASTLE || move_type(move) == MOVE_LONG_CASTLE;
 
-    uint8_t  castle_mask_u8  = bool_to_mask<uint8_t>(is_castle);
-    uint64_t castle_mask_u64 = bool_to_mask<uint64_t>(is_castle);
-
     int rook_from = rook_jump_from[move_to(move)];
-    int rook_to   = rook_jump_to  [move_to(move)];
+    int rook_to   = is_castle ? rook_jump_to[move_to(move)] : rook_from;
 
     uint64_t rook_from_mask = sq_to_bb(rook_from);
     uint64_t rook_to_mask   = sq_to_bb(rook_to);
-    uint64_t rook_jump_mask = castle_mask_u64 & (rook_from_mask ^ rook_to_mask);
-
-    sides[to_move].bb[PIECE_ROOK] ^= rook_jump_mask;
+    sides[to_move].bb[PIECE_ROOK] ^= rook_from_mask ^ rook_to_mask;
     
-    piece_at[rook_from] = (~castle_mask_u8 & piece_at[rook_from]) | (castle_mask_u8 & PIECE_NONE);
-    piece_at[rook_to]   = (~castle_mask_u8 & piece_at[rook_to]  ) | (castle_mask_u8 & PIECE_ROOK);
+    std::swap(piece_at[rook_from], piece_at[rook_to]); // if not castle, it swaps the same position, so no change
+
+    if (is_castle) { // TODO: find a way to remove this branch - its probably fast anyway
+        eval_remove_piece(PIECE_ROOK, rook_from, to_move);
+        eval_add_piece(PIECE_ROOK, rook_to, to_move);
+    }
 
 #ifdef ZOBRIST_INCLUDE_FLAGS
-    zobrist ^= castle_mask_u64 & zobrist_table.piece[to_move][PIECE_ROOK][rook_from];
-    zobrist ^= castle_mask_u64 & zobrist_table.piece[to_move][PIECE_ROOK][rook_to];
+    zobrist ^= zobrist_table.piece[to_move][PIECE_ROOK][rook_from];
+    zobrist ^= zobrist_table.piece[to_move][PIECE_ROOK][rook_to]; // if not castle, same square so net zero change
 #endif
 
     // update to_move
@@ -689,19 +679,16 @@ void Position::unmake_move(Move move) {
 
     // move the rook if a castle has to be undone
 
+    bool is_castle = move_type(move) == MOVE_SHORT_CASTLE || move_type(move) == MOVE_LONG_CASTLE;
+
     int rook_from = rook_jump_from[move_to(move)];
-    int rook_to   = rook_jump_to  [move_to(move)];
+    int rook_to   = is_castle ? rook_jump_to[move_to(move)] : rook_from;
 
     uint64_t rook_from_mask = sq_to_bb(rook_from);
     uint64_t rook_to_mask   = sq_to_bb(rook_to);
-    uint64_t rook_jump_mask = bool_to_mask<uint64_t>(move_type(move) == MOVE_SHORT_CASTLE || move_type(move) == MOVE_LONG_CASTLE) & (rook_from_mask ^ rook_to_mask);
-
-    sides[to_move].bb[PIECE_ROOK] ^= rook_jump_mask;
-
-    uint8_t castle_mask = bool_to_mask<uint8_t>(move_type(move) == MOVE_SHORT_CASTLE || move_type(move) == MOVE_LONG_CASTLE);
+    sides[to_move].bb[PIECE_ROOK] ^= rook_from_mask ^ rook_to_mask;
     
-    piece_at[rook_to]   = (~castle_mask & piece_at[rook_to]  ) | (castle_mask & PIECE_NONE);
-    piece_at[rook_from] = (~castle_mask & piece_at[rook_from]) | (castle_mask & PIECE_ROOK);
+    std::swap(piece_at[rook_from], piece_at[rook_to]);
 
     // move the piece
 

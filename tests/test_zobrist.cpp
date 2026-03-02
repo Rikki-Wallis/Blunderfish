@@ -2,12 +2,9 @@
 #include "blunderfish.h"
 #include <array>
 
-
 void zobrist_search(int depth, Position& position) {
     uint64_t incremental_hash = position.zobrist;
     uint64_t new_hash = position.compute_zobrist();
-
-    print("{}, {}\n", incremental_hash, new_hash);
 
     if (new_hash != incremental_hash) {
         position.display();
@@ -36,13 +33,15 @@ void zobrist_search(int depth, Position& position) {
             position.verify_integrity();
         }
 
-        position.make_null_move();
-
         if (!position.is_in_check(my_side)) {
-            zobrist_search(depth-1, position);
-        }
+            position.make_null_move();
 
-        position.unmake_null_move();
+            if (!position.is_in_check(my_side)) {
+                zobrist_search(depth-1, position);
+            }
+
+            position.unmake_null_move();
+        }
     }
 }
 

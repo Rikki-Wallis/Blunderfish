@@ -199,8 +199,13 @@ struct Position {
 
     void verify_integrity() const;
 
-    int64_t eval() const;
-    void increment_eval(Move& move);
+    int64_t compute_eval() const;
+    int64_t signed_eval() const;
+
+    // @note removing PIECE_NONE is a valid operation
+    void eval_remove_piece(Piece piece, int sq, int side);
+    void eval_add_piece(Piece piece, int sq, int side);
+
     int64_t negamax(int depth, int ply);
     int64_t pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta);
     int64_t quiescence(int ply, int64_t alpha, int64_t beta);
@@ -221,6 +226,7 @@ struct Position {
 
 int get_captured_square(Move move);
 int32_t piece_value_centipawns(Piece piece);
+int32_t unsigned_pst_value(Piece piece, int square, int side);
 
 inline std::pair<char, int> square_alg(size_t sq) {
     char file = sq % 8 + 'a';
@@ -269,4 +275,9 @@ inline Move encode_move(int from, int to, MoveType type, Piece end_piece, int si
     mv     |= ((uint32_t)end_piece) << 15;
     mv     |= ((uint32_t)side & 1) << 18;
     return mv;
+}
+
+template<typename T>
+static T bool_to_mask(bool x) {
+    return static_cast<T>(-static_cast<int>(x));
 }

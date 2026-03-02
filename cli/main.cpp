@@ -83,7 +83,7 @@ static int eval_main(const char* FEN) {
     }
 
     Position pos = std::move(*maybe_pos);
-    int64_t v = pos.eval();
+    int64_t v = pos.compute_eval();
 
     print("{}\n", v);
 

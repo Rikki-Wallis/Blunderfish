@@ -218,7 +218,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     std::array<int32_t, 256> score_buf;
     std::span<int32_t> move_scores = compute_move_scores(this, history, killers, ply, score_buf, moves, tt_move);
 
-    bool futility_prune = depth == 1 && !currently_checked && ((eval() + FUTILITY_MARGIN) < alpha); // if quiet moves couldn't possibly improve the position at the leaves by enough, don't search them
+    bool futility_prune = depth == 1 && !currently_checked && ((signed_eval() + FUTILITY_MARGIN) < alpha); // if quiet moves couldn't possibly improve the position at the leaves by enough, don't search them
 
     bool legal_found = false;
 
@@ -327,7 +327,7 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
     int64_t best_score = -MATE_SCORE;
 
     if (!currently_checked) { // if not checked, we can choose to stay here
-        int64_t stand_pat = eval();
+        int64_t stand_pat = signed_eval();
         best_score = stand_pat;
 
         alpha = std::max(stand_pat, alpha);
