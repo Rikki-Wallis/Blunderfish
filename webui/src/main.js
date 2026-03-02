@@ -2,6 +2,7 @@ import {Chess} from "chess.js"
 
 const game = new Chess();
 let board;
+let playerSide = 'w'; // 'w' or 'b'
 
 function formatMovesList() {
   const movesEl = document.getElementById('moves');
@@ -140,14 +141,14 @@ async function makeMove() {
   }
 }
 
-// Continue the game: if it's Black's turn, query the API; otherwise wait for player
+// Continue the game: if it's the engine's turn, query the API; otherwise wait for player
 async function continueGame() {
   if (game.isGameOver()) return;
-  if (game.turn() === 'w') {
-    // White's turn - wait for player
+  if (game.turn() === playerSide) {
+    // Player's turn - wait for input
     return;
   }
-  // Black's turn - query API and play
+  // Engine's turn - query API and play
   await makeMove();
 }
 
@@ -195,13 +196,15 @@ document.addEventListener('DOMContentLoaded', () => {
         result = '1/2-1/2';
       }
 
+      const whiteName = playerSide === 'w' ? 'Player' : 'Blunderfish';
+      const blackName = playerSide === 'b' ? 'Player' : 'Blunderfish';
       const headers = [
         '[Event "Casual Game"]',
         '[Site "?"]',
         `[Date "${dateStr}"]`,
         '[Round "?"]',
-        '[White "White"]',
-        '[Black "Blunderfish"]',
+        `[White "${whiteName}"]`,
+        `[Black "${blackName}"]`,
         `[Result "${result}"]`,
         ''
       ].join('\n');
@@ -226,8 +229,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // simple control buttons
   const newGameBtn = document.getElementById('new-game');
-  if (newGameBtn) newGameBtn.addEventListener('click', () => { game.reset(); board.setPosition(game.fen()); formatMovesList(); updateStatus(); });
-  // undo button removed from UI
+  if (newGameBtn) newGameBtn.addEventListener('click', () => {
+    game.reset();
+    board.setPosition(game.fen());
+    formatMovesList();
+    updateStatus();
+    updateFen();
+    continueGame();
+  });
+
+  // flip side button
+  const flipSideBtn = document.getElementById('flip-side');
+  if (flipSideBtn) {
+    flipSideBtn.addEventListener('click', () => {
+      playerSide = playerSide === 'w' ? 'b' : 'w';
+      flipSideBtn.textContent = playerSide === 'w' ? 'Play as Black' : 'Play as White';
+      board.setAttribute('orientation', playerSide === 'w' ? 'white' : 'black');
+      game.reset();
+      board.setPosition(game.fen());
+      formatMovesList();
+      updateStatus();
+      updateFen();
+      continueGame();
+    });
+  }
 
   board.addEventListener('drag-start', (e) => {
     const {source, piece, position, orientation} = e.detail;
@@ -238,8 +263,9 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // only pick up pieces for White
-    if (piece.search(/^b/) !== -1) {
+    // only pick up pieces for the player's side
+    const isWhitePiece = piece.search(/^w/) !== -1;
+    if ((playerSide === 'w' && !isWhitePiece) || (playerSide === 'b' && isWhitePiece)) {
       e.preventDefault();
       return;
     }
