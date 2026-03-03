@@ -21,8 +21,8 @@ constexpr LMRTable generate_lmr_table() {
 
     for (int d = 1; d < 64; d++) {
         for (int i = 1; i < 64; i++) {
-            // Standard logarithmic reduction table
-            table[d][i] = int(0.5 + std::log(d) * std::log(i) / 2.0);
+            double base = std::log(d) * std::log(i);
+            table[d][i] = int(base / 1.7 + d / 8.0);
         }
     }
 

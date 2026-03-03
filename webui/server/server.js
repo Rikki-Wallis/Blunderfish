@@ -11,7 +11,7 @@ app.post('/api/bestmove', (req, res) => {
   const fen = req.body.fen
   const depth = Math.min(20, Math.max(6, parseInt(req.body.depth) || 10))
 
-  exec(`../../engine/cli best "${fen}" ${depth}`, (err, stdout, stderr) => {
+  exec(`call ..\\..\\engine\\cli.exe best "${fen}" ${depth}`, (err, stdout, stderr) => {
     if (err) {
       console.error(err)
       return res.status(500).json({ error: 'Engine failed' })
