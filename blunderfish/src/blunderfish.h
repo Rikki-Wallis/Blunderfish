@@ -16,7 +16,7 @@
 constexpr int64_t INF        = 400000000;
 constexpr int64_t MATE_SCORE = 32000; // just shy of int16 bounds
 
-static constexpr size_t TRANSPOSITION_TABLE_SIZE = 1 << 19;
+static constexpr size_t TRANSPOSITION_TABLE_SIZE = 1 << 16;
 
 static constexpr uint64_t RANK_1 = 0x00000000000000ff;
 static constexpr uint64_t RANK_2 = 0x000000000000ff00;
