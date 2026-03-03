@@ -232,9 +232,9 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     // if we give the opponent a free move and alpha >= beta, our position is too good, so prune
 
     bool low_material = total_non_pawn_value() <= 2 * piece_value_centipawns(PIECE_KNIGHT);
-    bool skip_null = !allow_null || currently_checked || low_material;
+    bool skip_null = !allow_null || currently_checked || low_material || (signed_eval() < (beta - 50 * depth));
 
-    int R = 2; // we subtract this from depth to reduce the search depth
+    int R = 3 + depth / 6; // we subtract this from depth to reduce the search depth
 
     if (depth > R + 1 && !skip_null) { 
         make_null_move(); 
