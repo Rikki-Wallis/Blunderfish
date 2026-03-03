@@ -204,7 +204,8 @@ struct Position {
     bool is_in_check(int colour) const;
     bool is_king_square_attacked(int side, int square) const;
 
-    Piece lowest_value_defender(int side, int sq, int attacker_sq) const;
+    int lowest_value_defender(int defender_side, int sq, uint64_t occupancy) const;
+    int see(Move m) const;
 
     void filter_moves(std::span<Move>& moves);
 
@@ -220,7 +221,7 @@ struct Position {
     int64_t pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta);
     int64_t quiescence(int ply, int64_t alpha, int64_t beta);
 
-    int32_t mvv_lva_score(Move mv) const;
+    int32_t mvv_lva_score(Move mv, int32_t offset) const;
 
     bool is_capture(Move mv) const;
 

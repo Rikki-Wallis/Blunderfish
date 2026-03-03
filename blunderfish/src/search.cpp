@@ -5,11 +5,12 @@
 
 constexpr int64_t FUTILITY_MARGIN = 200;
 
-constexpr int32_t BEST_MOVE_SCORE   = 2000000;
-constexpr int32_t CAPTURE_SCORE     = 90000;
-constexpr int32_t MAX_HISTORY_SCORE = 80000;
-constexpr int32_t KILLER_1_SCORE    = 70000;
-constexpr int32_t KILLER_2_SCORE    = 60000;
+constexpr int32_t BEST_MOVE_SCORE    = 2000000;
+constexpr int32_t GOOD_CAPTURE_SCORE = 90000;
+constexpr int32_t MAX_HISTORY_SCORE  = 80000;
+constexpr int32_t KILLER_1_SCORE     = 70000;
+constexpr int32_t KILLER_2_SCORE     = 60000;
+constexpr int32_t BAD_CAPTURE_SCORE  = -90000;
 
 constexpr uint64_t TT_MASK = TRANSPOSITION_TABLE_SIZE - 1;
 
@@ -57,11 +58,11 @@ static Move select_best(std::span<Move>& moves, std::span<int32_t>& move_scores,
     return moves[index];
 }
 
-int32_t Position::mvv_lva_score(Move mv) const{
+int32_t Position::mvv_lva_score(Move mv, int32_t offset) const{
     int captured_sq = get_captured_square(mv);
     Piece captured_piece = (Piece)piece_at[captured_sq];
     Piece moving_piece = (Piece)piece_at[move_from(mv)];
-    int32_t score = CAPTURE_SCORE + piece_value_centipawns(captured_piece) * 1000 - piece_value_centipawns(moving_piece);
+    int32_t score = offset + piece_value_centipawns(captured_piece) * 1000 - piece_value_centipawns(moving_piece);
     return captured_piece == PIECE_NONE ? 0 : score;
 }
 
@@ -112,7 +113,9 @@ static std::span<int32_t> compute_move_scores(Position* pos, HistoryTable& histo
             move_scores[i] = KILLER_2_SCORE;
         }
         else {
-            int32_t score = pos->mvv_lva_score(mv);
+            int32_t offset = pos->see(mv) < 0 ? BAD_CAPTURE_SCORE : GOOD_CAPTURE_SCORE;
+            int32_t score = pos->mvv_lva_score(mv, offset);
+
             Piece piece = (Piece)pos->piece_at[move_from(mv)];
             int to = move_to(mv);
             move_scores[i] = score == 0 ? history[piece][to] : score;
@@ -370,27 +373,6 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     return best_score;
 }
 
-// simple SEE
-static bool is_bad_capture(Position& pos, Move m, int my_side) {
-    Piece captured = (Piece)pos.piece_at[get_captured_square(m)];
-    Piece attacker = (Piece)pos.piece_at[move_from(m)];
-
-    // If we are capturing a bigger or equal piece with a smaller one, it's always good.
-    if (piece_value_centipawns(attacker) <= piece_value_centipawns(captured)) {
-        return false;
-    }
-
-    // If we are capturing a same-sized or bigger piece, check if it's defended.
-    // If it's defended by a piece, bad trade
-    Piece defender = pos.lowest_value_defender(opponent(my_side), get_captured_square(m), move_from(m));
-
-    if (defender != PIECE_NONE) {
-        return true;
-    }
-
-    return false;
-}
-
 int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
     node_count++;
     qnode_count++;
@@ -430,7 +412,7 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
 
     for (size_t i = 0; i < moves.size(); ++i) {
         Move mv = moves[i];
-        move_scores[i] = mvv_lva_score(mv);
+        move_scores[i] = mvv_lva_score(mv, 0);
     }
 
     bool legal_found = false;
@@ -438,7 +420,7 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
     for (int i = 0; i < (int)moves.size(); ++i) {
         Move mv = select_best(moves, move_scores, i);
 
-        if (!currently_checked && is_bad_capture(*this, mv, side)) {
+        if (!currently_checked && see(mv) < 0) {
             continue;
         }
 

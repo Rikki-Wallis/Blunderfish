@@ -1,4 +1,5 @@
 #include <array>
+#include <bit>
 
 #include "blunderfish.h"
 #include "generated_tables.h"
@@ -158,43 +159,96 @@ bool Position::is_king_square_attacked(int side, int square) const {
     return false;
 }
 
-Piece Position::lowest_value_defender(int side, int square, int attacker_sq) const {
-    int opp = opponent(side);
+int Position::lowest_value_defender(int defender_side, int square, uint64_t occupancy) const {
+    uint64_t diag_mask     = occupancy & bishop_moves(square, occupancy, 0);
+    uint64_t straight_mask = occupancy & rook_moves(square, occupancy, 0);
+    uint64_t knight_mask   = occupancy & knight_moves(square, 0);
+    uint64_t pawn_mask     = occupancy & ((defender_side == BLACK) ? white_pawn_attacks_table[square] : black_pawn_attacks_table[square]);
+    uint64_t king_mask     = occupancy & king_moves(square, 0);
 
-    uint64_t allies = sides[side].all();
-    uint64_t all = all_pieces() & (~sq_to_bb(attacker_sq));
+    uint64_t pawn_defenders = pawn_mask & sides[defender_side].bb[PIECE_PAWN];
 
-    uint64_t diag_mask = bishop_moves(square, all, allies);
-    uint64_t straight_mask = rook_moves(square, all, allies);
-    uint64_t knight_mask = knight_moves(square, allies);
-    uint64_t pawn_mask = side == WHITE ? white_pawn_attacks_table[square] : black_pawn_attacks_table[square];
-    uint64_t king_mask = king_moves(square, allies);
-
-    if (pawn_mask & sides[opp].bb[PIECE_PAWN]) {
-        return PIECE_PAWN;
+    if (pawn_defenders != 0) {
+        return std::countr_zero(pawn_defenders);
     }
 
-    if (knight_mask & sides[opp].bb[PIECE_KNIGHT]) {
-        return PIECE_KNIGHT;
+    uint64_t knight_defenders = knight_mask & sides[defender_side].bb[PIECE_KNIGHT];
+
+    if (knight_defenders != 0) {
+        return std::countr_zero(knight_defenders);
     }
 
-    if (diag_mask & sides[opp].bb[PIECE_BISHOP]) {
-        return PIECE_BISHOP;
+    uint64_t bishop_defenders = diag_mask & sides[defender_side].bb[PIECE_BISHOP];
+
+    if (bishop_defenders != 0) {
+        return std::countr_zero(bishop_defenders);
     }
 
-    if (straight_mask & sides[opp].bb[PIECE_ROOK]) {
-        return PIECE_ROOK;
+    uint64_t rook_defenders = straight_mask & sides[defender_side].bb[PIECE_ROOK];
+
+    if (rook_defenders != 0) {
+        return std::countr_zero(rook_defenders);
     }
 
-    if ((straight_mask | diag_mask) & sides[opp].bb[PIECE_QUEEN]) {
-        return PIECE_QUEEN;
+    uint64_t queen_defenders = (straight_mask | diag_mask) & sides[defender_side].bb[PIECE_QUEEN];
+
+    if (queen_defenders != 0) {
+        return std::countr_zero(queen_defenders);
     }
 
-    if (king_mask & sides[opp].bb[PIECE_KING]) {
-        return PIECE_KING;
+    uint64_t king_defenders = king_mask & sides[defender_side].bb[PIECE_KING];
+
+    if (king_defenders != 0) {
+        return std::countr_zero(king_defenders);
     }
 
-    return PIECE_NONE;
+    return NULL_SQUARE;
+}
+
+int Position::see(Move m) const {
+    int value[32];
+    int depth = 0;
+
+    Piece attacker = (Piece)piece_at[move_from(m)];
+    int sq = move_to(m); // The destination square - not the captured square
+
+    Piece initial_captured = (Piece)piece_at[get_captured_square(m)];
+    value[depth++] = piece_value_centipawns(initial_captured); // initial value of capture
+
+    int defender_side = opponent(to_move);
+    uint64_t occupancy = all_pieces();
+
+    occupancy ^= sq_to_bb(move_from(m)); // remove the first attacker
+    occupancy ^= sq_to_bb(get_captured_square(m)); // remove captured piece (en passant)
+    
+    for (;;) {
+        int defender_sq = lowest_value_defender(defender_side, sq, occupancy);
+
+        if (defender_sq == NULL_SQUARE) {
+            break;
+        }
+
+        Piece defender = (Piece)piece_at[defender_sq];
+
+        if (defender == PIECE_KING) {
+            if (lowest_value_defender(opponent(defender_side), sq, occupancy ^ sq_to_bb(defender_sq)) != NULL_SQUARE) {
+                break; // the king cannot defend because it will move into check
+            }
+        }
+
+        int prev_value = value[depth-1];
+        value[depth++] = piece_value_centipawns(attacker) - prev_value; // the value of the PREVIOUS attacker
+
+        attacker = defender;
+        occupancy ^= sq_to_bb(defender_sq);
+        defender_side = opponent(defender_side);
+    }
+
+    while (--depth > 0) {
+        value[depth-1] = -std::max(-value[depth-1], value[depth]);
+    }
+
+    return value[0];
 }
 
 bool Position::is_in_check(int colour) const {
