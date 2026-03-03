@@ -14,9 +14,9 @@
 #define MAX_DEPTH 128
 
 constexpr int64_t INF        = 400000000;
-constexpr int64_t MATE_SCORE = 200000000;
+constexpr int64_t MATE_SCORE = 32000; // just shy of int16 bounds
 
-static constexpr size_t TRANSPOSITION_TABLE_SIZE = 1 << 20;
+static constexpr size_t TRANSPOSITION_TABLE_SIZE = 1 << 19;
 
 static constexpr uint64_t RANK_1 = 0x00000000000000ff;
 static constexpr uint64_t RANK_2 = 0x000000000000ff00;
@@ -109,9 +109,9 @@ struct Undo {
 };
 
 struct TTEntry {
-    uint64_t key;
-    int depth;
-    int64_t raw_score;
+    uint16_t key16; // top 16 bits
+    int16_t score;
+    uint8_t depth;
     uint8_t flag;
     Move best_move;
 };

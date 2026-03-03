@@ -66,17 +66,25 @@ int32_t Position::mvv_lva_score(Move mv, int32_t offset) const{
     return captured_piece == PIECE_NONE ? 0 : score;
 }
 
-bool update_tt_entry(TTEntry& entry, uint64_t zobrist, int depth, int64_t score, int ply, int64_t alpha_original, int64_t beta_original, Move best_move) {
-    if (entry.key != zobrist || depth > entry.depth) {
-        entry.key = zobrist;
-        entry.depth = depth;
-        entry.raw_score = score;
+static uint16_t compress_zobrist(uint64_t zobrist) {
+    return uint16_t(zobrist >> 48);
+}
 
-        if (entry.raw_score < -MATE_SCORE + 1000) {
-            entry.raw_score -= ply;
+bool update_tt_entry(TTEntry& entry, uint64_t zobrist, int depth, int64_t score, int ply, int64_t alpha_original, int64_t beta_original, Move best_move) {
+    if (entry.key16 != compress_zobrist(zobrist) || depth > entry.depth) {
+        entry.key16 = compress_zobrist(zobrist);
+
+        assert(depth <= UINT8_MAX);
+        entry.depth = (uint8_t)depth;
+
+        assert(int64_t(int16_t(score)) == score); // ensure the truncation preserves the score
+        entry.score = int16_t(score);
+
+        if (entry.score < -MATE_SCORE + 1000) {
+            entry.score -= ply;
         }
-        else if (entry.raw_score > MATE_SCORE - 1000) {
-            entry.raw_score += ply; // remove the current ply so that the mate score is relative to here rather than the root
+        else if (entry.score > MATE_SCORE - 1000) {
+            entry.score += ply; // remove the current ply so that the mate score is relative to here rather than the root
         }
 
         if (score <= alpha_original) {
@@ -130,14 +138,14 @@ static TTEntry& find_entry(TranspositionTable& tt, uint64_t zobrist) {
 
     // find match
     for (auto& e : cluster.entries) {
-        if (e.key == zobrist) {
+        if (e.key16 == compress_zobrist(zobrist)) {
             return e;
         }
     }
 
     // find empty
     for (auto& e : cluster.entries) {
-        if (e.key == 0) {
+        if (e.key16 == 0) {
             return e;
         }
     }
@@ -171,9 +179,9 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
 
     TTEntry& match = find_entry(tt, zobrist);
 
-    if (match.key == zobrist) { // exact match
+    if (match.key16 == compress_zobrist(zobrist)) { // exact match
         if (match.depth >= depth) {
-            int64_t entry_score = match.raw_score;
+            int64_t entry_score = int64_t(match.score);
 
             if (entry_score < -MATE_SCORE + 1000) {
                 entry_score += ply;
@@ -209,7 +217,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
         pruned_negamax(depth-2, tt, history, killers, ply, true, alpha, beta);
 
         TTEntry& e = find_entry(tt, zobrist);
-        if (e.key == zobrist) {
+        if (e.key16 == compress_zobrist(zobrist)) {
             tt_move = e.best_move;
         }
     }
