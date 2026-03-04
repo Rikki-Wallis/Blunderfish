@@ -90,6 +90,22 @@ static int eval_main(const char* FEN) {
     return 0;
 }
 
+static int perft_main(const char* FEN, int depth) {
+    auto maybe_pos = Position::decode_fen_string(FEN);
+
+    if (!maybe_pos) {
+        print("Invalid FEN string '{}'.\n", FEN);
+        return 1;
+    }
+
+    Position pos = std::move(*maybe_pos);
+
+    uint64_t count = perft_search(depth, pos);
+    print("{}\n", count);
+
+    return 0;
+}
+
 static int best_main(const char* FEN, int depth) {
     auto maybe_pos = Position::decode_fen_string(FEN);
 
@@ -140,6 +156,23 @@ int main(int argc, char** argv) {
         }
 
         return eval_main(argv[2]);
+    }
+
+    if (strcmp(argv[1], "perft") == 0) {
+        if (argc < 4) {
+            print("Usage: {} perft <FEN> <depth>\n", argv[0]);
+            return 1;
+        }
+
+        const char* FEN = argv[2];
+
+        int depth = atoi(argv[3]);
+        if (depth == 0) {
+            print("Invalid depth '{}'\n", argv[3]);
+            return 1;
+        }
+
+        return perft_main(FEN, depth);
     }
 
     if (strcmp(argv[1], "best") == 0) {
