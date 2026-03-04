@@ -258,12 +258,9 @@ bool Position::is_in_check(int colour) const {
 }
 
 std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
-    size_t move_count = 0;
+    Move* next = move_buf.data();
 
-    auto new_move = [&](int from, int to, MoveType type, Piece end_piece) {
-        assert("move buffer overflow" && move_count < move_buf.size());
-        move_buf[move_count++] = encode_move(from, to, type, end_piece, to_move);
-    };
+    #define new_move(from, to, type, end_piece) *(next++) = encode_move(from, to, type, end_piece, to_move)
 
     int opp = opponent(to_move);
     uint64_t opps = sides[opp].all();
@@ -397,16 +394,11 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
         new_move(from, to, MOVE_EN_PASSANT, PIECE_PAWN);
     }
 
-    return move_buf.subspan(0, move_count);
+    return move_buf.subspan(0, next-move_buf.data());
 }
 
 std::span<Move> Position::generate_captures(std::span<Move> move_buf) const {
-    size_t move_count = 0;
-
-    auto new_move = [&](int from, int to, MoveType type, Piece end_piece) {
-        assert("move buffer overflow" && move_count < move_buf.size());
-        move_buf[move_count++] = encode_move(from, to, type, end_piece, to_move);
-    };
+    Move* next = move_buf.data();
 
     int opp = opponent(to_move);
     uint64_t opps = sides[opp].all();
@@ -485,7 +477,7 @@ std::span<Move> Position::generate_captures(std::span<Move> move_buf) const {
         new_move(from, to, MOVE_EN_PASSANT, PIECE_PAWN);
     }
 
-    return move_buf.subspan(0, move_count);
+    return move_buf.subspan(0, next-move_buf.data());
 }
 
 void Position::filter_moves(std::span<Move>& moves) {

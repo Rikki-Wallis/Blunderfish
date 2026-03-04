@@ -4,7 +4,6 @@
 
 #include "blunderfish.h"
 
-/*
 template <typename Func>
 static uint64_t run_and_time(Func&& func) {
     // Time perft search
@@ -41,7 +40,6 @@ static void benchmark_perft() {
         
     };
 }
-*/
 
 template<typename Func>
 static void benchmark_pos_method(const std::string& name, int start_depth, int max_depth, Func&& func)
@@ -94,7 +92,7 @@ static void benchmark_pruned_negamax() {
 }
 
 int main() {
-    //benchmark_perft();
+    benchmark_perft();
     benchmark_pruned_negamax();
     benchmark_best_move();
     return 0;

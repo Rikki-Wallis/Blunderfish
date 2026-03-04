@@ -81,10 +81,10 @@ bool update_tt_entry(TTEntry& entry, uint64_t zobrist, int depth, int64_t score,
         entry.score = int16_t(score);
 
         if (entry.score < -MATE_SCORE + 1000) {
-            entry.score -= ply;
+            entry.score -= int16_t(ply);
         }
         else if (entry.score > MATE_SCORE - 1000) {
-            entry.score += ply; // remove the current ply so that the mate score is relative to here rather than the root
+            entry.score += int16_t(ply); // remove the current ply so that the mate score is relative to here rather than the root
         }
 
         if (score <= alpha_original) {
