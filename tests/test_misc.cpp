@@ -4,7 +4,6 @@
 
 #include "blunderfish.h"
 
-/*
 static void test_capture_gen(const std::string& FEN) {
     Position pos = *Position::decode_fen_string(FEN);
 
@@ -36,7 +35,6 @@ static void test_capture_gen(const std::string& FEN) {
 TEST_CASE("Generate-Captures Equals Captures from Generate-Moves") {
     test_capture_gen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -"); 
 }
-*/
 
 static void test_pin_case(const std::string& fen, const std::unordered_set<int>& white_pins, const std::unordered_set<int>& black_pins) {
     auto pos = *Position::decode_fen_string(fen);
