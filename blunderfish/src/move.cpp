@@ -123,36 +123,38 @@ uint64_t queen_moves(int from, uint64_t all_pieces, uint64_t allies) {
 bool Position::is_king_square_attacked(int side, int square) const {
     int opp = opponent(side);
 
-    uint64_t allies = sides[side].all() & ~(sides[side].bb[PIECE_KING]);
     uint64_t all = all_pieces() & ~(sides[side].bb[PIECE_KING]);
 
-    uint64_t diag_mask = bishop_moves(square, all, allies);
-    uint64_t straight_mask = rook_moves(square, all, allies);
-    uint64_t knight_mask = knight_moves(square, allies);
     uint64_t pawn_mask = side == WHITE ? white_pawn_attacks_table[square] : black_pawn_attacks_table[square];
-    uint64_t king_mask = king_moves(square, allies);
 
-    if (diag_mask & sides[opp].bb[PIECE_BISHOP]) {
+    if (pawn_mask & sides[opp].bb[PIECE_PAWN]) {
         return true;
     }
 
-    if (straight_mask & sides[opp].bb[PIECE_ROOK]) {
-        return true;
-    }
-
-    if (knight_mask & sides[opp].bb[PIECE_KNIGHT]) {
-        return true;
-    }
-
-    if ((straight_mask | diag_mask) & sides[opp].bb[PIECE_QUEEN]) {
-        return true;
-    }
+    uint64_t king_mask = king_moves(square, 0);
 
     if (king_mask & sides[opp].bb[PIECE_KING]) {
         return true;
     }
 
-    if (pawn_mask & sides[opp].bb[PIECE_PAWN]) {
+    uint64_t knight_mask = knight_moves(square, 0);
+
+    if (knight_mask & sides[opp].bb[PIECE_KNIGHT]) {
+        return true;
+    }
+
+    uint64_t diag_mask = bishop_moves(square, all, 0);
+    uint64_t queens  = sides[opp].bb[PIECE_QUEEN];
+    uint64_t bishops = sides[opp].bb[PIECE_BISHOP]; 
+
+    if (diag_mask & (bishops | queens)) {
+        return true;
+    }
+
+    uint64_t straight_mask = rook_moves(square, all, 0);
+    uint64_t rooks = sides[opp].bb[PIECE_ROOK];
+
+    if (straight_mask & (rooks | queens)) {
         return true;
     }
 
@@ -160,30 +162,28 @@ bool Position::is_king_square_attacked(int side, int square) const {
 }
 
 int Position::lowest_value_defender(int defender_side, int square, uint64_t occupancy) const {
-    uint64_t diag_mask     = occupancy & bishop_moves(square, occupancy, 0);
-    uint64_t straight_mask = occupancy & rook_moves(square, occupancy, 0);
-    uint64_t knight_mask   = occupancy & knight_moves(square, 0);
     uint64_t pawn_mask     = occupancy & ((defender_side == BLACK) ? white_pawn_attacks_table[square] : black_pawn_attacks_table[square]);
-    uint64_t king_mask     = occupancy & king_moves(square, 0);
-
     uint64_t pawn_defenders = pawn_mask & sides[defender_side].bb[PIECE_PAWN];
 
     if (pawn_defenders != 0) {
         return std::countr_zero(pawn_defenders);
     }
 
+    uint64_t knight_mask   = occupancy & knight_moves(square, 0);
     uint64_t knight_defenders = knight_mask & sides[defender_side].bb[PIECE_KNIGHT];
 
     if (knight_defenders != 0) {
         return std::countr_zero(knight_defenders);
     }
 
+    uint64_t diag_mask     = occupancy & bishop_moves(square, occupancy, 0);
     uint64_t bishop_defenders = diag_mask & sides[defender_side].bb[PIECE_BISHOP];
 
     if (bishop_defenders != 0) {
         return std::countr_zero(bishop_defenders);
     }
 
+    uint64_t straight_mask = occupancy & rook_moves(square, occupancy, 0);
     uint64_t rook_defenders = straight_mask & sides[defender_side].bb[PIECE_ROOK];
 
     if (rook_defenders != 0) {
@@ -196,6 +196,7 @@ int Position::lowest_value_defender(int defender_side, int square, uint64_t occu
         return std::countr_zero(queen_defenders);
     }
 
+    uint64_t king_mask     = occupancy & king_moves(square, 0);
     uint64_t king_defenders = king_mask & sides[defender_side].bb[PIECE_KING];
 
     if (king_defenders != 0) {
@@ -212,14 +213,14 @@ int Position::see(Move m) const {
     Piece attacker = (Piece)piece_at[move_from(m)];
     int sq = move_to(m); // The destination square - not the captured square
 
-    Piece initial_captured = (Piece)piece_at[get_captured_square(m)];
-    value[depth++] = piece_value_centipawns(initial_captured); // initial value of capture
+    Piece initial_captured = move_captured_piece(m);
+    value[depth++] = piece_value_table[initial_captured]; // initial value of capture
 
     int defender_side = opponent(to_move);
     uint64_t occupancy = all_pieces();
 
     occupancy ^= sq_to_bb(move_from(m)); // remove the first attacker
-    occupancy ^= sq_to_bb(get_captured_square(m)); // remove captured piece (en passant)
+    occupancy ^= sq_to_bb(move_captured_square(m)); // remove captured piece (en passant)
     
     for (;;) {
         int defender_sq = lowest_value_defender(defender_side, sq, occupancy);
@@ -237,7 +238,7 @@ int Position::see(Move m) const {
         }
 
         int prev_value = value[depth-1];
-        value[depth++] = piece_value_centipawns(attacker) - prev_value; // the value of the PREVIOUS attacker
+        value[depth++] = piece_value_table[attacker] - prev_value; // the value of the PREVIOUS attacker
 
         attacker = defender;
         occupancy ^= sq_to_bb(defender_sq);
@@ -251,16 +252,13 @@ int Position::see(Move m) const {
     return value[0];
 }
 
-bool Position::is_in_check(int colour) const {
-    assert(std::popcount(sides[colour].bb[PIECE_KING]) == 1);
-    int square = std::countr_zero(sides[colour].bb[PIECE_KING]);
-    return is_king_square_attacked(colour, square);
-}
-
 std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     Move* next = move_buf.data();
 
-    #define new_move(from, to, type, end_piece) *(next++) = encode_move(from, to, type, end_piece, to_move)
+    #define new_move(from, to, type, end_piece) do { \
+        int sq = get_captured_square(to, type, to_move); \
+        *(next++) = encode_move(from, to, type, end_piece, to_move, (Piece)piece_at[sq]); \
+    } while (false)
 
     int opp = opponent(to_move);
     uint64_t opps = sides[opp].all();
@@ -278,40 +276,41 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     uint32_t kcastle_flag = to_move == WHITE ? POSITION_FLAG_WHITE_KCASTLE : POSITION_FLAG_BLACK_KCASTLE;
     uint32_t qcastle_flag = to_move == WHITE ? POSITION_FLAG_WHITE_QCASTLE : POSITION_FLAG_BLACK_QCASTLE;
 
-    bool can_kcastle = (flags & kcastle_flag) != 0;
-    bool can_qcastle = (flags & qcastle_flag) != 0;
+    uint64_t short_castle_space = to_move == WHITE ? WHITE_SHORT_SPACING : BLACK_SHORT_SPACING;
+    uint64_t long_castle_space = to_move == WHITE ? WHITE_LONG_SPACING : BLACK_LONG_SPACING;
 
-    if (is_in_check(to_move)) {
+    bool can_kcastle = (flags & kcastle_flag) != 0 && ((short_castle_space & all) == 0);
+    bool can_qcastle = (flags & qcastle_flag) != 0 && ((long_castle_space & all) == 0);
+
+    if (is_checked[to_move]) {
         can_kcastle = false;
         can_qcastle = false;
     }
 
-    can_kcastle = can_kcastle && !is_king_square_attacked(to_move, to_move == WHITE ? 5 : 61);
-    can_kcastle = can_kcastle && !is_king_square_attacked(to_move, to_move == WHITE ? 6 : 62);
+    if (can_kcastle) {
+        can_kcastle = !is_king_square_attacked(to_move, to_move == WHITE ? 5 : 61)
+                   && !is_king_square_attacked(to_move, to_move == WHITE ? 6 : 62);
+    }
 
-    can_qcastle = can_qcastle && !is_king_square_attacked(to_move, to_move == WHITE ? 3 : 59);
-    can_qcastle = can_qcastle && !is_king_square_attacked(to_move, to_move == WHITE ? 2 : 58);
+    if (can_qcastle) {
+        can_qcastle = !is_king_square_attacked(to_move, to_move == WHITE ? 3 : 59)
+                   && !is_king_square_attacked(to_move, to_move == WHITE ? 2 : 58);
+    }
 
     if (can_kcastle) {
-        uint64_t castle_space = to_move == WHITE ? WHITE_SHORT_SPACING : BLACK_SHORT_SPACING;
         uint8_t from = to_move == WHITE ? 4 : 60;
         uint8_t to   = to_move == WHITE ? 6 : 62;
         assert(std::countr_zero(sides[to_move].bb[PIECE_KING]) == from);
         assert(sides[to_move].bb[PIECE_ROOK] & sq_to_bb(to_move == WHITE ? 7 : 63));
-        if (!(castle_space & all)) {
-            new_move(from, to, MOVE_SHORT_CASTLE, PIECE_KING);
-        }
+        new_move(from, to, MOVE_SHORT_CASTLE, PIECE_KING);
     }
 
     if (can_qcastle) {
-        uint64_t castle_space = to_move == WHITE ? WHITE_LONG_SPACING : BLACK_LONG_SPACING;
         uint8_t from = to_move == WHITE ? 4 : 60;
         uint8_t to   = to_move == WHITE ? 2 : 58;
         assert(std::countr_zero(sides[to_move].bb[PIECE_KING]) == from);
         assert(sides[to_move].bb[PIECE_ROOK] & sq_to_bb(to_move == WHITE ? 0 : 56));
-        if (!(castle_space & all)) {
-            new_move(from, to, MOVE_LONG_CASTLE, PIECE_KING);
-        }
+        new_move(from, to, MOVE_LONG_CASTLE, PIECE_KING);
     }
 
     for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KNIGHT])) {
@@ -488,7 +487,7 @@ void Position::filter_moves(std::span<Move>& moves) {
 
         make_move(moves[i]);
 
-        if (is_in_check(side)) {
+        if (is_checked[side]) {
             illegal = true;
         }
 
@@ -557,7 +556,7 @@ std::unordered_map<std::string, Move> Position::name_moves(std::span<Move> moves
             std::string check_suffix = "";
 
             make_move(m);
-            if (is_in_check(to_move)) {
+            if (is_checked[to_move]) {
                 std::array<Move, 256> temp;
                 auto new_moves = generate_moves(temp);
                 filter_moves(new_moves);
@@ -607,17 +606,15 @@ inline void set_piece(Position& pos, int side, Piece piece, size_t index) {
     pos.piece_at[index] = (uint8_t)piece;
 }
 
-int get_captured_square(Move move) {
-    int captured_pos = move_to(move); // usually the piece being captured is at the square being moved to
+int get_captured_square(int to, MoveType ty, int side) {
+    int captured_pos = to; // usually the piece being captured is at the square being moved to
 
     int offsets[] = {
         0, 0, -8, 8
     };
 
-    int is_ep = move_type(move)==MOVE_EN_PASSANT;
-
-    int side = move_side(move);
-    captured_pos = move_to(move) + offsets[is_ep * 2 + side];
+    int is_ep = ty == MOVE_EN_PASSANT;
+    captured_pos = to + offsets[is_ep * 2 + side];
 
     return captured_pos;
 }
@@ -634,34 +631,31 @@ void Position::update_en_passant_sq(int sq) {
 #endif
 }
 
-bool Position::is_capture(Move mv) const {
-    int captured_sq = get_captured_square(mv);
-    Piece captured_piece = (Piece)piece_at[captured_sq];
-    return captured_piece != PIECE_NONE;
-}
-
 void Position::make_move(Move move) {
     // Update eval
     int64_t initial_eval = incremental_eval;
     uint64_t initial_zobrist = zobrist;
 
     // First, check for a capture and remove the piece
-    int captured_pos = get_captured_square(move);
-    Piece captured_piece = (Piece)piece_at[captured_pos];
+    Piece captured_piece = move_captured_piece(move);
     assert(captured_piece != PIECE_KING);
 
     // ZOBRIST, remove any captured piece
 #ifdef ZOBRIST_INCLUDE_PIECES
+    int captured_pos = move_captured_square(move);
     zobrist ^= bool_to_mask<uint64_t>(captured_piece != PIECE_NONE) & zobrist_table.piece[opponent(to_move)][captured_piece][captured_pos];
 #endif
 
     // Before we modify anything, record the destroyable data in the undo stack
     Undo undo = {
-        .captured_piece = (uint8_t)captured_piece,
         .flags = flags,
         .en_passant_sq = en_passant_sq,
         .zobrist = initial_zobrist,
-        .incremental_eval = initial_eval
+        .incremental_eval = initial_eval,
+        .is_checked = {
+            is_checked[0],
+            is_checked[1]
+        }
     };
 
     assert(undo_count < MAX_DEPTH);
@@ -747,11 +741,23 @@ void Position::make_move(Move move) {
 #ifdef ZOBRIST_INCLUDE_SIDE
     zobrist ^= zobrist_table.side;
 #endif
+
+    update_is_checked();
+}
+
+void Position::update_is_checked() {
+    assert(std::popcount(sides[WHITE].bb[PIECE_KING]) == 1);
+    assert(std::popcount(sides[BLACK].bb[PIECE_KING]) == 1);
+    is_checked[WHITE] = is_king_square_attacked(WHITE, std::countr_zero(sides[WHITE].bb[PIECE_KING]));
+    is_checked[BLACK] = is_king_square_attacked(BLACK, std::countr_zero(sides[BLACK].bb[PIECE_KING]));
 }
 
 void Position::unmake_move(Move move) {
     assert(undo_count > 0);
     Undo undo = undo_stack[--undo_count];
+
+    is_checked[WHITE] = undo.is_checked[WHITE];
+    is_checked[BLACK] = undo.is_checked[BLACK];
 
     to_move = opponent(to_move);
 
@@ -783,10 +789,12 @@ void Position::unmake_move(Move move) {
     piece_at[move_from(move)] = static_cast<uint8_t>(start_piece);
 
     // replace the captured piece
-    int captured_square = get_captured_square(move);
-    uint64_t captured_mask = bool_to_mask<uint64_t>(undo.captured_piece != PIECE_NONE) & sq_to_bb(captured_square);
-    sides[opponent(to_move)].bb[undo.captured_piece] ^= captured_mask;
-    piece_at[captured_square] = undo.captured_piece;
+    int captured_square = move_captured_square(move);
+    Piece captured_piece = move_captured_piece(move);
+
+    uint64_t captured_mask = bool_to_mask<uint64_t>(captured_piece != PIECE_NONE) & sq_to_bb(captured_square);
+    sides[opponent(to_move)].bb[captured_piece] ^= captured_mask;
+    piece_at[captured_square] = captured_piece;
 
     flags = undo.flags;
     en_passant_sq = undo.en_passant_sq;
@@ -797,11 +805,14 @@ void Position::unmake_move(Move move) {
 void Position::make_null_move() {
     assert(undo_count < MAX_DEPTH);
     undo_stack[undo_count++] = Undo {
-        .captured_piece = PIECE_NONE,
         .flags = flags,
         .en_passant_sq = en_passant_sq,
         .zobrist = zobrist,
-        .incremental_eval = incremental_eval
+        .incremental_eval = incremental_eval,
+        .is_checked = {
+            is_checked[0],
+            is_checked[1]
+        }
     };
 
     update_en_passant_sq(NULL_SQUARE);
@@ -809,6 +820,8 @@ void Position::make_null_move() {
 #ifdef ZOBRIST_INCLUDE_SIDE
     zobrist ^= zobrist_table.side;
 #endif
+
+    update_is_checked();
 }
 
 void Position::unmake_null_move(){

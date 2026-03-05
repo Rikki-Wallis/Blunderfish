@@ -1,33 +1,11 @@
 #include "blunderfish.h"
 
-int32_t piece_value_centipawns(Piece piece) {
-    switch (piece) {
-        default:
-            assert(false);
-            return 0;
-        case PIECE_NONE:
-            return 0;
-        case PIECE_PAWN:
-            return 100;
-        case PIECE_KNIGHT:
-            return 300;
-        case PIECE_BISHOP:
-            return 300;
-        case PIECE_ROOK:
-            return 500;
-        case PIECE_KING:
-            return 0;
-        case PIECE_QUEEN:
-            return 900;
-    }
-}
-
 int64_t Side::material_value() const {
     int64_t sum = 0;
 
     for (int p = PIECE_PAWN; p < NUM_PIECE_TYPES; ++p) {
         int n = std::popcount(bb[p]);
-        sum += n * piece_value_centipawns((Piece)p);
+        sum += n * piece_value_table[p];
     }
 
     return sum;
@@ -144,7 +122,7 @@ inline int32_t piece_delta(Piece piece, int sq, int side) {
     int32_t sign = side == BLACK ? -1 : 1;
     int32_t value = 0;
     value += sign * unsigned_pst_value(piece, sq, side);
-    value += sign * piece_value_centipawns(piece);
+    value += sign * piece_value_table[piece];
     return value;
 }
 

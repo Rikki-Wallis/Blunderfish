@@ -19,9 +19,7 @@ static void test_capture_gen(const std::string& FEN) {
     for (int i = (int)moves.size()-1; i >= 0; --i) {
         Move mv = moves[i];
 
-        int square = get_captured_square(mv);
-
-        if (pos.piece_at[square] == PIECE_NONE) {
+        if (!is_capture(mv)) {
             moves[i] = moves.back();
             moves = moves.subspan(0, moves.size()-1);
         }

@@ -287,7 +287,7 @@ int64_t Position::total_non_pawn_value() const {
 
     for (int p = PIECE_PAWN + 1; p < NUM_PIECE_TYPES; ++p) {
         int count = std::popcount(sides[WHITE].bb[p]) + std::popcount(sides[BLACK].bb[p]);
-        value += piece_value_centipawns((Piece)p) * count;
+        value += piece_value_table[p] * count;
     }
 
     return value;

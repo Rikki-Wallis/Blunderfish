@@ -84,6 +84,16 @@ static const char* piece_alg_table[NUM_PIECE_TYPES] = {
     "K",
 };
 
+static const int32_t piece_value_table[NUM_PIECE_TYPES] = {
+    0,
+    100,
+    500,
+    300,
+    300,
+    900,
+    0
+};
+
 using Move = uint32_t;
 
 static constexpr Move NULL_MOVE = 0;
@@ -101,11 +111,11 @@ struct Side {
 static constexpr int NULL_SQUARE = -1;
 
 struct Undo {
-    uint8_t captured_piece;
     uint32_t flags;
     int en_passant_sq;
     uint64_t zobrist;
     int64_t incremental_eval;
+    bool is_checked[2];
 };
 
 struct TTEntry {
@@ -156,6 +166,8 @@ struct Position {
     uint32_t flags;
     int64_t incremental_eval;
 
+    bool is_checked[2];
+
     uint64_t zobrist;
 
     // benchmarking statistics
@@ -201,7 +213,6 @@ struct Position {
 
     std::vector<Side> get_sides() const;  
 
-    bool is_in_check(int colour) const;
     bool is_king_square_attacked(int side, int square) const;
 
     int lowest_value_defender(int defender_side, int sq, uint64_t occupancy) const;
@@ -216,13 +227,12 @@ struct Position {
 
     // @note if no castle, make rook_from == rook_ro
     void update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side);
+    void update_is_checked();
 
     int64_t pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta);
     int64_t quiescence(int ply, int64_t alpha, int64_t beta);
 
     int32_t mvv_lva_score(Move mv, int32_t offset) const;
-
-    bool is_capture(Move mv) const;
 
     std::pair<Move, int64_t> best_move_internal(std::span<Move> moves, int depth, TranspositionTable& tt, Move last_best_move, HistoryTable& history, KillerTable& killers, int64_t alpha, int64_t beta);
     Move best_move(std::span<Move> moves, int depth);
@@ -236,8 +246,8 @@ struct Position {
     void reset_benchmarking_statistics();
 };
 
-int get_captured_square(Move move);
-int32_t piece_value_centipawns(Piece piece);
+int get_captured_square(int to, MoveType ty, int side);
+
 int32_t unsigned_pst_value(Piece piece, int square, int side);
 
 inline std::pair<char, int> square_alg(size_t sq) {
@@ -280,12 +290,25 @@ inline int move_side(Move move) {
     return side;
 }
 
-inline Move encode_move(int from, int to, MoveType type, Piece end_piece, int side) {
-    Move mv = (uint32_t)from; 
-    mv     |= ((uint32_t)to) << 6;
-    mv     |= ((uint32_t)type) << 12;
-    mv     |= ((uint32_t)end_piece) << 15;
+inline Piece move_captured_piece(Move move) {
+    return Piece((move >> 19) & 0b111);
+}
+
+inline bool is_capture(Move move) {
+    return move_captured_piece(move) != PIECE_NONE;
+}
+
+inline int move_captured_square(Move move) {
+    return get_captured_square(move_to(move), move_type(move), move_side(move));
+}
+
+inline Move encode_move(int from, int to, MoveType type, Piece end_piece, int side, Piece captured) {
+    Move mv = (uint32_t)from & 0b111111; 
+    mv     |= ((uint32_t)to & 0b111111) << 6;
+    mv     |= ((uint32_t)type & 0b111) << 12;
+    mv     |= ((uint32_t)end_piece & 0b111) << 15;
     mv     |= ((uint32_t)side & 1) << 18;
+    mv     |= ((uint32_t)captured & 0b111) << 19;
     return mv;
 }
 
