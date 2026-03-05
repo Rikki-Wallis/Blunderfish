@@ -212,6 +212,8 @@ struct Position {
     void unmake_null_move();
 
     std::vector<Side> get_sides() const;  
+    
+    uint64_t generate_pin_mask(int side) const;
 
     bool is_king_square_attacked(int side, int square) const;
 

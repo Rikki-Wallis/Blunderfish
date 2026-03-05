@@ -835,3 +835,33 @@ void Position::unmake_null_move(){
     zobrist = undo.zobrist;
     incremental_eval = undo.incremental_eval;
 }
+
+uint64_t Position::generate_pin_mask(int side) const {
+    assert(std::popcount(sides[side].bb[PIECE_KING]) == 1);
+    int king_sq = std::countr_zero(sides[side].bb[PIECE_KING]);
+
+    uint64_t opps = sides[opponent(side)].all();
+    uint64_t allies = sides[side].all();
+
+    uint64_t diags     = bishop_moves(king_sq, opps, 0); // excluding all our own pieces
+    uint64_t straights =   rook_moves(king_sq, opps, 0); // excluding all our own pieces
+
+    uint64_t rooks   = sides[opponent(side)].bb[PIECE_ROOK];
+    uint64_t bishops = sides[opponent(side)].bb[PIECE_BISHOP];
+    uint64_t queens  = sides[opponent(side)].bb[PIECE_QUEEN];
+
+    uint64_t attackers = (diags & (bishops|queens)) | (straights & (rooks|queens));
+
+    uint64_t pinned = 0;
+
+    for (int atk_sq : set_bits(attackers)) {
+        uint64_t mask = between[atk_sq][king_sq];
+        uint64_t blockers = mask & allies;
+
+        if (std::popcount(blockers) == 1) { // that guy is pinned
+            pinned |= sq_to_bb(std::countr_zero(blockers));
+        }
+    }
+
+    return pinned;
+}
