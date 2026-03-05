@@ -172,7 +172,7 @@ std::unordered_map<std::string, std::vector<std::string>> EIGENMANN_RAPID_TEST_S
 TEST_CASE("best_move - All Test Suites") {
 
     std::vector<std::unordered_map<std::string, std::vector<std::string>>> test_suites = {BRATKO_KOPEC_TEST_SUITE, CCR_ONE_HOUR_TEST_SUITE, EIGENMANN_RAPID_TEST_SUITE};
-    int depth = 18;
+    int depth = 14;
     double pos_correct = 0;
     double pos_incorrect = 0;
     int pos_invalid = 0;

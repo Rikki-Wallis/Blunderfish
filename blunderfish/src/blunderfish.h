@@ -235,6 +235,11 @@ struct Position {
     int64_t total_non_pawn_value() const; // used for null move reduction heuristic
 
     void reset_benchmarking_statistics();
+
+    // eval
+    int64_t pawn_structure(int colour, uint64_t ally_pawn_bb) const;
+    int64_t king_safety(int colour, uint64_t king_bb, uint64_t pawn_bb) const;
+    int64_t bishop_imbalance() const;
 };
 
 int get_captured_square(Move move);
@@ -288,6 +293,17 @@ inline Move encode_move(int from, int to, MoveType type, Piece end_piece, int si
     mv     |= ((uint32_t)end_piece) << 15;
     mv     |= ((uint32_t)side & 1) << 18;
     return mv;
+}
+
+inline uint64_t bb_to_file(uint64_t bb) {
+    static const uint64_t file_table[8] = { FILE_A, FILE_B, FILE_C, FILE_D, FILE_E, FILE_F, FILE_G, FILE_H };
+    if (bb == 0) return 0;
+
+    unsigned long index;
+    _BitScanForward64(&index, bb); 
+
+    int file = index % 8; 
+    return file_table[file];
 }
 
 template<typename T>
