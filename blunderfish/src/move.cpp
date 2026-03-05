@@ -252,6 +252,14 @@ int Position::see(Move m) const {
     return value[0];
 }
 
+inline bool pinned(int sq, uint64_t pin_mask) {
+    return (sq_to_bb(sq) & pin_mask) != 0;
+}
+
+static uint64_t restrictions(int sq, uint64_t pin_mask, int king_sq) {
+    return pinned(sq, pin_mask) ? line[sq][king_sq] : UINT64_MAX;
+}
+
 std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     Move* next = move_buf.data();
 
@@ -264,6 +272,9 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     uint64_t opps = sides[opp].all();
     uint64_t allies = sides[to_move].all();
     uint64_t all = all_pieces();
+
+    int king_sq = get_king_sq(to_move);
+    uint64_t pin_mask = generate_pin_mask(to_move);
 
     for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KING])) {
         for (uint8_t to : set_bits(king_moves(from, allies))) {
@@ -313,26 +324,34 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
         new_move(from, to, MOVE_LONG_CASTLE, PIECE_KING);
     }
 
-    for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KNIGHT])) {
+    uint64_t knights = sides[to_move].bb[PIECE_KNIGHT] & (~pin_mask);
+
+    for (uint8_t from : set_bits(knights)) {
         for (uint8_t to : set_bits(knight_moves(from, allies))) {
             new_move(from, to, MOVE_NORMAL, PIECE_KNIGHT);
         }
     }
 
     for (uint8_t from: set_bits(sides[to_move].bb[PIECE_ROOK])) {
-        for (uint8_t to : set_bits(rook_moves(from, all, allies))) {
+        uint64_t bb = rook_moves(from, all, allies) & restrictions(from, pin_mask, king_sq);
+
+        for (uint8_t to : set_bits(bb)) {
             new_move(from, to, MOVE_NORMAL, PIECE_ROOK);
         }
     }
 
     for (uint8_t from: set_bits(sides[to_move].bb[PIECE_BISHOP])) {
-        for (uint8_t to : set_bits(bishop_moves(from, all, allies))) {
+        uint64_t bb = bishop_moves(from, all, allies) & restrictions(from, pin_mask, king_sq);
+
+        for (uint8_t to : set_bits(bb)) {
             new_move(from, to, MOVE_NORMAL, PIECE_BISHOP);
         }
     }
 
     for (uint8_t from: set_bits(sides[to_move].bb[PIECE_QUEEN])) {
-        for (uint8_t to : set_bits(queen_moves(from, all, allies))) {
+        uint64_t bb = queen_moves(from, all, allies) & restrictions(from, pin_mask, king_sq);
+
+        for (uint8_t to : set_bits(bb)) {
             new_move(from, to, MOVE_NORMAL, PIECE_QUEEN);
         }
     }
@@ -837,8 +856,7 @@ void Position::unmake_null_move(){
 }
 
 uint64_t Position::generate_pin_mask(int side) const {
-    assert(std::popcount(sides[side].bb[PIECE_KING]) == 1);
-    int king_sq = std::countr_zero(sides[side].bb[PIECE_KING]);
+    int king_sq = get_king_sq(side);
 
     uint64_t opps = sides[opponent(side)].all();
     uint64_t allies = sides[side].all();

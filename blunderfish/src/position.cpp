@@ -301,3 +301,8 @@ void Position::reset_benchmarking_statistics() {
     cutoff_index_count = 0;
     cutoff_index_sum = 0;
 }
+
+int Position::get_king_sq(int side) const {
+    assert(std::popcount(sides[side].bb[PIECE_KING]) == 1);
+    return std::countr_zero(sides[side].bb[PIECE_KING]);
+}
