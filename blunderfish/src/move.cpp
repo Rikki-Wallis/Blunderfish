@@ -762,6 +762,9 @@ void Position::make_move(Move move) {
 #endif
 
     update_is_checked();
+
+    // For testing
+    incremental_eval = compute_eval();
 }
 
 void Position::update_is_checked() {
@@ -813,7 +816,7 @@ void Position::unmake_move(Move move) {
 
     uint64_t captured_mask = bool_to_mask<uint64_t>(captured_piece != PIECE_NONE) & sq_to_bb(captured_square);
     sides[opponent(to_move)].bb[captured_piece] ^= captured_mask;
-    piece_at[captured_square] = captured_piece;
+    piece_at[captured_square] = static_cast<uint8_t>(captured_piece);
 
     flags = undo.flags;
     en_passant_sq = undo.en_passant_sq;

@@ -158,6 +158,34 @@ struct ZobristTable {
 
 extern const ZobristTable zobrist_table;
 
+struct EvalParameters {
+    // Material
+    int piece_values[NUM_PIECE_TYPES];
+
+    // PSTs
+    int mg_pst[NUM_PIECE_TYPES][64];
+    int eg_pst[NUM_PIECE_TYPES][64];
+
+    // King Safety
+    int q_castling_bonus;
+    int q_castling_penalty;
+    int k_castling_bonus;
+    int k_castling_penalty;
+    int shelter_strength_bonus;
+    int shelter_strength_penalty;
+    int open_file_bonus;
+    int open_file_penalty;
+
+    // Imbalance
+    int bishop_pair_bonus;
+
+    // Pawn Structure
+    int isloated_pawn_penalty;
+    int doubled_pawn_penalty;
+    int connected_pawn_bonus;
+    int passed_pawn_bonus;
+};
+
 struct Position {
     Side sides[2];
     int to_move;
@@ -256,7 +284,8 @@ struct Position {
 
 int get_captured_square(int to, MoveType ty, int side);
 
-int32_t unsigned_pst_value(Piece piece, int square, int side);
+int32_t mg_unsigned_pst_value(Piece piece, int square, int side);
+int32_t eg_unsigned_pst_value(Piece piece, int square, int side);
 
 inline std::pair<char, int> square_alg(size_t sq) {
     char file = sq % 8 + 'a';

@@ -13,7 +13,7 @@ int64_t Side::material_value() const {
 
 // stolen from https://www.chessprogramming.org/Simplified_Evaluation_Function
 
-static const int PAWN_PST[64] = {
+static const int MG_PAWN_PST[64] = {
     0,  0,  0,  0,  0,  0,  0,  0,
     5, 10, 10,-20,-20, 10, 10,  5,
     5, -5,-10,  0,  0,-10, -5,  5,
@@ -22,6 +22,17 @@ static const int PAWN_PST[64] = {
     10, 10, 20, 30, 30, 20, 10, 10,
     50, 50, 50, 50, 50, 50, 50, 50,
     0,  0,  0,  0,  0,  0,  0,  0,
+};
+
+static const int EG_PAWN_PST[64] = {
+     0,  0,  0,  0,  0,  0,  0,  0,
+    10, 10, 10, 10, 10, 10, 10, 10,
+    15, 15, 15, 20, 20, 15, 15, 15,
+    20, 20, 25, 30, 30, 25, 20, 20,
+    30, 30, 35, 40, 40, 35, 30, 30,
+    40, 40, 45, 50, 50, 45, 40, 40,
+    70, 70, 70, 70, 70, 70, 70, 70,
+     0,  0,  0,  0,  0,  0,  0,  0
 };
 
 static const int KNIGHT_PST[64] = {
@@ -35,7 +46,7 @@ static const int KNIGHT_PST[64] = {
     -50,-40,-30,-30,-30,-30,-40,-50,
 };
 
-static const int BISHOP_PST[64] = {
+static const int MG_BISHOP_PST[64] = {
     -20,-10,-10,-10,-10,-10,-10,-20,
     -10,  5,  0,  0,  0,  0,  5,-10,
     -10, 10, 10, 10, 10, 10, 10,-10,
@@ -46,7 +57,18 @@ static const int BISHOP_PST[64] = {
     -20,-10,-10,-10,-10,-10,-10,-20,
 };
 
-static const int ROOK_PST[64] = {
+static const int EG_BISHOP_PST[64] = {
+    -20,-10,-10,-10,-10,-10,-10,-20,
+    -10,  5,  0,  0,  0,  0,  5,-10,
+    -10, 10, 15, 15, 15, 15, 10,-10,
+    -10, 10, 15, 20, 20, 15, 10,-10,
+    -10, 10, 15, 20, 20, 15, 10,-10,
+    -10, 10, 15, 15, 15, 15, 10,-10,
+    -10,  5,  0,  0,  0,  0,  5,-10,
+    -20,-10,-10,-10,-10,-10,-10,-20
+};
+
+static const int MG_ROOK_PST[64] = {
     0,  0,  0,  5,  5,  0,  0,  0,
     -5,  0,  0,  0,  0,  0,  0, -5,
     -5,  0,  0,  0,  0,  0,  0, -5,
@@ -57,7 +79,18 @@ static const int ROOK_PST[64] = {
     0,  0,  0,  0,  0,  0,  0,  0,
 };
 
-static const int QUEEN_PST[64] = {
+static const int EG_ROOK_PST[64] = {
+     0,  5, 10, 15, 15, 10,  5,  0,
+     0,  5, 10, 15, 15, 10,  5,  0,
+     0,  5, 10, 15, 15, 10,  5,  0,
+     0,  5, 10, 15, 15, 10,  5,  0,
+     0,  5, 10, 15, 15, 10,  5,  0,
+     0,  5, 10, 15, 15, 10,  5,  0,
+     5, 10, 15, 20, 20, 15, 10,  5,
+     0,  0,  5, 10, 10,  5,  0,  0
+};
+
+static const int MG_QUEEN_PST[64] = {
     -20,-10,-10, -5, -5,-10,-10,-20,
     -10,  0,  5,  0,  0,  0,  0,-10,
     -10,  5,  5,  5,  5,  5,  0,-10,
@@ -68,7 +101,18 @@ static const int QUEEN_PST[64] = {
     -20,-10,-10, -5, -5,-10,-10,-20,
 };
 
-static const int KING_PST[64] = {
+static const int EG_QUEEN_PST[64] = {
+    -20,-10,-10, -5, -5,-10,-10,-20,
+    -10,  0,  5, 10, 10,  5,  0,-10,
+    -10,  5, 10, 15, 15, 10,  5,-10,
+     -5, 10, 15, 20, 20, 15, 10, -5,
+     -5, 10, 15, 20, 20, 15, 10, -5,
+    -10,  5, 10, 15, 15, 10,  5,-10,
+    -10,  0,  5, 10, 10,  5,  0,-10,
+    -20,-10,-10, -5, -5,-10,-10,-20
+};
+
+static const int MG_KING_PST[64] = {
     20, 30, 10,  0,  0, 10, 30, 20,
     20, 20,  0,  0,  0,  0, 20, 20,
     -10,-20,-20,-20,-20,-20,-20,-10,
@@ -79,16 +123,39 @@ static const int KING_PST[64] = {
     -30,-40,-40,-50,-50,-40,-40,-30,
 };
 
+// stolen from https://github.com/SebLague/Chess-Coding-Adventure/blob/Chess-V2-UCI/Chess-Coding-Adventure/src/Core/Evaluation/PieceSquareTable.cs
+static const int EG_KING_PST[64] = {
+    -20, -10, -10, -10, -10, -10, -10, -20,
+    -5,   0,   5,   5,   5,   5,   0,  -5,
+    -10, -5,   20,  30,  30,  20,  -5, -10,
+    -15, -10,  35,  45,  45,  35, -10, -15,
+    -20, -15,  30,  40,  40,  30, -15, -20,
+    -25, -20,  20,  25,  25,  20, -20, -25,
+    -30, -25,   0,   0,   0,   0, -25, -30,
+    -50, -30, -30, -30, -30, -30, -30, -50
+};
+
+
 static const int ZEROED_PST[64] = {};
 
-static const int* PST[NUM_PIECE_TYPES] = {
+static const int* MG_PST[NUM_PIECE_TYPES] = {
     ZEROED_PST,
-    PAWN_PST,
-    ROOK_PST,
+    MG_PAWN_PST,
+    MG_ROOK_PST,
     KNIGHT_PST,
-    BISHOP_PST,
-    QUEEN_PST,
-    KING_PST,
+    MG_BISHOP_PST,
+    MG_QUEEN_PST,
+    MG_KING_PST,
+};
+
+static const int* EG_PST[NUM_PIECE_TYPES] = {
+    ZEROED_PST,
+    MG_PAWN_PST,
+    MG_ROOK_PST,
+    KNIGHT_PST,
+    MG_BISHOP_PST,
+    MG_QUEEN_PST,
+    EG_KING_PST,
 };
 
 static const int64_t SHELTER_STRENGTH_BONUS = 20;
@@ -105,24 +172,48 @@ static const int64_t DOUBLED_PAWN_PENALTY = 10; // This will trigger twice so ha
 static const int64_t CONNECTED_PAWN_BONUS = 5;
 static const int64_t PASSED_PAWN_BONUS = 30;
 
-int32_t unsigned_pst_value(Piece piece, int square, int side) {
-    return PST[piece][square ^ (bool_to_mask<int>(side==BLACK) & 56)];
+int32_t mg_unsigned_pst_value(Piece piece, int square, int side) {
+    return MG_PST[piece][square ^ (bool_to_mask<int>(side==BLACK) & 56)];
+}
+
+int32_t eg_unsigned_pst_value(Piece piece, int square, int side) {
+    return EG_PST[piece][square ^ (bool_to_mask<int>(side==BLACK) & 56)];
 }
 
 int64_t Position::compute_eval() const {
+
     int64_t value = sides[WHITE].material_value() - sides[BLACK].material_value();
+
+    // Compute phase
+    int phase = 0;
+    phase += std::popcount(sides[WHITE].bb[PIECE_KNIGHT] | sides[BLACK].bb[PIECE_KNIGHT]) * 1;
+    phase += std::popcount(sides[WHITE].bb[PIECE_BISHOP] | sides[BLACK].bb[PIECE_BISHOP]) * 1;
+    phase += std::popcount(sides[WHITE].bb[PIECE_ROOK]   | sides[BLACK].bb[PIECE_ROOK]  ) * 2;
+    phase += std::popcount(sides[WHITE].bb[PIECE_QUEEN]  | sides[BLACK].bb[PIECE_QUEEN] ) * 4;
+    phase = std::min(phase, 24);
+
+    int mg_weight = static_cast<uint8_t>(phase);
+    int eg_weight = 24 - static_cast<uint8_t>(phase);
+    int mg_score = 0;
+    int eg_score = 0;
 
     for (int p = PIECE_PAWN; p < NUM_PIECE_TYPES; ++p) {
         for (int sq : set_bits(sides[WHITE].bb[p])) {
-            value += unsigned_pst_value((Piece)p, sq, WHITE);
+            mg_score += mg_unsigned_pst_value((Piece)p, sq, WHITE);
+            eg_score += eg_unsigned_pst_value((Piece)p, sq, WHITE);
         }
     }
 
     for (int p = PIECE_PAWN; p < NUM_PIECE_TYPES; ++p) {
         for (int sq : set_bits(sides[BLACK].bb[p])) {
-            value -= unsigned_pst_value((Piece)p, sq, BLACK);
+            mg_score -= mg_unsigned_pst_value((Piece)p, sq, BLACK);
+            eg_score -= eg_unsigned_pst_value((Piece)p, sq, BLACK);
         }
     }
+
+    value += ((mg_score * mg_weight + eg_score * eg_weight) / 24);
+
+
     
     uint64_t white_pawns = sides[WHITE].bb[PIECE_PAWN]; 
     uint64_t black_pawns = sides[BLACK].bb[PIECE_PAWN];
@@ -326,7 +417,6 @@ int64_t Position::bishop_imbalance() const {
 }
 
 
-
 int64_t Position::signed_eval() const {
     int64_t sign = to_move == WHITE ? 1 : -1;
     return incremental_eval * sign;
@@ -335,7 +425,7 @@ int64_t Position::signed_eval() const {
 inline int32_t piece_delta(Piece piece, int sq, int side) {
     int32_t sign = side == BLACK ? -1 : 1;
     int32_t value = 0;
-    value += sign * unsigned_pst_value(piece, sq, side);
+    value += sign * mg_unsigned_pst_value(piece, sq, side);
     value += sign * piece_value_table[piece];
     return value;
 }
