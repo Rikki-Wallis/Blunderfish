@@ -22,7 +22,7 @@ void eval_search(int depth, Position& position) {
             position.make_move(move);
             position.verify_integrity();
 
-            if (!position.is_in_check(my_side)) {
+            if (!position.is_checked[my_side]) {
                 eval_search(depth-1, position);
             }
             
@@ -30,10 +30,10 @@ void eval_search(int depth, Position& position) {
             position.verify_integrity();
         }
 
-        if (!position.is_in_check(my_side)) {
+        if (!position.is_checked[my_side]) {
             position.make_null_move();
 
-            if (!position.is_in_check(my_side)) {
+            if (!position.is_checked[my_side]) {
                 eval_search(depth-1, position);
             }
 

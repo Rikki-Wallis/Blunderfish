@@ -287,7 +287,7 @@ int64_t Position::total_non_pawn_value() const {
 
     for (int p = PIECE_PAWN + 1; p < NUM_PIECE_TYPES; ++p) {
         int count = std::popcount(sides[WHITE].bb[p]) + std::popcount(sides[BLACK].bb[p]);
-        value += piece_value_centipawns((Piece)p) * count;
+        value += piece_value_table[p] * count;
     }
 
     return value;
@@ -300,4 +300,9 @@ void Position::reset_benchmarking_statistics() {
     null_prunes = 0;
     cutoff_index_count = 0;
     cutoff_index_sum = 0;
+}
+
+int Position::get_king_sq(int side) const {
+    assert(std::popcount(sides[side].bb[PIECE_KING]) == 1);
+    return std::countr_zero(sides[side].bb[PIECE_KING]);
 }

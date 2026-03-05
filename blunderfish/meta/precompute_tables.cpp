@@ -309,7 +309,7 @@ uint64_t black_pawn_attacks_at(int from) {
 }
 
 static void dump_trivial_move_table(FILE* file, const std::string& name, uint64_t(*moves_at)(int)) {
-    fprint(file, "const uint64_t {}_table[] = {{\n", name);
+    fprint(file, "const uint64_t {}[] = {{\n", name);
     for (int i = 0; i < 64; ++i) {
         if (i%8==0) {
             fprint(file, "  ");
@@ -324,6 +324,114 @@ static void dump_trivial_move_table(FILE* file, const std::string& name, uint64_
         }
     }
     fprint(file, "}};\n\n");
+}
+
+inline int sign(int x) {
+    if (x < 0) {
+        return -1;
+    }
+    else if (x > 0) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
+}
+
+static uint64_t compute_line(int a, int b, bool bounded) {
+    if (a == b) {
+        return 0;
+    }
+
+    int ar = (a >> 3) & 7;
+    int af = a & 7;
+
+    int br = (b >> 3) & 7;
+    int bf = b & 7;
+
+    bool straight = ar == br || af == bf; // either they are on the same rank or the same file
+    bool diag     = std::abs(br-ar) == std::abs(bf-af); // or the difference between the files is the same as the distance between the ranks
+
+    if (!straight && !diag) {
+        return 0;
+    }
+
+    // we'll slide from a to b
+
+    int dr = sign(br-ar);
+    int df = sign(bf-af);
+
+    uint64_t result = 0;
+
+    int r = ar;
+    int f = af;
+
+    for (;;) {
+        r += dr;
+        f += df;
+
+        if (r < 0 || r >= 8 || f < 0 || f >= 8) {
+            break;
+        }
+
+        int sq = r * 8 + f;
+
+        if (bounded && sq == b) {
+            break;
+        }
+
+        result |= uint64_t(1) << sq;
+    }
+
+    r = br;
+    f = bf;
+
+    for (;;) {
+        r -= dr;
+        f -= df;
+
+        if (r < 0 || r >= 8 || f < 0 || f >= 8) {
+            break;
+        }
+
+        int sq = r * 8 + f;
+
+        if (bounded && sq == a) {
+            break;
+        }
+
+        result |= uint64_t(1) << sq;
+    }
+
+    return result;
+}
+
+template<typename F>
+static void generate_line_segment_table(FILE* file, const std::string& name, F&& func) {
+    for (int a = 0; a < 64; ++a) {
+        fprint(file, "const uint64_t {}_from_{}[] = {{\n", name, a);
+        for (int b = 0; b < 64; ++b) {
+            if (b%8==0) {
+                fprint(file, "  ");
+            }
+
+            uint64_t val = std::forward<F>(func)(a, b);
+
+            fprint(file, "0x{:x},", val);
+
+            if ((b+1) % 8 == 0) {
+                fprint(file, "\n");
+            }
+        }
+        fprint(file, "}};\n\n");
+    }
+
+    fprint(file, "const uint64_t* {}[64] = {{\n", name);
+    for (int a = 0; a < 64; ++a) {
+        fprint(file, "  {}_from_{},\n", name, a);
+    }
+    fprint(file, "}};\n\n");
+
 }
 
 int main(int argc, char** argv) {
@@ -351,10 +459,18 @@ int main(int argc, char** argv) {
     rooks.dump(file, "rook");
     bishops.dump(file, "bishop");
 
-    dump_trivial_move_table(file, "knight_move", knight_moves_at);
-    dump_trivial_move_table(file, "king_move", king_moves_at);
-    dump_trivial_move_table(file, "white_pawn_attacks", white_pawn_attacks_at);
-    dump_trivial_move_table(file, "black_pawn_attacks", black_pawn_attacks_at);
+    dump_trivial_move_table(file, "knight_move_table", knight_moves_at);
+    dump_trivial_move_table(file, "king_move_table", king_moves_at);
+    dump_trivial_move_table(file, "white_pawn_attacks_table", white_pawn_attacks_at);
+    dump_trivial_move_table(file, "black_pawn_attacks_table", black_pawn_attacks_at);
+
+    generate_line_segment_table(file, "between", [](int a, int b){
+        return compute_line(a, b, true);
+    });
+
+    generate_line_segment_table(file, "line", [](int a, int b){
+        return compute_line(a, b, false);
+    });
 
     return 0;
 }

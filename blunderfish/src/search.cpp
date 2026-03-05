@@ -59,10 +59,9 @@ static Move select_best(std::span<Move>& moves, std::span<int32_t>& move_scores,
 }
 
 int32_t Position::mvv_lva_score(Move mv, int32_t offset) const{
-    int captured_sq = get_captured_square(mv);
-    Piece captured_piece = (Piece)piece_at[captured_sq];
+    Piece captured_piece = move_captured_piece(mv);
     Piece moving_piece = (Piece)piece_at[move_from(mv)];
-    int32_t score = offset + piece_value_centipawns(captured_piece) * 1000 - piece_value_centipawns(moving_piece);
+    int32_t score = offset + piece_value_table[captured_piece] * 1000 - piece_value_table[moving_piece];
     return captured_piece == PIECE_NONE ? 0 : score;
 }
 
@@ -111,6 +110,8 @@ static std::span<int32_t> compute_move_scores(Position* pos, HistoryTable& histo
     for (size_t i = 0; i < moves.size(); ++i) {
         Move mv = moves[i];
 
+        bool quiet = !is_capture(mv);
+
         if (mv == best_move) {
             move_scores[i] = BEST_MOVE_SCORE;
         }
@@ -121,7 +122,12 @@ static std::span<int32_t> compute_move_scores(Position* pos, HistoryTable& histo
             move_scores[i] = KILLER_2_SCORE;
         }
         else {
-            int32_t offset = pos->see(mv) < 0 ? BAD_CAPTURE_SCORE : GOOD_CAPTURE_SCORE;
+            int32_t offset = 0;
+            
+            if (!quiet) {
+                offset = pos->see(mv) < 0 ? BAD_CAPTURE_SCORE : GOOD_CAPTURE_SCORE;
+            }
+
             int32_t score = pos->mvv_lva_score(mv, offset);
 
             Piece piece = (Piece)pos->piece_at[move_from(mv)];
@@ -223,7 +229,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     }
 
     int64_t best_score = -MATE_SCORE;
-    bool currently_checked = is_in_check(my_side);
+    bool currently_checked = is_checked[my_side];
 
     // Reverse futility pruning - 
 
@@ -239,7 +245,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     // Null move pruning
     // if we give the opponent a free move and alpha >= beta, our position is too good, so prune
 
-    bool low_material = total_non_pawn_value() <= 2 * piece_value_centipawns(PIECE_KNIGHT);
+    bool low_material = total_non_pawn_value() <= 2 * piece_value_table[PIECE_KNIGHT];
     bool skip_null = !allow_null || currently_checked || low_material || (signed_eval() < (beta - 50 * depth));
 
     int R = 3 + depth / 6; // we subtract this from depth to reduce the search depth
@@ -312,7 +318,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
 
         make_move(m);
 
-        if (!is_in_check(my_side)) {
+        if (!is_checked[my_side]) {
             legal_found = true;
 
             int64_t score;
@@ -367,7 +373,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     }
 
     if (!legal_found) { // no legal moves
-        if (is_in_check(my_side)) {
+        if (is_checked[my_side]) {
             best_score = -MATE_SCORE + ply; // checkmate
         }
         else {
@@ -386,7 +392,7 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
     qnode_count++;
 
     int side = to_move;
-    bool currently_checked = is_in_check(side);
+    bool currently_checked = is_checked[side];
 
     int64_t best_score = -MATE_SCORE;
 
@@ -428,7 +434,9 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
     for (int i = 0; i < (int)moves.size(); ++i) {
         Move mv = select_best(moves, move_scores, i);
 
-        if (!currently_checked && see(mv) < 0) {
+        bool quiet = !is_capture(mv);
+
+        if (!quiet && !currently_checked && see(mv) < 0) {
             continue;
         }
 
@@ -436,7 +444,7 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
 
         make_move(mv);
 
-        if (!is_in_check(side)) {
+        if (!is_checked[side]) {
             legal_found = true;
 
             int64_t score = -quiescence(ply+1, -beta, -alpha);

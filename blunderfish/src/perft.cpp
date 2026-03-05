@@ -22,7 +22,7 @@ uint64_t perft_search(int depth, Position& position) {
         position.make_move(move);
         position.verify_integrity();
 
-        if (!position.is_in_check(side)) {
+        if (!position.is_checked[side]) {
             nodes += perft_search(depth-1, position);
         }
 
