@@ -140,14 +140,24 @@ int64_t Position::signed_eval() const {
     return incremental_eval * sign;
 }
  
-void Position::eval_remove_piece(Piece piece, int sq, int side) {
+inline int32_t piece_delta(Piece piece, int sq, int side) {
     int32_t sign = side == BLACK ? -1 : 1;
-    incremental_eval -= sign * unsigned_pst_value(piece, sq, side);
-    incremental_eval -= sign * piece_value_centipawns(piece);
+    int32_t value = 0;
+    value += sign * unsigned_pst_value(piece, sq, side);
+    value += sign * piece_value_centipawns(piece);
+    return value;
 }
 
-void Position::eval_add_piece(Piece piece, int sq, int side) {
-    int32_t sign = side == BLACK ? -1 : 1;
-    incremental_eval += sign * unsigned_pst_value(piece, sq, side);
-    incremental_eval += sign * piece_value_centipawns(piece);
+void Position::update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side) {
+    // NOTE: if rook_from == rook_to there is NO castle
+    // ensure that if that is the case, your castling operations have a NET ZERO
+
+    incremental_eval -= piece_delta(captured_piece, captured_pos, opponent(side));
+
+    incremental_eval -= piece_delta(moving_piece_start, move_from, side);
+    incremental_eval += piece_delta(moving_piece_end, move_to, side);
+
+    // since these are symmetric, should have net zero when rook_from == rook_to
+    incremental_eval -= piece_delta(PIECE_ROOK, rook_from, to_move);
+    incremental_eval += piece_delta(PIECE_ROOK, rook_to, to_move);
 }

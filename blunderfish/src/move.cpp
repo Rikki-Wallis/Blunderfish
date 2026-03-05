@@ -671,7 +671,6 @@ void Position::make_move(Move move) {
     uint64_t capture_mask = bool_to_mask<uint64_t>(captured_piece != PIECE_NONE) & sq_to_bb(captured_pos);
     sides[opponent(to_move)].bb[captured_piece] ^= capture_mask;
     piece_at[captured_pos] = PIECE_NONE; // if no captured piece, this is okay because it will be updated with the moving piece
-    eval_remove_piece(captured_piece, captured_pos, opponent(to_move)); // can call this function on empty square
 
     // move the piece
     Piece start_piece = (Piece)piece_at[move_from(move)];
@@ -691,9 +690,6 @@ void Position::make_move(Move move) {
 
     piece_at[move_from(move)] = PIECE_NONE;
     piece_at[move_to(move)] = static_cast<uint8_t>(end_piece);
-
-    eval_remove_piece(start_piece, move_from(move), to_move);
-    eval_add_piece(end_piece, move_to(move), to_move);
 
     // Update castling rights when a rook or a king is moved, or a rook is taken
 
@@ -737,15 +733,12 @@ void Position::make_move(Move move) {
     
     std::swap(piece_at[rook_from], piece_at[rook_to]); // if not castle, it swaps the same position, so no change
 
-    if (is_castle) { // TODO: find a way to remove this branch - its probably fast anyway
-        eval_remove_piece(PIECE_ROOK, rook_from, to_move);
-        eval_add_piece(PIECE_ROOK, rook_to, to_move);
-    }
-
 #ifdef ZOBRIST_INCLUDE_FLAGS
     zobrist ^= zobrist_table.piece[to_move][PIECE_ROOK][rook_from];
     zobrist ^= zobrist_table.piece[to_move][PIECE_ROOK][rook_to]; // if not castle, same square so net zero change
 #endif
+
+    update_eval(captured_piece, captured_pos, start_piece, end_piece, move_from(move), move_to(move), rook_from, rook_to, to_move);
 
     // update to_move
     

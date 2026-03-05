@@ -214,9 +214,8 @@ struct Position {
     int64_t compute_eval() const;
     int64_t signed_eval() const;
 
-    // @note removing PIECE_NONE is a valid operation
-    void eval_remove_piece(Piece piece, int sq, int side);
-    void eval_add_piece(Piece piece, int sq, int side);
+    // @note if no castle, make rook_from == rook_ro
+    void update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side);
 
     int64_t pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta);
     int64_t quiescence(int ply, int64_t alpha, int64_t beta);
