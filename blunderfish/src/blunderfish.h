@@ -352,11 +352,8 @@ inline Move encode_move(int from, int to, MoveType type, Piece end_piece, int si
 inline uint64_t bb_to_file(uint64_t bb) {
     static const uint64_t file_table[8] = { FILE_A, FILE_B, FILE_C, FILE_D, FILE_E, FILE_F, FILE_G, FILE_H };
     if (bb == 0) return 0;
-
-    unsigned long index;
-    _BitScanForward64(&index, bb); 
-
-    int file = index % 8; 
+    int sq = std::countr_zero(bb);
+    int file = sq & 7; 
     return file_table[file];
 }
 
