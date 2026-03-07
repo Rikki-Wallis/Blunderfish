@@ -75,3 +75,13 @@ private:
     static constexpr size_t NUM_WORDS = (N + 63) / 64;
     uint64_t _data[NUM_WORDS];
 };
+
+#if defined(__GNUC__) || defined(__clang__)
+    // 0 means prepare for a read, 3 means high temporal locality (keep it in all cache levels)
+    #define PREFETCH(addr) __builtin_prefetch((const void*)(addr), 0, 3)
+#elif defined(_MSC_VER)
+    #include <xmmintrin.h>
+    #define PREFETCH(addr) _mm_prefetch((const char*)(addr), _MM_HINT_T0)
+#else
+    #define PREFETCH(addr) // Fallback for unknown compilers does nothing
+#endif

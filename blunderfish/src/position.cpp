@@ -282,11 +282,11 @@ void Position::verify_integrity() const {
     assert(memcmp(map, piece_at, sizeof(map)) == 0);
 }
 
-int64_t Position::total_non_pawn_value() const {
+int64_t Position::non_pawn_value(int side) const {
     int64_t value = 0;
 
     for (int p = PIECE_PAWN + 1; p < NUM_PIECE_TYPES; ++p) {
-        int count = std::popcount(sides[WHITE].bb[p]) + std::popcount(sides[BLACK].bb[p]);
+        int count = std::popcount(sides[side].bb[p]);
         value += piece_value_table[p] * count;
     }
 
@@ -294,12 +294,16 @@ int64_t Position::total_non_pawn_value() const {
 }
 
 void Position::reset_benchmarking_statistics() {
+    max_ply = 0;
     node_count = 0;
     qnode_count = 0;
+    pv_node_count = 0;
     beta_cutoffs = 0;
     null_prunes = 0;
     cutoff_index_count = 0;
     cutoff_index_sum = 0;
+    reduced_searches = 0;
+    reduced_fail_high = 0;
 }
 
 int Position::get_king_sq(int side) const {

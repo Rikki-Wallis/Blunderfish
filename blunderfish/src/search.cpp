@@ -3,8 +3,6 @@
 
 #include "blunderfish.h"
 
-constexpr int64_t FUTILITY_MARGIN = 200;
-
 constexpr int32_t BEST_MOVE_SCORE    = 2000000;
 constexpr int32_t GOOD_CAPTURE_SCORE = 90000;
 constexpr int32_t MAX_HISTORY_SCORE  = 80000;
@@ -16,13 +14,15 @@ constexpr uint64_t TT_MASK = TRANSPOSITION_TABLE_SIZE - 1;
 
 using LMRTable = std::array<std::array<int, 64>,64>;
 
-constexpr LMRTable generate_lmr_table() {
+static LMRTable generate_lmr_table() {
     LMRTable table;
 
     for (int d = 1; d < 64; d++) {
         for (int i = 1; i < 64; i++) {
-            double base = std::log(d) * std::log(i);
-            table[d][i] = int(base / 1.7 + d / 8.0);
+            double v = std::log((double)d) * std::log((double)i) / 1.6 + d / 10.0;
+            int r = int(v);
+            if (r < 0) r = 0;
+            table[d][i] = r;
         }
     }
 
@@ -65,13 +65,13 @@ int32_t Position::mvv_lva_score(Move mv, int32_t offset) const{
     return captured_piece == PIECE_NONE ? 0 : score;
 }
 
-static uint16_t compress_zobrist(uint64_t zobrist) {
-    return uint16_t(zobrist >> 48);
+static uint32_t compress_zobrist(uint64_t zobrist) {
+    return uint32_t(zobrist >> 32);
 }
 
 bool update_tt_entry(TTEntry& entry, uint64_t zobrist, int depth, int64_t score, int ply, int64_t alpha_original, int64_t beta_original, Move best_move) {
-    if (entry.key16 != compress_zobrist(zobrist) || depth > entry.depth) {
-        entry.key16 = compress_zobrist(zobrist);
+    if (entry.key32 != compress_zobrist(zobrist) || depth > entry.depth) {
+        entry.key32 = compress_zobrist(zobrist);
 
         assert(depth <= UINT8_MAX);
         entry.depth = (uint8_t)depth;
@@ -139,19 +139,21 @@ static std::span<int32_t> compute_move_scores(Position* pos, HistoryTable& histo
     return move_scores;
 }
 
+#define PREFETCH_TT() PREFETCH(&tt[zobrist & TT_MASK])
+
 static TTEntry& find_entry(TranspositionTable& tt, uint64_t zobrist) {
     TTCluster& cluster = tt[zobrist & TT_MASK];
 
     // find match
     for (auto& e : cluster.entries) {
-        if (e.key16 == compress_zobrist(zobrist)) {
+        if (e.key32 == compress_zobrist(zobrist)) {
             return e;
         }
     }
 
     // find empty
     for (auto& e : cluster.entries) {
-        if (e.key16 == 0) {
+        if (e.key32 == 0) {
             return e;
         }
     }
@@ -170,6 +172,11 @@ static TTEntry& find_entry(TranspositionTable& tt, uint64_t zobrist) {
 int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta) {
     node_count++;
 
+    max_ply = std::max(max_ply, ply);
+
+    bool is_pv = (beta-alpha) > 1;
+    pv_node_count += is_pv;
+
     if (depth == 0) {
         return quiescence(ply, alpha, beta);
     }
@@ -185,7 +192,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
 
     TTEntry& match = find_entry(tt, zobrist);
 
-    if (match.key16 == compress_zobrist(zobrist)) { // exact match
+    if (match.key32 == compress_zobrist(zobrist)) { // exact match
         if (match.depth >= depth) {
             int64_t entry_score = int64_t(match.score);
 
@@ -223,7 +230,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
         pruned_negamax(depth-2, tt, history, killers, ply, true, alpha, beta);
 
         TTEntry& e = find_entry(tt, zobrist);
-        if (e.key16 == compress_zobrist(zobrist)) {
+        if (e.key32 == compress_zobrist(zobrist)) {
             tt_move = e.best_move;
         }
     }
@@ -245,8 +252,8 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     // Null move pruning
     // if we give the opponent a free move and alpha >= beta, our position is too good, so prune
 
-    bool low_material = total_non_pawn_value() <= 2 * piece_value_table[PIECE_KNIGHT];
-    bool skip_null = !allow_null || currently_checked || low_material || (signed_eval() < (beta - 50 * depth));
+    bool low_material = non_pawn_value(my_side) <= 2 * piece_value_table[PIECE_KNIGHT];
+    bool skip_null = !allow_null || currently_checked || low_material;
 
     int R = 3 + depth / 6; // we subtract this from depth to reduce the search depth
 
@@ -276,14 +283,20 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     std::array<int32_t, 256> score_buf;
     std::span<int32_t> move_scores = compute_move_scores(this, history, killers, ply, score_buf, moves, tt_move);
 
-    bool futility_prune = depth == 1 && !currently_checked && ((signed_eval() + FUTILITY_MARGIN) < alpha); // if quiet moves couldn't possibly improve the position at the leaves by enough, don't search them
-
-    bool legal_found = false;
+    bool futility_prune = false;
+    if (depth <= 3 && !currently_checked && (std::abs(alpha) < MATE_SCORE - 1000)) {
+        int f_margin = depth * 200;
+        if (signed_eval() + f_margin <= alpha) {
+            futility_prune = true;
+        }
+    }
 
     Move best_move = NULL_MOVE;
 
-    for (int i = 0; i < (int)moves.size(); ++i) {
-        Move m = select_best(moves, move_scores, i);
+    int move_index = 0; // the index of move out of all LEGAL moves
+
+    for (int mv_idx_raw = 0; mv_idx_raw < (int)moves.size(); ++mv_idx_raw) {
+        Move m = select_best(moves, move_scores, mv_idx_raw);
 
         Piece piece = (Piece)piece_at[move_from(m)];
         int to = move_to(m);
@@ -291,45 +304,62 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
         bool cutoff = false;
         bool quiet = !is_capture(m);
 
+        if (futility_prune && quiet) {
+            continue;
+        }
+
         // Late move pruning
 
         if (depth <= 4 && !currently_checked && quiet) {
-            if (i > (3 + 2 * depth * depth)) { 
+            if (move_index > (3 + 2 * depth * depth)) { 
                 continue; 
             }
         }
 
         int reduction = 0;
 
-        if (depth >= 3 && quiet && !currently_checked && i >= 3) {
-            int idx = i;
-            if (idx > 63) {
-                idx = 63;
-            }
+        if (depth >= 3 && quiet && !currently_checked && move_index >= 2) {
+            int idx = std::min(move_index, 63);
             reduction = (int)lmr_table[depth][idx];
-            //reduction = 1 + (depth / 3) + (i / 8); 
-            // Don't reduce so much that we hit the leaf (depth 0) immediately
-            if (reduction >= depth) reduction = depth - 1;
+
+            if (depth <= 5) {
+                reduction = std::max(0, reduction - 1);
+            }
+
+            if (history[piece][to] > 1000) { // tune this threshold
+                reduction = std::max(0, reduction - 1);
+            }
+            else if (history[piece][to] < 0) {
+                reduction++; // this move has historically been ass -> reduce ts
+            }
+
+            if (!is_pv) {
+                reduction++; // this move is PROBABLY ass anyway, so slash the search depth
+            }
+
+            reduction = std::min(reduction, std::max(0, depth - 2));
         }
 
-        if (futility_prune && quiet) {
-            continue;
+        if (m == killers[ply][0] || m == killers[ply][1]) {
+            reduction = 0; // never reduce killers - could hurt pruning
         }
 
         make_move(m);
 
         if (!is_checked[my_side]) {
-            legal_found = true;
+            PREFETCH_TT();
 
             int64_t score;
 
-            if (i == 0) {
+            if (move_index == 0) {
                 score = -pruned_negamax(depth - 1, tt, history, killers, ply + 1, true, -beta, -alpha);
             }
             else {
+                reduced_searches += reduction > 0;
                 score = -pruned_negamax(depth - 1 - reduction, tt, history, killers, ply + 1, true, -alpha-1, -alpha); // do null-window search
 
                 if (score > alpha) { // if beats alpha do full-window
+                    reduced_fail_high += reduction > 0;
                     score = -pruned_negamax(depth - 1, tt, history, killers, ply + 1, true, -beta, -alpha);
                 }
             }
@@ -346,6 +376,8 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
             if (alpha >= beta) { // opponent will never allow this; cutoff
                 cutoff = true;
             }
+
+            move_index++;
         }
 
         unmake_move(m);
@@ -362,17 +394,28 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
                 if (history[piece][to] > MAX_HISTORY_SCORE) {
                     history[piece][to] = MAX_HISTORY_SCORE;
                 }
+
+                for (int i = 0; i < mv_idx_raw; ++i) { // we have a quiet cutoff, penalize all previous cutoffs in the history table
+                    Move punished = moves[i];
+                    if (!is_capture(punished)) {
+                        Piece punished_piece = Piece(piece_at[move_from(punished)]);
+                        int punished_to = move_to(punished);
+                        
+                        history[punished_piece][punished_to] -= depth * depth;
+                        history[punished_piece][punished_to] = std::max(history[punished_piece][punished_to], -MAX_HISTORY_SCORE);
+                    }
+                }
             }
 
             cutoff_index_count++;
-            cutoff_index_sum += i;
+            cutoff_index_sum += (move_index-1);
             beta_cutoffs++;
 
             break;
         } 
     }
 
-    if (!legal_found) { // no legal moves
+    if (move_index == 0) { // no legal moves
         if (is_checked[my_side]) {
             best_score = -MATE_SCORE + ply; // checkmate
         }
@@ -395,9 +438,14 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
     bool currently_checked = is_checked[side];
 
     int64_t best_score = -MATE_SCORE;
+    int64_t stand_pat = signed_eval();
+
+    uint64_t promotion_rank = side == WHITE ? RANK_7 : RANK_2;
+    uint64_t pawns = sides[side].bb[PIECE_PAWN];
+    
+    bool can_delta_prune = (pawns & promotion_rank) == 0;
 
     if (!currently_checked) { // if not checked, we can choose to stay here
-        int64_t stand_pat = signed_eval();
         best_score = stand_pat;
 
         alpha = std::max(stand_pat, alpha);
@@ -407,14 +455,9 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
             return stand_pat;
         }
 
-        uint64_t promotion_rank = side == WHITE ? RANK_7 : RANK_2;
-        uint64_t pawns = sides[side].bb[PIECE_PAWN];
-        
-        bool can_delta_prune = (pawns & promotion_rank) == 0;
-
         int BIG_DELTA = 1100;
         if (can_delta_prune && (stand_pat < alpha - BIG_DELTA)) { // even a queen capture can't save us
-            return alpha;
+            return stand_pat;
         }
     }
 
@@ -436,8 +479,19 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
 
         bool quiet = !is_capture(mv);
 
-        if (!quiet && !currently_checked && see(mv) < 0) {
-            continue;
+        if (!quiet && !currently_checked) {
+            if (can_delta_prune)
+            {
+                int32_t capture_value = piece_value_table[move_captured_piece(mv)];
+
+                if (stand_pat + capture_value + 200 < alpha) {
+                    continue;
+                }
+            }
+
+            if (see(mv) < 0) {
+                continue;
+            }
         }
 
         bool cutoff = false;
@@ -492,6 +546,7 @@ std::pair<Move, int64_t> Position::best_move_internal(std::span<Move> moves, int
         Move m = select_best(moves, move_scores, i);
 
         make_move(m); // no need to filter for check here - assumes filtered moves given
+        PREFETCH_TT();
         int64_t score = -pruned_negamax(depth-1, tt, history, killers, ply+1, true, -beta, -alpha);
         unmake_move(m);
 
@@ -537,6 +592,7 @@ Move Position::best_move(std::span<Move> _moves, int depth) {
             }
             else if (score >= beta) {
                 // fail high
+                best_move = move;
                 beta += window;
                 window *= 2;
             }

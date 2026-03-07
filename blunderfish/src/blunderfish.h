@@ -119,11 +119,12 @@ struct Undo {
 };
 
 struct TTEntry {
-    uint16_t key16; // top 16 bits
+    uint32_t key32;
     int16_t score;
     uint8_t depth;
     uint8_t flag;
     Move best_move;
+    uint32_t padding;
 };
 
 struct TTCluster {
@@ -199,12 +200,16 @@ struct Position {
     uint64_t zobrist;
 
     // benchmarking statistics
+    int max_ply;
     int node_count;
     int qnode_count;
+    int pv_node_count;
     int beta_cutoffs;
     int null_prunes; 
     int cutoff_index_count;
     int cutoff_index_sum;
+    int reduced_searches;
+    int reduced_fail_high;
 
     std::array<Undo, MAX_DEPTH> undo_stack;
     int undo_count;
@@ -272,7 +277,7 @@ struct Position {
 
     void update_en_passant_sq(int sq);
 
-    int64_t total_non_pawn_value() const; // used for null move reduction heuristic
+    int64_t non_pawn_value(int side) const; // used for null move reduction heuristic
 
     void reset_benchmarking_statistics();
 
