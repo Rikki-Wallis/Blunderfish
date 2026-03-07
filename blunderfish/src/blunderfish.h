@@ -3,8 +3,12 @@
 #include <optional>
 #include <unordered_map>
 #include <array>
+#include <chrono>
 
 #include "common.h"
+
+using Clock = std::chrono::steady_clock;
+using TimePoint = std::chrono::time_point<Clock>;
 
 #define ZOBRIST_INCLUDE_PIECES
 #define ZOBRIST_INCLUDE_FLAGS
@@ -215,6 +219,10 @@ struct Position {
     std::array<Undo, MAX_DEPTH> undo_stack;
     int undo_count;
 
+    bool should_stop;
+    std::optional<double> time_limit;
+    TimePoint search_start;
+
     Position()
         : to_move(WHITE), en_passant_sq(NULL_SQUARE), flags(0), undo_count(0)
     {
@@ -272,7 +280,7 @@ struct Position {
     int32_t mvv_lva_score(Move mv, int32_t offset) const;
 
     std::pair<Move, int64_t> best_move_internal(std::span<Move> moves, int depth, TranspositionTable& tt, Move last_best_move, HistoryTable& history, KillerTable& killers, EvalHistory& eval_history, int64_t alpha, int64_t beta);
-    Move best_move(std::span<Move> moves, int depth);
+    Move best_move(std::span<Move> moves, int depth, std::optional<double> time_limit = std::nullopt);
 
     uint64_t compute_zobrist() const;
 
@@ -281,6 +289,8 @@ struct Position {
     int64_t non_pawn_value(int side) const; // used for null move reduction heuristic
 
     void reset_benchmarking_statistics();
+
+    bool out_of_time() const;
 
     // eval
     int64_t pawn_structure(int colour, uint64_t ally_pawn_bb) const;

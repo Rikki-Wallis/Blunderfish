@@ -106,7 +106,7 @@ static int perft_main(const char* FEN, int depth) {
     return 0;
 }
 
-static int best_main(const char* FEN, int depth) {
+static int best_main(const char* FEN, int depth, std::optional<double> time_limit) {
     auto maybe_pos = Position::decode_fen_string(FEN);
 
     if (!maybe_pos) {
@@ -121,7 +121,7 @@ static int best_main(const char* FEN, int depth) {
     pos.filter_moves(moves);
     auto names = pos.name_moves(moves);
 
-    Move best = pos.best_move(moves, depth);
+    Move best = pos.best_move(moves, depth, time_limit);
 
     if (best == NULL_MOVE) {
         print("There is no move.\n");
@@ -223,7 +223,18 @@ int main(int argc, char** argv) {
             }
         }
 
-        return best_main(argv[2], depth);
+        std::optional<double> time_limit = std::nullopt;
+
+        if (argc >= 5) {
+            double lim = atof(argv[4]);
+            if (lim < 0.001) {
+                print("Invalid time limit '{}'\n", argv[4]);
+                return 1;
+            }
+            time_limit = lim;
+        }
+
+        return best_main(argv[2], depth, time_limit);
     }
 
     if (strcmp(argv[1], "moves") == 0) {

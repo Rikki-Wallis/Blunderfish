@@ -19,7 +19,7 @@ static LMRTable generate_lmr_table() {
 
     for (int d = 1; d < 64; d++) {
         for (int i = 1; i < 64; i++) {
-            double reduction = 0.5 + std::log(d) * std::log(i) / 1.1;
+            double reduction = 0.5 + std::log(d) * std::log(i) / 1.35;
             int r = int(reduction);
             if (r < 0) r = 0;
             table[d][i] = r;
@@ -170,6 +170,16 @@ static TTEntry& find_entry(TranspositionTable& tt, uint64_t zobrist) {
 }
 
 int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, EvalHistory& eval_history, int ply, bool allow_null, int64_t alpha, int64_t beta, Move excluded_move, int extensions_so_far, int root_depth) {
+    if ((node_count & 4095) == 0) {
+        if (out_of_time()) {
+            should_stop = true;
+        }
+    }
+
+    if (should_stop) {
+        return 0;
+    }
+
     node_count++;
 
     if (depth == 0) {
@@ -242,7 +252,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     bool tt_is_singular = false;
 
     if (depth >= 6 && tt_move != NULL_MOVE && excluded_move == NULL_MOVE && match.flag != TT_SCORE_UPPER && std::abs(match.score) < MATE_SCORE - 1000) {
-        int singular_margin = depth; // start with 1 cp per depth
+        int singular_margin = 2 * depth;
         int singular_beta = match.score - singular_margin;
 
         int64_t exc_score = pruned_negamax(depth/2, tt, history, killers, eval_history, ply, false, singular_beta-1, singular_beta, tt_move, extensions_so_far, root_depth);
@@ -360,7 +370,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
             int reduction = 0;
             bool bad_capture = !quiet && (see(m) < 0);
 
-            if (depth >= 2 && (quiet || bad_capture) && !currently_checked && move_index >= 2 && !gives_check) {
+            if (depth >= 2 && (quiet || bad_capture) && !currently_checked && move_index >= 3 && !gives_check) {
                 int idx = std::min(move_index, 63);
                 reduction = (int)lmr_table[depth][idx];
 
@@ -623,8 +633,10 @@ std::pair<Move, int64_t> Position::best_move_internal(std::span<Move> moves, int
     return {best_move, best_score};
 }
 
-Move Position::best_move(std::span<Move> _moves, int depth) {
+Move Position::best_move(std::span<Move> _moves, int depth, std::optional<double> limit) {
     reset_benchmarking_statistics();
+
+    time_limit = limit;
 
     KillerTable killers{};
     HistoryTable history{};
@@ -644,6 +656,10 @@ Move Position::best_move(std::span<Move> _moves, int depth) {
 
         while (true) {
             auto [move, score] = best_move_internal(moves, i, tt, best_move, history, killers, eval_history, alpha, beta);
+
+            if (should_stop) {
+                break;
+            }
 
             if (score <= alpha) {
                 // fail low
