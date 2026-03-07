@@ -133,6 +133,7 @@ struct TTCluster {
 
 using KillerTable = std::array<std::array<Move, 2>, MAX_DEPTH>;
 using HistoryTable = std::array<std::array<int32_t, 64>, NUM_PIECE_TYPES>;
+using EvalHistory = std::array<int64_t, MAX_DEPTH>;
 
 class TranspositionTable {
 public:
@@ -265,12 +266,12 @@ struct Position {
     void update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side);
     void update_is_checked();
 
-    int64_t pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta);
+    int64_t pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, EvalHistory& eval_history, int ply, bool allow_null, int64_t alpha, int64_t beta);
     int64_t quiescence(int ply, int64_t alpha, int64_t beta);
 
     int32_t mvv_lva_score(Move mv, int32_t offset) const;
 
-    std::pair<Move, int64_t> best_move_internal(std::span<Move> moves, int depth, TranspositionTable& tt, Move last_best_move, HistoryTable& history, KillerTable& killers, int64_t alpha, int64_t beta);
+    std::pair<Move, int64_t> best_move_internal(std::span<Move> moves, int depth, TranspositionTable& tt, Move last_best_move, HistoryTable& history, KillerTable& killers, EvalHistory& eval_history, int64_t alpha, int64_t beta);
     Move best_move(std::span<Move> moves, int depth);
 
     uint64_t compute_zobrist() const;
