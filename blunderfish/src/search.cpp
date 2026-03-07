@@ -350,59 +350,59 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
 
         make_move(m);
 
-        bool gives_check = is_checked[opponent(my_side)];
-
-        // Late move reduction
-
-        int reduction = 0;
-        bool bad_capture = !quiet && (see(m) < 0);
-
-        if (depth >= 2 && (quiet || bad_capture) && !currently_checked && move_index >= 2 && !gives_check) {
-            int idx = std::min(move_index, 63);
-            reduction = (int)lmr_table[depth][idx];
-
-            if (depth <= 2) {
-                reduction = std::max(0, reduction - 1);
-            }
-
-            if (history[piece][to] > 1000) { // tune this threshold
-                reduction = std::max(0, reduction - 1);
-            }
-            else
-            if (history[piece][to] < 0) {
-                reduction++; // this move has historically been ass -> reduce ts
-            }
-
-            if (!is_pv) {
-                reduction++; // this move is PROBABLY ass anyway, so slash the search depth
-            }
-
-            if (improving) {
-                reduction = std::max(0, reduction - 1);
-            }
-            else {
-                reduction++;
-            }
-
-            reduction = std::min(reduction, std::max(0, depth - 2));
-        }
-
-        if (futility_prune && quiet && !gives_check) {
-            unmake_move(m);
-            continue;
-        }
-
-        // Late move pruning
-
-        if (depth <= 4 && !currently_checked && quiet && !gives_check) {
-            if (move_index > (3 + 2 * depth * depth)) { 
-                unmake_move(m);
-                continue; 
-            }
-        }
-
         if (!is_checked[my_side]) {
             PREFETCH_TT();
+
+            bool gives_check = is_checked[opponent(my_side)];
+
+            // Late move reduction
+
+            int reduction = 0;
+            bool bad_capture = !quiet && (see(m) < 0);
+
+            if (depth >= 2 && (quiet || bad_capture) && !currently_checked && move_index >= 2 && !gives_check) {
+                int idx = std::min(move_index, 63);
+                reduction = (int)lmr_table[depth][idx];
+
+                if (depth <= 2) {
+                    reduction = std::max(0, reduction - 1);
+                }
+
+                if (history[piece][to] > 1000) { // tune this threshold
+                    reduction = std::max(0, reduction - 1);
+                }
+                else
+                if (history[piece][to] < 0) {
+                    reduction++; // this move has historically been ass -> reduce ts
+                }
+
+                if (!is_pv) {
+                    reduction++; // this move is PROBABLY ass anyway, so slash the search depth
+                }
+
+                if (improving) {
+                    reduction = std::max(0, reduction - 1);
+                }
+                else {
+                    reduction++;
+                }
+
+                reduction = std::min(reduction, std::max(0, depth - 2));
+            }
+
+            if (futility_prune && quiet && !gives_check) {
+                unmake_move(m);
+                continue;
+            }
+
+            // Late move pruning
+
+            if (depth <= 4 && !currently_checked && quiet && !gives_check) {
+                if (move_index > (3 + 2 * depth * depth)) { 
+                    unmake_move(m);
+                    continue; 
+                }
+            }
 
             int64_t score;
 

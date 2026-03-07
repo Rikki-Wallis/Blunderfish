@@ -141,6 +141,37 @@ static int best_main(const char* FEN, int depth) {
     return 1;
 }
 
+static int moves_main(const std::string& FEN) {
+    auto maybe_pos = Position::decode_fen_string(FEN);
+
+    if (!maybe_pos) {
+        print("Invalid FEN string '{}'.\n", FEN);
+        return 1;
+    }
+
+    Position pos = std::move(*maybe_pos);
+
+    std::array<Move, 256> move_buf;
+    std::span<Move> moves = pos.generate_moves(move_buf);
+    pos.filter_moves(moves);
+    auto names = pos.name_moves(moves);
+
+    int i = 0;
+    for (auto& [name, m] : names) {
+        if (i > 0) {
+            print(", ");
+        }
+        print("{}", name);
+        i++;
+    }
+    print("\n");
+
+    print("White checked: {}\n", pos.is_checked[WHITE] ? "true" : "false");
+    print("Black checked: {}\n", pos.is_checked[BLACK] ? "true" : "false");
+    
+    return 0;
+}
+
 int main(int argc, char** argv) {
     if (argc < 2) {
         print("Usage: {} <play, eval, best> <FEN?>\n", argv[0]);
@@ -193,6 +224,15 @@ int main(int argc, char** argv) {
         }
 
         return best_main(argv[2], depth);
+    }
+
+    if (strcmp(argv[1], "moves") == 0) {
+        if (argc < 3) {
+            print("Usage: {} moves <FEN>\n", argv[0]);
+            return 1;
+        }
+
+        return moves_main(argv[2]);
     }
 
     print("Invalid mode given '{}'\n", argv[1]);
