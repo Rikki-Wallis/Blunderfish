@@ -293,7 +293,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     // if we give the opponent a free move and alpha >= beta, our position is too good, so prune
 
     bool low_material = non_pawn_value(my_side) <= 2 * piece_value_table[PIECE_KNIGHT];
-    bool skip_null = !allow_null || currently_checked || low_material;
+    bool skip_null = !allow_null || currently_checked || low_material || alpha >= MATE_SCORE - 1000;
 
     int R = 3 + depth / 6; // we subtract this from depth to reduce the search depth
 
@@ -348,24 +348,12 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
         bool cutoff = false;
         bool quiet = !is_capture(m);
 
-        if (futility_prune && quiet) {
-            continue;
-        }
-
-        // Late move pruning
-
-        if (depth <= 4 && !currently_checked && quiet) {
-            if (move_index > (3 + 2 * depth * depth)) { 
-                continue; 
-            }
-        }
-
         // Late move reduction
 
         int reduction = 0;
         bool bad_capture = !quiet && (see(m) < 0);
 
-        if (depth >= 2 && (quiet || bad_capture) && !currently_checked && move_index >= 1) {
+        if (depth >= 2 && (quiet || bad_capture) && !currently_checked && move_index >= 2) {
             int idx = std::min(move_index, 63);
             reduction = (int)lmr_table[depth][idx];
 
@@ -396,6 +384,22 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
         }
 
         make_move(m);
+
+        bool gives_check = is_checked[opponent(my_side)];
+
+        if (futility_prune && quiet && !gives_check) {
+            unmake_move(m);
+            continue;
+        }
+
+        // Late move pruning
+
+        if (depth <= 4 && !currently_checked && quiet && !gives_check) {
+            if (move_index > (3 + 2 * depth * depth)) { 
+                unmake_move(m);
+                continue; 
+            }
+        }
 
         if (!is_checked[my_side]) {
             PREFETCH_TT();
