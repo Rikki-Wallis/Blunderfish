@@ -348,12 +348,16 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
         bool cutoff = false;
         bool quiet = !is_capture(m);
 
+        make_move(m);
+
+        bool gives_check = is_checked[opponent(my_side)];
+
         // Late move reduction
 
         int reduction = 0;
         bool bad_capture = !quiet && (see(m) < 0);
 
-        if (depth >= 2 && (quiet || bad_capture) && !currently_checked && move_index >= 2) {
+        if (depth >= 2 && (quiet || bad_capture) && !currently_checked && move_index >= 2 && !gives_check) {
             int idx = std::min(move_index, 63);
             reduction = (int)lmr_table[depth][idx];
 
@@ -382,10 +386,6 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
 
             reduction = std::min(reduction, std::max(0, depth - 2));
         }
-
-        make_move(m);
-
-        bool gives_check = is_checked[opponent(my_side)];
 
         if (futility_prune && quiet && !gives_check) {
             unmake_move(m);
