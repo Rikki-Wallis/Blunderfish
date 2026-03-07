@@ -128,6 +128,8 @@ static int best_main(const char* FEN, int depth) {
         return 0;
     }
 
+    print("Depth reached: {}\n", pos.max_ply);
+
     for (auto& [name, mv] : names) {
         if (mv == best) {
             print("{}\n", name);

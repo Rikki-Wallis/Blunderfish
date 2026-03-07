@@ -169,7 +169,7 @@ static TTEntry& find_entry(TranspositionTable& tt, uint64_t zobrist) {
     return cluster.entries[shallowest];
 }
 
-int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, EvalHistory& eval_history, int ply, bool allow_null, int64_t alpha, int64_t beta, Move excluded_move) {
+int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, EvalHistory& eval_history, int ply, bool allow_null, int64_t alpha, int64_t beta, Move excluded_move, int extensions_so_far, int root_depth) {
     node_count++;
 
     if (depth == 0) {
@@ -239,16 +239,16 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     // then we can extend the depth of the TT search by 1
     // since we are so confident in this line, we can crank up LMR (which is essentially every other move)
 
-    int extension = 0;
+    bool tt_is_singular = false;
 
     if (depth >= 6 && tt_move != NULL_MOVE && excluded_move == NULL_MOVE && match.flag != TT_SCORE_UPPER && std::abs(match.score) < MATE_SCORE - 1000) {
         int singular_margin = depth; // start with 1 cp per depth
         int singular_beta = match.score - singular_margin;
 
-        int64_t exc_score = pruned_negamax(depth/2, tt, history, killers, eval_history, ply, false, singular_beta-1, singular_beta, tt_move);
+        int64_t exc_score = pruned_negamax(depth/2, tt, history, killers, eval_history, ply, false, singular_beta-1, singular_beta, tt_move, extensions_so_far, root_depth);
 
         if (exc_score < singular_beta) {
-            extension = 1; // no other move can even come close 
+            tt_is_singular = true; // no other move can even come close 
         }
         else if (singular_beta >= beta) { // another move beats beta, we might be able to fail-high immediately
             return exc_score; 
@@ -257,7 +257,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
 
     // we didn't find a TT move; search at a lower depth to try and populate a best move
     if (tt_move == NULL_MOVE && depth >= 4) {
-        pruned_negamax(depth-2, tt, history, killers, eval_history, ply, true, alpha, beta, NULL_MOVE);
+        pruned_negamax(depth-2, tt, history, killers, eval_history, ply, true, alpha, beta, NULL_MOVE, extensions_so_far, root_depth);
 
         TTEntry& e = find_entry(tt, zobrist);
         if (e.key32 == compress_zobrist(zobrist)) {
@@ -303,7 +303,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
         int64_t null_alpha = beta - 1; // we only care if it can beat it, not the actual score
         int64_t null_beta = beta;
         
-        int64_t score = -pruned_negamax(depth - 1 - R, tt, history, killers, eval_history, ply + 1, false, -null_beta, -null_alpha, NULL_MOVE);
+        int64_t score = -pruned_negamax(depth - 1 - R, tt, history, killers, eval_history, ply + 1, false, -null_beta, -null_alpha, NULL_MOVE, extensions_so_far, root_depth);
 
         unmake_null_move();
 
@@ -347,12 +347,6 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
 
         bool cutoff = false;
         bool quiet = !is_capture(m);
-        bool gives_check = is_checked[opponent(my_side)];
-
-        int ext = m == tt_move ? extension : 0;
-        if (gives_check) {
-            ext = std::max(ext, 1); // also extend for moves that give a check
-        }
 
         if (futility_prune && quiet) {
             continue;
@@ -409,15 +403,17 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
             int64_t score;
 
             if (move_index == 0) {
-                score = -pruned_negamax(depth - 1 + ext, tt, history, killers, eval_history, ply + 1, true, -beta, -alpha, NULL_MOVE);
+                int ext = m == tt_move ? (tt_is_singular && (extensions_so_far < root_depth/2)) : 0;
+
+                score = -pruned_negamax(depth - 1 + ext, tt, history, killers, eval_history, ply + 1, true, -beta, -alpha, NULL_MOVE, extensions_so_far + ext, root_depth);
             }
             else {
                 reduced_searches += reduction > 0;
-                score = -pruned_negamax(depth - 1 - reduction + ext, tt, history, killers, eval_history, ply + 1, true, -alpha-1, -alpha, NULL_MOVE); // do null-window search
+                score = -pruned_negamax(depth - 1 - reduction, tt, history, killers, eval_history, ply + 1, true, -alpha-1, -alpha, NULL_MOVE, extensions_so_far, root_depth); // do null-window search
 
                 if (score > alpha) { // if beats alpha do full-window
                     reduced_fail_high += reduction > 0;
-                    score = -pruned_negamax(depth - 1 + ext, tt, history, killers, eval_history, ply + 1, true, -beta, -alpha, NULL_MOVE);
+                    score = -pruned_negamax(depth - 1, tt, history, killers, eval_history, ply + 1, true, -beta, -alpha, NULL_MOVE, extensions_so_far, root_depth);
                 }
             }
 
@@ -604,7 +600,7 @@ std::pair<Move, int64_t> Position::best_move_internal(std::span<Move> moves, int
 
         make_move(m); // no need to filter for check here - assumes filtered moves given
         PREFETCH_TT();
-        int64_t score = -pruned_negamax(depth-1, tt, history, killers, eval_history, ply+1, true, -beta, -alpha, NULL_MOVE);
+        int64_t score = -pruned_negamax(depth-1, tt, history, killers, eval_history, ply+1, true, -beta, -alpha, NULL_MOVE, 0, depth-1);
         unmake_move(m);
 
         if (score > best_score) {
@@ -624,6 +620,8 @@ std::pair<Move, int64_t> Position::best_move_internal(std::span<Move> moves, int
 }
 
 Move Position::best_move(std::span<Move> _moves, int depth) {
+    reset_benchmarking_statistics();
+
     KillerTable killers{};
     HistoryTable history{};
     EvalHistory eval_history{};
