@@ -266,7 +266,7 @@ struct Position {
     void update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side);
     void update_is_checked();
 
-    int64_t pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, EvalHistory& eval_history, int ply, bool allow_null, int64_t alpha, int64_t beta);
+    int64_t pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, EvalHistory& eval_history, int ply, bool allow_null, int64_t alpha, int64_t beta, Move excluded_move);
     int64_t quiescence(int ply, int64_t alpha, int64_t beta);
 
     int32_t mvv_lva_score(Move mv, int32_t offset) const;
