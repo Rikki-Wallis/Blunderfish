@@ -239,6 +239,7 @@ struct Position {
 
     void display(bool display_metadata=false) const;
     static std::optional<Position> decode_fen_string(const std::string& fen);
+    std::string fen() const;
 
     std::span<Move> generate_moves(std::span<Move> move_buf) const;
     std::span<Move> generate_captures(std::span<Move> move_buf) const;

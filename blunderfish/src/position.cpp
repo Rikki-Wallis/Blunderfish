@@ -257,6 +257,102 @@ std::optional<Position> Position::decode_fen_string(const std::string& fen) {
     return pos;
 }
 
+std::string Position::fen() const {
+    std::string result{};
+
+    uint64_t white_pieces = sides[WHITE].all(); 
+
+    for (int r = 7; r >= 0; --r) {
+        int f = 0;
+
+        if (r < 7) {
+            result.push_back('/');
+        }
+
+        while (f < 8) {
+            int sq = r*8+f;
+            bool is_white = (sq_to_bb(sq) & white_pieces) != 0;
+            switch (piece_at[sq]) {
+                case PIECE_PAWN:
+                    result.push_back(is_white ? 'P' : 'p');
+                    f++;
+                    break;
+                case PIECE_ROOK:
+                    result.push_back(is_white ? 'R' : 'r');
+                    f++;
+                    break;
+                case PIECE_KNIGHT:
+                    result.push_back(is_white ? 'N' : 'n');
+                    f++;
+                    break;
+                case PIECE_BISHOP:
+                    result.push_back(is_white ? 'B' : 'b');
+                    f++;
+                    break;
+                case PIECE_KING:
+                    result.push_back(is_white ? 'K' : 'k');
+                    f++;
+                    break;
+                case PIECE_QUEEN:
+                    result.push_back(is_white ? 'Q' : 'q');
+                    f++;
+                    break;
+
+                case PIECE_NONE: {
+                    int start = f;
+                    while (f < 8 && piece_at[r*8+f] == PIECE_NONE) {
+                        f++;
+                    }
+                    result.push_back(char(f-start) + '0');
+                } break;
+            }
+        }
+    }
+
+    result.push_back(' ');
+    result.push_back(to_move == WHITE ? 'w' : 'b');
+
+    // castling rights
+    result.push_back(' ');
+    if (flags == 0) {
+        result.push_back('-');
+    }
+    else {
+        if (flags & POSITION_FLAG_WHITE_KCASTLE) {
+            result.push_back('K');
+        }
+
+        if (flags & POSITION_FLAG_WHITE_QCASTLE) {
+            result.push_back('Q');
+        }
+
+        if (flags & POSITION_FLAG_BLACK_KCASTLE) {
+            result.push_back('k');
+        }
+
+        if (flags & POSITION_FLAG_BLACK_QCASTLE) {
+            result.push_back('q');
+        }
+    }
+
+    result.push_back(' ');
+    if (en_passant_sq == NULL_SQUARE) {
+        result.push_back('-');
+    }
+    else {
+        auto [file, rank] = square_alg(en_passant_sq);
+        result.push_back(file);
+        result.push_back(char(rank) + '0');
+    }
+
+    result.push_back(' ');
+    result.push_back(to_move == WHITE ? '2' : '3');
+    result.push_back(' ');
+    result.push_back('1');
+
+    return result;
+}
+
 uint64_t Position::all_pieces() const {
     return sides[0].all() | sides[1].all();
 }
