@@ -370,7 +370,9 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
             int reduction = 0;
             bool bad_capture = !quiet && (see(m) < 0);
 
-            if (depth >= 2 && (quiet || bad_capture) && !currently_checked && move_index >= 3 && !gives_check) {
+            bool is_killer = m == killers[ply][0] || m == killers[ply][1];
+
+            if (depth >= 2 && (quiet || bad_capture) && !currently_checked && move_index >= 3 && !gives_check && !is_killer) {
                 int idx = std::min(move_index, 63);
                 reduction = (int)lmr_table[depth][idx];
 
