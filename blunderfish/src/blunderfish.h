@@ -15,7 +15,7 @@ using TimePoint = std::chrono::time_point<Clock>;
 #define ZOBRIST_INCLUDE_EN_PASSANT_SQ
 #define ZOBRIST_INCLUDE_SIDE
 
-#define MAX_DEPTH 128
+#define MAX_DEPTH 256
 
 constexpr int64_t INF        = 400000000;
 constexpr int64_t MATE_SCORE = 32000; // just shy of int16 bounds
@@ -140,8 +140,6 @@ struct SearchParameters {
     float singular_margin_factor = 2.0f;
     int rfp_margin_factor = 120;
     int rfp_improving_bonus = 60;
-    int nmp_r_base = 3;
-    int nmp_r_divisor = 6;
     int fp_margin_factor = 200;
     int lmr_history_bonus_threshold = 1000;
     float history_bonus_factor = 1.0f;
@@ -298,7 +296,10 @@ struct Position {
     int32_t mvv_lva_score(Move mv, int32_t offset) const;
 
     std::pair<Move, int64_t> best_move_internal(std::span<Move> moves, int depth, TranspositionTable& tt, Move last_best_move, HistoryTable& history, KillerTable& killers, EvalHistory& eval_history, int64_t alpha, int64_t beta);
-    Move best_move(std::span<Move> moves, int depth, std::optional<double> time_limit = std::nullopt);
+    Move best_move(std::span<Move> moves, int depth, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt);
+    Move best_move_easy(int depth, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt);
+
+    std::optional<int> game_result();
 
     uint64_t compute_zobrist() const;
 

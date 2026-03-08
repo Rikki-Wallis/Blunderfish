@@ -423,3 +423,20 @@ int Position::get_king_sq(int side) const {
     assert(std::popcount(sides[side].bb[PIECE_KING]) == 1);
     return std::countr_zero(sides[side].bb[PIECE_KING]);
 }
+
+std::optional<int> Position::game_result() {
+    std::array<Move, 256> move_buf;
+    std::span<Move> moves = generate_moves(move_buf);
+    filter_moves(moves);
+
+    if (moves.size() != 0) {
+        return std::nullopt;
+    }
+
+    if (is_checked[to_move]) {
+        return to_move == WHITE ? -1 : 1;
+    }
+    else {
+        return 0;
+    }
+}
