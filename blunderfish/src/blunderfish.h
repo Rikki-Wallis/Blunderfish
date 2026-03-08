@@ -135,6 +135,21 @@ struct TTCluster {
     TTEntry entries[4];
 };
 
+struct SearchParameters {
+    float lmr_rate_divisor = 1.35f;
+    float singular_margin_factor = 2.0f;
+    int rfp_margin_factor = 120;
+    int rfp_improving_bonus = 60;
+    int nmp_r_base = 3;
+    int nmp_r_divisor = 6;
+    int fp_margin_factor = 200;
+    int lmr_history_bonus_threshold = 1000;
+    float history_bonus_factor = 1.0f;
+    float history_malus_factor = 1.0f;
+    int qsearch_big_delta = 1100;
+    int qsearch_delta_margin = 200;
+};
+
 using KillerTable = std::array<std::array<Move, 2>, MAX_DEPTH>;
 using HistoryTable = std::array<std::array<int32_t, 64>, NUM_PIECE_TYPES>;
 using EvalHistory = std::array<int64_t, MAX_DEPTH>;
@@ -215,6 +230,8 @@ struct Position {
     int cutoff_index_sum;
     int reduced_searches;
     int reduced_fail_high;
+
+    SearchParameters params;
 
     std::array<Undo, MAX_DEPTH> undo_stack;
     int undo_count;

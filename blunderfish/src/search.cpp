@@ -12,24 +12,28 @@ constexpr int32_t BAD_CAPTURE_SCORE  = -90000;
 
 constexpr uint64_t TT_MASK = TRANSPOSITION_TABLE_SIZE - 1;
 
-using LMRTable = std::array<std::array<int, 64>,64>;
+//using LMRTable = std::array<std::array<int, 64>,64>;
 
-static LMRTable generate_lmr_table() {
-    LMRTable table;
-
-    for (int d = 1; d < 64; d++) {
-        for (int i = 1; i < 64; i++) {
-            double reduction = 0.5 + std::log(d) * std::log(i) / 1.35;
-            int r = int(reduction);
-            if (r < 0) r = 0;
-            table[d][i] = r;
-        }
-    }
-
-    return table;
+static int get_reduction(int d, int i, float divisor) {
+    double reduction = 0.5 + std::log(d) * std::log(i) / divisor;
+    int r = int(reduction);
+    if (r < 0) r = 0;
+    return r;
 }
 
-static const LMRTable lmr_table = generate_lmr_table();
+//static LMRTable generate_lmr_table() {
+//    LMRTable table;
+//
+//    for (int d = 1; d < 64; d++) {
+//        for (int i = 1; i < 64; i++) {
+//            table[d][i] = get_reduction(d, i, 1.35f);
+//        }
+//    }
+//
+//    return table;
+//}
+//
+//static const LMRTable lmr_table = generate_lmr_table();
 
 enum TTScoreFlag {
     TT_SCORE_EXACT,
@@ -252,7 +256,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     bool tt_is_singular = false;
 
     if (depth >= 6 && tt_move != NULL_MOVE && excluded_move == NULL_MOVE && match.flag != TT_SCORE_UPPER && std::abs(match.score) < MATE_SCORE - 1000) {
-        int singular_margin = 2 * depth;
+        int singular_margin = int(std::round(params.singular_margin_factor * float(depth)));
         int singular_beta = match.score - singular_margin;
 
         int64_t exc_score = pruned_negamax(depth/2, tt, history, killers, eval_history, ply, false, singular_beta-1, singular_beta, tt_move, extensions_so_far, root_depth);
@@ -280,13 +284,13 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     // Reverse futility pruning - 
 
     if (depth <= 3 && !currently_checked && std::abs(beta) < MATE_SCORE - 1000) { // we disable this if we are mating or we are being mated
-        int64_t margin = 120 * depth;
+        int64_t margin = params.rfp_margin_factor * depth;
 
         if (!improving) {
-            margin += 60;
+            margin += params.rfp_improving_bonus;
         }
         else {
-            margin -= 60;
+            margin -= params.rfp_improving_bonus;
         }
 
         margin = std::max(int64_t(0), margin);
@@ -305,7 +309,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     bool low_material = non_pawn_value(my_side) <= 2 * piece_value_table[PIECE_KNIGHT];
     bool skip_null = !allow_null || currently_checked || low_material || alpha >= MATE_SCORE - 1000;
 
-    int R = 3 + depth / 6; // we subtract this from depth to reduce the search depth
+    int R = params.nmp_r_base + depth / params.nmp_r_divisor; // we subtract this from depth to reduce the search depth
 
     if (depth > R + 1 && !skip_null) { 
         make_null_move(); 
@@ -335,7 +339,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
 
     bool futility_prune = false;
     if (depth <= 3 && !currently_checked && (std::abs(alpha) < MATE_SCORE - 1000)) {
-        int f_margin = depth * 200;
+        int f_margin = depth * params.fp_margin_factor;
         if (signed_eval() + f_margin <= alpha) {
             futility_prune = true;
         }
@@ -374,13 +378,13 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
 
             if (depth >= 2 && (quiet || bad_capture) && !currently_checked && move_index >= 3 && !gives_check && !is_killer) {
                 int idx = std::min(move_index, 63);
-                reduction = (int)lmr_table[depth][idx];
+                reduction = get_reduction(depth, idx, params.lmr_rate_divisor);
 
                 if (depth <= 2) {
                     reduction = std::max(0, reduction - 1);
                 }
 
-                if (history[piece][to] > 1000) { // tune this threshold
+                if (history[piece][to] > params.lmr_history_bonus_threshold) {
                     reduction = std::max(0, reduction - 1);
                 }
                 else
@@ -458,7 +462,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
                     killers[ply][0] = m;
                 }
 
-                history[piece][to] += depth * depth;
+                history[piece][to] += int(std::round(params.history_bonus_factor * float(depth * depth)));
 
                 if (history[piece][to] > MAX_HISTORY_SCORE) {
                     history[piece][to] = MAX_HISTORY_SCORE;
@@ -470,7 +474,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
                         Piece punished_piece = Piece(piece_at[move_from(punished)]);
                         int punished_to = move_to(punished);
                         
-                        history[punished_piece][punished_to] -= depth * depth;
+                        history[punished_piece][punished_to] -= int(std::round(params.history_malus_factor * float(depth * depth)));
                         history[punished_piece][punished_to] = std::max(history[punished_piece][punished_to], -MAX_HISTORY_SCORE);
                     }
                 }
@@ -524,8 +528,7 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
             return stand_pat;
         }
 
-        int BIG_DELTA = 1100;
-        if (can_delta_prune && (stand_pat < alpha - BIG_DELTA)) { // even a queen capture can't save us
+        if (can_delta_prune && (stand_pat < alpha - params.qsearch_big_delta)) { // even a queen capture can't save us
             return stand_pat;
         }
     }
@@ -553,7 +556,7 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
             {
                 int32_t capture_value = piece_value_table[move_captured_piece(mv)];
 
-                if (stand_pat + capture_value + 200 < alpha) {
+                if (stand_pat + capture_value + params.qsearch_delta_margin < alpha) {
                     continue;
                 }
             }
