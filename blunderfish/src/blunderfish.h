@@ -135,6 +135,7 @@ struct TTCluster {
     TTEntry entries[4];
 };
 
+/*
 struct SearchParameters {
     float lmr_rate_divisor = 1.35f;
     float singular_margin_factor = 2.0f;
@@ -152,6 +153,26 @@ struct SearchParameters {
     float nmr_r_divisor = 6.0f;
     float lmp_index_base = 3.0f;
     float lmp_index_factor = 2.0f;
+};
+*/
+
+struct SearchParameters {
+    float lmr_rate_divisor = 1.4993f;
+    float singular_margin_factor = 2.3213f;
+    int rfp_margin_factor = 120;
+    int rfp_improving_bonus = 60;
+    int fp_margin_factor = 200;
+    int lmr_history_bonus_threshold = 1000;
+    float history_bonus_factor = 2.4127f;
+    float history_malus_factor = 1.4736f;
+    int qsearch_big_delta = 1100;
+    int qsearch_delta_margin = 200;
+    int asp_initial_window_size = 30;
+    float asp_window_growth_factor = 1.7353f;
+    float nmr_r_base = 2.4658f;
+    float nmr_r_divisor = 5.9947f;
+    float lmp_index_base = 3.7331f;
+    float lmp_index_factor = 1.4358f;
 };
 
 using KillerTable = std::array<std::array<Move, 2>, MAX_DEPTH>;
