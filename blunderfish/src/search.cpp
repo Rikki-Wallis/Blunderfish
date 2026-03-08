@@ -309,7 +309,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     bool low_material = non_pawn_value(my_side) <= 2 * piece_value_table[PIECE_KNIGHT];
     bool skip_null = !allow_null || currently_checked || low_material || alpha >= MATE_SCORE - 1000;
 
-    int R = 3 + depth / 6; // we subtract this from depth to reduce the search depth
+    int R = int(std::round(params.nmr_r_base + float(depth) / params.nmr_r_divisor)); // we subtract this from depth to reduce the search depth
 
     if (depth > R + 1 && !skip_null) { 
         make_null_move(); 
@@ -414,7 +414,8 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
             // Late move pruning
 
             if (depth <= 4 && !currently_checked && quiet && !gives_check) {
-                if (move_index > (3 + 2 * depth * depth)) { 
+                int move_threshold = int(std::round(params.lmp_index_base + params.lmp_index_factor * float(depth * depth)));
+                if (move_index > move_threshold) { 
                     unmake_move(m);
                     continue; 
                 }
