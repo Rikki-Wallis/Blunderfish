@@ -1,7 +1,7 @@
 #include <random>
 #include <unordered_map>
 
-#include "openings.h"
+#include "balanced_openings.h"
 
 std::mt19937 rng(std::random_device{}());
 std::uniform_int_distribution<int> twin_dist(0, 1);
@@ -9,18 +9,9 @@ std::uniform_int_distribution<size_t> opening_dist(0, std::size(openings)-1);
 
 #include "blunderfish.h"
 
-static const std::unordered_map<std::string, float> perturbations = {
-    {"lmr_rate_divisor", 0.05f},
-    {"singular_margin_factor", 0.1f},
-    {"rfp_margin_factor", 30.0f},
-    {"rfp_improving_bonus", 30.0f},
-    {"fp_margin_factor", 30.0f},
-    {"lmr_history_bonus_threshold", 100.0f},
-    {"history_bonus_factor", 0.05f},
-    {"history_malus_factor", 0.05f},
-    {"qsearch_big_delta", 100.0f},
-    {"qsearch_delta_margin", 30.0f},
-};
+float perturb_amount(float param) {
+    return std::max(std::abs(param) * 0.05f, 0.01f);
+}
 
 // These are continuously updated but rounded to integers in most cases
 struct Params {
@@ -34,6 +25,8 @@ struct Params {
     float history_malus_factor = 1.0f;
     float qsearch_big_delta = 1100.0f;
     float qsearch_delta_margin = 200.0f;
+    float asp_initial_window_size = 30.0f;
+    float asp_window_growth_factor = 2.0f;
 
     void clamp() {
         #define CLAMP(x, lo, hi) x = std::clamp(x, lo, hi)
@@ -47,6 +40,8 @@ struct Params {
         CLAMP(history_malus_factor, 0.1f, 5.0f);
         CLAMP(qsearch_big_delta, 400.0f, 2000.0f);
         CLAMP(qsearch_delta_margin, 50.0f, 1000.0f);
+        CLAMP(asp_initial_window_size, 5.0f, 10000.0f);
+        CLAMP(asp_window_growth_factor, 1.1f, 100.0f);
         #undef CLAMP
     }
 
@@ -63,6 +58,8 @@ struct Params {
         PRINT_PARAM(history_malus_factor);
         PRINT_PARAM(qsearch_big_delta);
         PRINT_PARAM(qsearch_delta_margin);
+        PRINT_PARAM(asp_initial_window_size);
+        PRINT_PARAM(asp_window_growth_factor);
         print("\n");
         #undef PRINT_PARAM
     }
@@ -79,6 +76,8 @@ struct Params {
             .history_malus_factor = history_malus_factor,
             .qsearch_big_delta = int(qsearch_big_delta),
             .qsearch_delta_margin = int(qsearch_delta_margin),
+            .asp_initial_window_size = int(asp_initial_window_size),
+            .asp_window_growth_factor = asp_window_growth_factor,
         };
     }
 
@@ -89,7 +88,7 @@ struct Params {
 
         #define perturb_param(param) do { \
             int i = twin_dist(rng); \
-            float amount = perturbations.at(#param); \
+            float amount = perturb_amount(param); \
             twins[i].param += amount;\
             twins[(i+1)&1].param -= amount; \
         } while(false)
@@ -104,6 +103,8 @@ struct Params {
         perturb_param(history_malus_factor);
         perturb_param(qsearch_big_delta);
         perturb_param(qsearch_delta_margin);
+        perturb_param(asp_initial_window_size);
+        perturb_param(asp_window_growth_factor);
 
         twins[0].clamp();
         twins[1].clamp();
@@ -118,62 +119,72 @@ struct Params {
 int main() {
     Params params{};
 
-    double time_limit_per_move = 0.05f; 
+    std::vector<const char*> games;
+
+    for (int i = 0; i < 16; ++i) {
+        const char* opening = openings[opening_dist(rng)];
+        games.push_back(opening);
+    }
+
+    double time_limit_per_move = 0.04f; 
 
     for (int iteration = 0; iteration < 1000; ++iteration) {
         float ak = 0.5f / std::pow(iteration + 10, 0.6f);
 
         auto [p1, p2] = params.perturb();
 
-        const char* opening = openings[opening_dist(rng)];
+        float result_aggregate = 0;
 
-        print("Playing opening '{}'\n", opening);
+        for (size_t op = 0; op < games.size(); ++op) {
+            const char* opening = games[op];
 
-        SearchParameters sides[2] = {
-            p1.convert(),
-            p2.convert()
-        };
+            print("Playing opening {}/{} '{}'\n", op+1, games.size(), opening);
 
-        int result_aggregate = 0;
+            SearchParameters sides[2] = {
+                p1.convert(),
+                p2.convert()
+            };
 
-        for (int round = 0; round < 2; ++round) { // play two rounds, switching sides with the opening
-            Position pos = *Position::decode_fen_string(opening);
+            for (int round = 0; round < 2; ++round) { // play two rounds, switching sides with the opening
+                Position pos = *Position::decode_fen_string(opening);
 
-            std::optional<int> result;
+                std::optional<int> result;
 
-            for (int hm = 0; hm < 200; ++hm) {
-                result = pos.game_result();
+                for (int hm = 0; hm < 200; ++hm) {
+                    result = pos.game_result();
 
-                if (result.has_value()) { // game over
-                    break;
+                    if (result.has_value()) { // game over
+                        break;
+                    }
+
+                    Move move = pos.best_move_easy(20, time_limit_per_move, sides[pos.to_move]);
+                    pos.make_move(move);
                 }
 
-                Move move = pos.best_move_easy(20, time_limit_per_move, sides[pos.to_move]);
-                pos.make_move(move);
-            }
+                if (!result) {
+                    result = 0;
+                }
 
-            if (!result) {
-                result = 0;
-            }
+                print("Round {} result: {}\n", round+1, *result);
 
-            print("Round {} result: {}\n", round+1, *result);
+                if (round == 0) {
+                    result_aggregate += float(*result);
+                }
+                else {
+                    result_aggregate -= float(*result);
+                }
 
-            if (round == 0) {
-                result_aggregate += *result;
+                std::swap(sides[0], sides[1]);
             }
-            else {
-                result_aggregate -= *result;
-            }
-
-            std::swap(sides[0], sides[1]);
         }
+
+        float avg_result = result_aggregate / float(games.size()*2);
 
         #define UPDATE(param) do { \
             float diff = p1.param - p2.param; \
-            if (std::abs(diff) > 1e-6f) { \
-                float gradient = float(result_aggregate) / diff; \
-                float pert = perturbations.at(#param); \
-                params.param += ak * pert * gradient; \
+            if (std::abs(diff) > 1e-9f) { \
+                float grad = avg_result / diff; \
+                params.param += ak * grad; \
             } \
         } while(false)
 
@@ -187,12 +198,14 @@ int main() {
         UPDATE(history_malus_factor);
         UPDATE(qsearch_big_delta);
         UPDATE(qsearch_delta_margin);
+        UPDATE(asp_initial_window_size);
+        UPDATE(asp_window_growth_factor);
 
         params.clamp();
 
         #undef UPDATE
 
-        print("Iteration: {}\n  ak: {:.4f}\n  result: {}\n", iteration, ak, result_aggregate);
+        print("Iteration: {}\n  ak: {:.4f}\n  result: {}\n", iteration, ak, avg_result);
         params.dump();
     }
 }

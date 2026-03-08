@@ -146,6 +146,8 @@ struct SearchParameters {
     float history_malus_factor = 1.0f;
     int qsearch_big_delta = 1100;
     int qsearch_delta_margin = 200;
+    int asp_initial_window_size = 30;
+    float asp_window_growth_factor = 2.0f;
 };
 
 using KillerTable = std::array<std::array<Move, 2>, MAX_DEPTH>;

@@ -665,7 +665,7 @@ Move Position::best_move(std::span<Move> _moves, int depth, std::optional<double
     std::vector<Move> moves(_moves.begin(), _moves.end());
 
     for (int i = 1; i <= depth; ++i) {
-        int64_t window = 30; // start the window small
+        int64_t window = params.asp_initial_window_size; // start the window small
 
         int64_t alpha = best_score - window;
         int64_t beta  = best_score + window;
@@ -680,13 +680,13 @@ Move Position::best_move(std::span<Move> _moves, int depth, std::optional<double
             if (score <= alpha) {
                 // fail low
                 alpha -= window;
-                window *= 2;
+                window = int64_t(float(window) * params.asp_window_growth_factor);
             }
             else if (score >= beta) {
                 // fail high
                 best_move = move;
                 beta += window;
-                window *= 2;
+                window = int64_t(float(window) * params.asp_window_growth_factor);
             }
             else {
                 best_move = move;
