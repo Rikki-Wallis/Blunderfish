@@ -14,8 +14,8 @@ constexpr uint64_t TT_MASK = TRANSPOSITION_TABLE_SIZE - 1;
 
 //using LMRTable = std::array<std::array<int, 64>,64>;
 
-static int get_reduction(int d, int i, float divisor) {
-    double reduction = 0.5 + std::log(d) * std::log(i) / divisor;
+static int get_reduction(int d, int i, const SearchParameters& params) {
+    float reduction = params.lmr_rate_base + std::log(d) * std::log(i) / params.lmr_rate_divisor;
     int r = int(reduction);
     if (r < 0) r = 0;
     return r;
@@ -143,7 +143,7 @@ static std::span<int32_t> compute_move_scores(Position* pos, HistoryTable& histo
     return move_scores;
 }
 
-#define PREFETCH_TT() PREFETCH(&tt[zobrist & TT_MASK])
+#define PREFETCH_TT() PREFETCH(&s.tt[zobrist & TT_MASK])
 
 static TTEntry& find_entry(TranspositionTable& tt, uint64_t zobrist) {
     TTCluster& cluster = tt[zobrist & TT_MASK];
@@ -173,21 +173,21 @@ static TTEntry& find_entry(TranspositionTable& tt, uint64_t zobrist) {
     return cluster.entries[shallowest];
 }
 
-int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, EvalHistory& eval_history, int ply, bool allow_null, int64_t alpha, int64_t beta, Move excluded_move, int extensions_so_far, int root_depth) {
+int64_t Position::pruned_negamax(SearchContext& s, int depth, int ply, bool allow_null, int64_t alpha, int64_t beta, Move excluded_move, int extensions_so_far, int root_depth) {
     if ((node_count & 4095) == 0) {
-        if (out_of_time()) {
-            should_stop = true;
+        if (s.out_of_time()) {
+            s.should_stop = true;
         }
     }
 
-    if (should_stop) {
+    if (s.should_stop) {
         return 0;
     }
 
     node_count++;
 
     if (depth == 0) {
-        return quiescence(ply, alpha, beta);
+        return quiescence(s, ply, alpha, beta);
     }
 
     max_ply = std::max(max_ply, ply);
@@ -200,10 +200,10 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
 
     bool improving = false;
     if (ply >= 2 && !currently_checked) {
-        improving = signed_eval() >= eval_history[ply-2];
+        improving = signed_eval() >= s.eval_history[ply-2];
     }
 
-    eval_history[ply] = signed_eval();
+    s.eval_history[ply] = signed_eval();
 
     // First check TT
 
@@ -212,7 +212,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
 
     Move tt_move = NULL_MOVE;
 
-    TTEntry& match = find_entry(tt, zobrist);
+    TTEntry& match = find_entry(s.tt, zobrist);
 
     if (match.key32 == compress_zobrist(zobrist)) { // exact match
         if (excluded_move == NULL_MOVE && match.depth >= depth) {
@@ -256,10 +256,10 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     bool tt_is_singular = false;
 
     if (depth >= 6 && tt_move != NULL_MOVE && excluded_move == NULL_MOVE && match.flag != TT_SCORE_UPPER && std::abs(match.score) < MATE_SCORE - 1000) {
-        int singular_margin = int(std::round(params.singular_margin_factor * float(depth)));
+        int singular_margin = int(std::round(s.params.singular_margin_factor * float(depth)));
         int singular_beta = match.score - singular_margin;
 
-        int64_t exc_score = pruned_negamax(depth/2, tt, history, killers, eval_history, ply, false, singular_beta-1, singular_beta, tt_move, extensions_so_far, root_depth);
+        int64_t exc_score = pruned_negamax(s, depth/2, ply, false, singular_beta-1, singular_beta, tt_move, extensions_so_far, root_depth);
 
         if (exc_score < singular_beta) {
             tt_is_singular = true; // no other move can even come close 
@@ -271,9 +271,9 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
 
     // we didn't find a TT move; search at a lower depth to try and populate a best move
     if (tt_move == NULL_MOVE && depth >= 4) {
-        pruned_negamax(depth-2, tt, history, killers, eval_history, ply, true, alpha, beta, NULL_MOVE, extensions_so_far, root_depth);
+        pruned_negamax(s, depth-2, ply, true, alpha, beta, NULL_MOVE, extensions_so_far, root_depth);
 
-        TTEntry& e = find_entry(tt, zobrist);
+        TTEntry& e = find_entry(s.tt, zobrist);
         if (e.key32 == compress_zobrist(zobrist)) {
             tt_move = e.best_move;
         }
@@ -284,13 +284,13 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     // Reverse futility pruning - 
 
     if (depth <= 3 && !currently_checked && std::abs(beta) < MATE_SCORE - 1000) { // we disable this if we are mating or we are being mated
-        int64_t margin = params.rfp_margin_factor * depth;
+        int64_t margin = s.params.rfp_margin_factor * depth;
 
         if (!improving) {
-            margin += params.rfp_improving_bonus;
+            margin += s.params.rfp_improving_bonus;
         }
         else {
-            margin -= params.rfp_improving_bonus;
+            margin -= s.params.rfp_improving_bonus;
         }
 
         margin = std::max(int64_t(0), margin);
@@ -309,7 +309,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     bool low_material = non_pawn_value(my_side) <= 2 * piece_value_table[PIECE_KNIGHT];
     bool skip_null = !allow_null || currently_checked || low_material || alpha >= MATE_SCORE - 1000;
 
-    int R = int(std::round(params.nmr_r_base + float(depth) / params.nmr_r_divisor)); // we subtract this from depth to reduce the search depth
+    int R = int(std::round(s.params.nmp_r_base + float(depth) / s.params.nmp_r_divisor)); // we subtract this from depth to reduce the search depth
 
     if (depth > R + 1 && !skip_null) { 
         make_null_move(); 
@@ -317,12 +317,12 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
         int64_t null_alpha = beta - 1; // we only care if it can beat it, not the actual score
         int64_t null_beta = beta;
         
-        int64_t score = -pruned_negamax(depth - 1 - R, tt, history, killers, eval_history, ply + 1, false, -null_beta, -null_alpha, NULL_MOVE, extensions_so_far, root_depth);
+        int64_t score = -pruned_negamax(s, depth - 1 - R, ply + 1, false, -null_beta, -null_alpha, NULL_MOVE, extensions_so_far, root_depth);
 
         unmake_null_move();
 
         if (score >= beta) {
-            TTEntry& target = find_entry(tt, zobrist);
+            TTEntry& target = find_entry(s.tt, zobrist);
             bool changed = update_tt_entry(target, zobrist, depth, beta, ply, alpha_original, beta_original, NULL_MOVE);
             if (changed) { target.flag = TT_SCORE_LOWER; }
             beta_cutoffs++;
@@ -335,11 +335,11 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
     std::span<Move> moves = generate_moves(move_buf);
 
     std::array<int32_t, 256> score_buf;
-    std::span<int32_t> move_scores = compute_move_scores(this, history, killers, ply, score_buf, moves, tt_move);
+    std::span<int32_t> move_scores = compute_move_scores(this, s.history, s.killers, ply, score_buf, moves, tt_move);
 
     bool futility_prune = false;
     if (depth <= 3 && !currently_checked && (std::abs(alpha) < MATE_SCORE - 1000)) {
-        int f_margin = depth * params.fp_margin_factor;
+        int f_margin = depth * s.params.fp_margin_factor;
         if (signed_eval() + f_margin <= alpha) {
             futility_prune = true;
         }
@@ -374,21 +374,21 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
             int reduction = 0;
             bool bad_capture = !quiet && (see(m) < 0);
 
-            bool is_killer = m == killers[ply][0] || m == killers[ply][1];
+            bool is_killer = m == s.killers[ply][0] || m == s.killers[ply][1];
 
             if (depth >= 2 && (quiet || bad_capture) && !currently_checked && move_index >= 3 && !gives_check && !is_killer) {
                 int idx = std::min(move_index, 63);
-                reduction = get_reduction(depth, idx, params.lmr_rate_divisor);
+                reduction = get_reduction(depth, idx, s.params);
 
                 if (depth <= 2) {
                     reduction = std::max(0, reduction - 1);
                 }
 
-                if (history[piece][to] > params.lmr_history_bonus_threshold) {
+                if (s.history[piece][to] > s.params.lmr_history_bonus_threshold) {
                     reduction = std::max(0, reduction - 1);
                 }
                 else
-                if (history[piece][to] < 0) {
+                if (s.history[piece][to] < 0) {
                     reduction++; // this move has historically been ass -> reduce ts
                 }
 
@@ -414,7 +414,7 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
             // Late move pruning
 
             if (depth <= 4 && !currently_checked && quiet && !gives_check) {
-                int move_threshold = int(std::round(params.lmp_index_base + params.lmp_index_factor * float(depth * depth)));
+                int move_threshold = int(std::round(s.params.lmp_index_base + s.params.lmp_index_factor * float(depth * depth)));
                 if (move_index > move_threshold) { 
                     unmake_move(m);
                     continue; 
@@ -426,15 +426,15 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
             if (move_index == 0) {
                 int ext = m == tt_move ? (tt_is_singular && (extensions_so_far < root_depth/2)) : 0;
 
-                score = -pruned_negamax(depth - 1 + ext, tt, history, killers, eval_history, ply + 1, true, -beta, -alpha, NULL_MOVE, extensions_so_far + ext, root_depth);
+                score = -pruned_negamax(s, depth - 1 + ext, ply + 1, true, -beta, -alpha, NULL_MOVE, extensions_so_far + ext, root_depth);
             }
             else {
                 reduced_searches += reduction > 0;
-                score = -pruned_negamax(depth - 1 - reduction, tt, history, killers, eval_history, ply + 1, true, -alpha-1, -alpha, NULL_MOVE, extensions_so_far, root_depth); // do null-window search
+                score = -pruned_negamax(s, depth - 1 - reduction, ply + 1, true, -alpha-1, -alpha, NULL_MOVE, extensions_so_far, root_depth); // do null-window search
 
                 if (score > alpha) { // if beats alpha do full-window
                     reduced_fail_high += reduction > 0;
-                    score = -pruned_negamax(depth - 1, tt, history, killers, eval_history, ply + 1, true, -beta, -alpha, NULL_MOVE, extensions_so_far, root_depth);
+                    score = -pruned_negamax(s, depth - 1, ply + 1, true, -beta, -alpha, NULL_MOVE, extensions_so_far, root_depth);
                 }
             }
 
@@ -458,15 +458,15 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
 
         if (cutoff) {
             if (quiet) {
-                if (m != killers[ply][0]) {
-                    killers[ply][1] = killers[ply][0];
-                    killers[ply][0] = m;
+                if (m != s.killers[ply][0]) {
+                    s.killers[ply][1] = s.killers[ply][0];
+                    s.killers[ply][0] = m;
                 }
 
-                history[piece][to] += int(std::round(params.history_bonus_factor * float(depth * depth)));
+                s.history[piece][to] += int(std::round(s.params.history_bonus_factor * float(depth * depth)));
 
-                if (history[piece][to] > MAX_HISTORY_SCORE) {
-                    history[piece][to] = MAX_HISTORY_SCORE;
+                if (s.history[piece][to] > MAX_HISTORY_SCORE) {
+                    s.history[piece][to] = MAX_HISTORY_SCORE;
                 }
 
                 for (int i = 0; i < mv_idx_raw; ++i) { // we have a quiet cutoff, penalize all previous cutoffs in the history table
@@ -475,8 +475,8 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
                         Piece punished_piece = Piece(piece_at[move_from(punished)]);
                         int punished_to = move_to(punished);
                         
-                        history[punished_piece][punished_to] -= int(std::round(params.history_malus_factor * float(depth * depth)));
-                        history[punished_piece][punished_to] = std::max(history[punished_piece][punished_to], -MAX_HISTORY_SCORE);
+                        s.history[punished_piece][punished_to] -= int(std::round(s.params.history_malus_factor * float(depth * depth)));
+                        s.history[punished_piece][punished_to] = std::max(s.history[punished_piece][punished_to], -MAX_HISTORY_SCORE);
                     }
                 }
             }
@@ -498,13 +498,13 @@ int64_t Position::pruned_negamax(int depth, TranspositionTable& tt, HistoryTable
         }
     }
 
-    TTEntry& target = find_entry(tt, zobrist);
+    TTEntry& target = find_entry(s.tt, zobrist);
     update_tt_entry(target, zobrist, depth, best_score, ply, alpha_original, beta_original, best_move);
 
     return best_score;
 }
 
-int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
+int64_t Position::quiescence(SearchContext& s, int ply, int64_t alpha, int64_t beta) {
     node_count++;
     qnode_count++;
 
@@ -529,7 +529,7 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
             return stand_pat;
         }
 
-        if (can_delta_prune && (stand_pat < alpha - params.qsearch_big_delta)) { // even a queen capture can't save us
+        if (can_delta_prune && (stand_pat < alpha - s.params.qsearch_big_delta)) { // even a queen capture can't save us
             return stand_pat;
         }
     }
@@ -557,7 +557,7 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
             {
                 int32_t capture_value = piece_value_table[move_captured_piece(mv)];
 
-                if (stand_pat + capture_value + params.qsearch_delta_margin < alpha) {
+                if (stand_pat + capture_value + s.params.qsearch_delta_margin < alpha) {
                     continue;
                 }
             }
@@ -574,7 +574,7 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
         if (!is_checked[side]) {
             legal_found = true;
 
-            int64_t score = -quiescence(ply+1, -beta, -alpha);
+            int64_t score = -quiescence(s, ply+1, -beta, -alpha);
 
             if (score > best_score) {
                 best_score = score;
@@ -604,7 +604,7 @@ int64_t Position::quiescence(int ply, int64_t alpha, int64_t beta) {
     return best_score;
 }
 
-std::pair<Move, int64_t> Position::best_move_internal(std::span<Move> moves, int depth, TranspositionTable& tt, Move last_best_move, HistoryTable& history, KillerTable& killers, EvalHistory& eval_history, int64_t alpha, int64_t beta) {
+std::pair<Move, int64_t> Position::best_move_internal(SearchContext& s, std::span<Move> moves, int depth, Move last_best_move, int64_t alpha, int64_t beta) {
     (void)last_best_move;
 
     int ply = 1;
@@ -613,14 +613,14 @@ std::pair<Move, int64_t> Position::best_move_internal(std::span<Move> moves, int
     Move best_move = NULL_MOVE;
 
     std::array<int32_t, 256> score_buf;
-    std::span<int32_t> move_scores = compute_move_scores(this, history, killers, ply, score_buf, moves, last_best_move);
+    std::span<int32_t> move_scores = compute_move_scores(this, s.history, s.killers, ply, score_buf, moves, last_best_move);
 
     for (int i = 0; i < (int)moves.size(); ++i) {
         Move m = select_best(moves, move_scores, i);
 
         make_move(m); // no need to filter for check here - assumes filtered moves given
         PREFETCH_TT();
-        int64_t score = -pruned_negamax(depth-1, tt, history, killers, eval_history, ply+1, true, -beta, -alpha, NULL_MOVE, 0, depth-1);
+        int64_t score = -pruned_negamax(s, depth-1, ply+1, true, -beta, -alpha, NULL_MOVE, 0, depth-1);
         unmake_move(m);
 
         if (score > best_score) {
@@ -642,23 +642,20 @@ std::pair<Move, int64_t> Position::best_move_internal(std::span<Move> moves, int
 Move Position::best_move(std::span<Move> _moves, int depth, std::optional<double> limit, std::optional<SearchParameters> params_in) {
     reset_benchmarking_statistics();
 
-    time_limit = limit;
-    
-    if (params_in) {
-        params = *params_in;
-    }
-    else {
-        params = {};
-    }
-
     if (_moves.size() == 0) {
         return NULL_MOVE;
     }
 
-    KillerTable killers{};
-    HistoryTable history{};
-    EvalHistory eval_history{};
-    TranspositionTable tt;
+    SearchContext s = {
+        .tt = {},
+        .killers {},
+        .history = {},
+        .eval_history = {},
+        .params = params_in.value_or(SearchParameters{}),
+        .should_stop = false,
+        .time_limit = limit,
+        .search_start = Clock::now(),
+    };
 
     Move best_move = _moves[0]; // have at least one move
     int64_t best_score = 0;
@@ -666,28 +663,28 @@ Move Position::best_move(std::span<Move> _moves, int depth, std::optional<double
     std::vector<Move> moves(_moves.begin(), _moves.end());
 
     for (int i = 1; i <= depth; ++i) {
-        int64_t window = params.asp_initial_window_size; // start the window small
+        int64_t window = s.params.asp_initial_window_size; // start the window small
 
         int64_t alpha = best_score - window;
         int64_t beta  = best_score + window;
 
         while (true) {
-            auto [move, score] = best_move_internal(moves, i, tt, best_move, history, killers, eval_history, alpha, beta);
+            auto [move, score] = best_move_internal(s, moves, i, best_move, alpha, beta);
 
-            if (should_stop) {
+            if (s.should_stop) {
                 break;
             }
 
             if (score <= alpha) {
                 // fail low
                 alpha -= window;
-                window = int64_t(float(window) * params.asp_window_growth_factor);
+                window = int64_t(float(window) * s.params.asp_window_growth_factor);
             }
             else if (score >= beta) {
                 // fail high
                 best_move = move;
                 beta += window;
-                window = int64_t(float(window) * params.asp_window_growth_factor);
+                window = int64_t(float(window) * s.params.asp_window_growth_factor);
             }
             else {
                 best_move = move;
@@ -705,4 +702,31 @@ Move Position::best_move_easy(int depth, std::optional<double> time_limit, std::
     std::span<Move> moves = generate_moves(move_buf);
     filter_moves(moves);
     return best_move(moves, depth, time_limit, params);
+}
+
+int64_t Position::eval_at_depth(int depth){
+    SearchContext s = {
+        .tt = {},
+        .killers {},
+        .history = {},
+        .eval_history = {},
+        .params = {},
+        .should_stop = false,
+        .time_limit = std::nullopt,
+        .search_start = Clock::now(),
+    };
+
+    return pruned_negamax(s, depth, 1, true, -INF, INF, NULL_MOVE, 0, depth);
+}
+
+bool SearchContext::out_of_time() const {
+    if (time_limit) {
+        auto now = Clock::now();
+        auto elapsed_nano = now - search_start;
+        auto elapsed = double(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed_nano).count())/1000.0;
+        return elapsed > *time_limit;
+    }
+    else {
+        return false;
+    }
 }

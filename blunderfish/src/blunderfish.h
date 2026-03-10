@@ -137,6 +137,7 @@ struct TTCluster {
 
 /*
 struct SearchParameters {
+    float lmr_rate_base = 0.5f;
     float lmr_rate_divisor = 1.35f;
     float singular_margin_factor = 2.0f;
     int rfp_margin_factor = 120;
@@ -149,30 +150,31 @@ struct SearchParameters {
     int qsearch_delta_margin = 200;
     int asp_initial_window_size = 30;
     float asp_window_growth_factor = 2.0f;
-    float nmr_r_base = 3.0f;
-    float nmr_r_divisor = 6.0f;
+    float nmp_r_base = 3.0f;
+    float nmp_r_divisor = 6.0f;
     float lmp_index_base = 3.0f;
     float lmp_index_factor = 2.0f;
 };
 */
 
 struct SearchParameters {
-    float lmr_rate_divisor = 1.4993f;
-    float singular_margin_factor = 2.3213f;
-    int rfp_margin_factor = 120;
-    int rfp_improving_bonus = 60;
-    int fp_margin_factor = 200;
-    int lmr_history_bonus_threshold = 1000;
-    float history_bonus_factor = 2.4127f;
-    float history_malus_factor = 1.4736f;
-    int qsearch_big_delta = 1100;
-    int qsearch_delta_margin = 200;
-    int asp_initial_window_size = 30;
-    float asp_window_growth_factor = 1.7353f;
-    float nmr_r_base = 2.4658f;
-    float nmr_r_divisor = 5.9947f;
-    float lmp_index_base = 3.7331f;
-    float lmp_index_factor = 1.4358f;
+    float lmr_rate_base = 0.575117f;
+    float lmr_rate_divisor = 1.6918f;
+    float singular_margin_factor = 1.94691f;
+    int rfp_margin_factor = 101;
+    int rfp_improving_bonus = 9;
+    int fp_margin_factor = 565;
+    int lmr_history_bonus_threshold = 1387;
+    float history_bonus_factor = 0.977785f;
+    float history_malus_factor = 0.80322f;
+    int qsearch_big_delta = 1255;
+    int qsearch_delta_margin = 203;
+    int asp_initial_window_size = 23;
+    float asp_window_growth_factor = 2.40463f;
+    float nmp_r_base = 2.52832f;
+    float nmp_r_divisor = 6.28705f;
+    float lmp_index_base = 3.34623f;
+    float lmp_index_factor = 2.39237f;
 };
 
 using KillerTable = std::array<std::array<Move, 2>, MAX_DEPTH>;
@@ -232,6 +234,21 @@ struct EvalParameters {
     int passed_pawn_bonus;
 };
 
+struct SearchContext {
+    TranspositionTable tt;
+    KillerTable killers;
+    HistoryTable history;
+    EvalHistory eval_history;
+
+    SearchParameters params;
+
+    bool should_stop;
+    std::optional<double> time_limit;
+    TimePoint search_start;
+
+    bool out_of_time() const;
+};
+
 struct Position {
     Side sides[2];
     int to_move;
@@ -256,14 +273,8 @@ struct Position {
     int reduced_searches;
     int reduced_fail_high;
 
-    SearchParameters params;
-
     std::array<Undo, MAX_DEPTH> undo_stack;
     int undo_count;
-
-    bool should_stop;
-    std::optional<double> time_limit;
-    TimePoint search_start;
 
     Position()
         : to_move(WHITE), en_passant_sq(NULL_SQUARE), flags(0), undo_count(0)
@@ -317,12 +328,14 @@ struct Position {
     void update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side);
     void update_is_checked();
 
-    int64_t pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, EvalHistory& eval_history, int ply, bool allow_null, int64_t alpha, int64_t beta, Move excluded_move, int extensions_so_far, int root_depth);
-    int64_t quiescence(int ply, int64_t alpha, int64_t beta);
+    int64_t pruned_negamax(SearchContext& s, int depth, int ply, bool allow_null, int64_t alpha, int64_t beta, Move excluded_move, int extensions_so_far, int root_depth);
+    int64_t quiescence(SearchContext& s, int ply, int64_t alpha, int64_t beta);
+
+    int64_t eval_at_depth(int depth);
 
     int32_t mvv_lva_score(Move mv, int32_t offset) const;
 
-    std::pair<Move, int64_t> best_move_internal(std::span<Move> moves, int depth, TranspositionTable& tt, Move last_best_move, HistoryTable& history, KillerTable& killers, EvalHistory& eval_history, int64_t alpha, int64_t beta);
+    std::pair<Move, int64_t> best_move_internal(SearchContext& s, std::span<Move> moves, int depth, Move last_best_move, int64_t alpha, int64_t beta);
     Move best_move(std::span<Move> moves, int depth, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt);
     Move best_move_easy(int depth, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt);
 
@@ -336,12 +349,12 @@ struct Position {
 
     void reset_benchmarking_statistics();
 
-    bool out_of_time() const;
-
     // eval
     int64_t pawn_structure(int colour, uint64_t ally_pawn_bb) const;
     int64_t king_safety(int colour, uint64_t king_bb, uint64_t pawn_bb) const;
     int64_t bishop_imbalance() const;
+
+    void clear_undo_stack();
 };
 
 int get_captured_square(int to, MoveType ty, int side);

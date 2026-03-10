@@ -78,18 +78,6 @@ void Position::display(bool display_metadata) const {
     print("To move: {}\n", to_move == WHITE ? "white" : "black");
 }
 
-bool Position::out_of_time() const {
-    if (time_limit) {
-        auto now = Clock::now();
-        auto elapsed_nano = now - search_start;
-        auto elapsed = double(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed_nano).count())/1000.0;
-        return elapsed > *time_limit;
-    }
-    else {
-        return false;
-    }
-}
-
 std::optional<Position> Position::decode_fen_string(const std::string& fen) {
     size_t cursor = 0;
 
@@ -413,10 +401,6 @@ void Position::reset_benchmarking_statistics() {
     cutoff_index_sum = 0;
     reduced_searches = 0;
     reduced_fail_high = 0;
-
-    time_limit = std::nullopt;
-    should_stop = false;
-    search_start = Clock::now();
 }
 
 int Position::get_king_sq(int side) const {
@@ -439,4 +423,8 @@ std::optional<int> Position::game_result() {
     else {
         return 0;
     }
+}
+
+void Position::clear_undo_stack() {
+    undo_count = 0;
 }
