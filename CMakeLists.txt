@@ -21,7 +21,6 @@ endif()
 add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 
 add_subdirectory(blunderfish)
-add_subdirectory(cli)
 add_subdirectory(uci)
 add_subdirectory(opening_gen)
 add_subdirectory(tests)

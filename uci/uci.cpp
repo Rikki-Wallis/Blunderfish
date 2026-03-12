@@ -235,7 +235,7 @@ int main() {
             should_stop = false;
 
             int time_ms = calculate_move_time(g, position.to_move);
-            double time_s = double(time_ms)/1000.0;
+            double time_s = double(time_ms)/1000.0*0.95;
 
             int depth = g.depth.value_or(20);
 
