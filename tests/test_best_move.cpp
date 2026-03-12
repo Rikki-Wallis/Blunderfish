@@ -201,7 +201,8 @@ TEST_CASE("best_move - All Test Suites") {
             pos.filter_moves(moves);
 
             // find best move
-            Move best = pos.best_move(moves, depth);
+            std::atomic<bool> should_stop = false;
+            Move best = pos.best_move(moves, depth, should_stop);
 
             // get name of best move
             auto move_name = pos.name_moves(std::span<Move>(&best, 1));

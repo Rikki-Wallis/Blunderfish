@@ -86,7 +86,8 @@ static void benchmark_best_move() {
         std::array<Move, 256> move_buf;
         std::span<Move> moves = pos.generate_moves(move_buf);
         pos.filter_moves(moves);
-        pos.best_move(moves, depth);
+        std::atomic<bool> should_stop = false;
+        pos.best_move(moves, depth, should_stop);
     });
 }
 

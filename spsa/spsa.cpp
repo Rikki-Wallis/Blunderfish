@@ -151,7 +151,8 @@ static int run_double_sided_game(size_t game_index, const char* opening, const S
                 break;
             }
 
-            Move move = pos.best_move_easy(20, time_limit_per_move, sides[pos.to_move]);
+            std::atomic<bool> should_stop = false;
+            Move move = pos.best_move_easy(20, should_stop, time_limit_per_move, sides[pos.to_move]);
             pos.make_move(move);
             pos.clear_undo_stack();
         }

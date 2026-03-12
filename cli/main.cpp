@@ -58,7 +58,8 @@ static int play_main() {
             pos.make_move(m);
         }
         else {
-            Move best = pos.best_move(moves, 14);
+            std::atomic<bool> should_stop = false;
+            Move best = pos.best_move(moves, 14, should_stop);
             assert(best != NULL_MOVE);
 
             for (auto& [name, mv] : names) {
@@ -121,7 +122,8 @@ static int best_main(const char* FEN, int depth, std::optional<double> time_limi
     pos.filter_moves(moves);
     auto names = pos.name_moves(moves);
 
-    Move best = pos.best_move(moves, depth, time_limit);
+    std::atomic<bool> should_stop = false;
+    Move best = pos.best_move(moves, depth, should_stop, time_limit);
 
     if (best == NULL_MOVE) {
         print("There is no move.\n");

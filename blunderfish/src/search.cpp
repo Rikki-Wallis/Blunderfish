@@ -505,6 +505,10 @@ int64_t Position::pruned_negamax(SearchContext& s, int depth, int ply, bool allo
 }
 
 int64_t Position::quiescence(SearchContext& s, int ply, int64_t alpha, int64_t beta) {
+    if (s.should_stop) {
+        return 0;
+    }
+
     node_count++;
     qnode_count++;
 
@@ -639,7 +643,7 @@ std::pair<Move, int64_t> Position::best_move_internal(SearchContext& s, std::spa
     return {best_move, best_score};
 }
 
-Move Position::best_move(std::span<Move> _moves, int depth, std::optional<double> limit, std::optional<SearchParameters> params_in) {
+Move Position::best_move(std::span<Move> _moves, int depth, std::atomic<bool>& should_stop, std::optional<double> limit, std::optional<SearchParameters> params_in) {
     reset_benchmarking_statistics();
 
     if (_moves.size() == 0) {
@@ -652,7 +656,7 @@ Move Position::best_move(std::span<Move> _moves, int depth, std::optional<double
         .history = {},
         .eval_history = {},
         .params = params_in.value_or(SearchParameters{}),
-        .should_stop = false,
+        .should_stop = should_stop,
         .time_limit = limit,
         .search_start = Clock::now(),
     };
@@ -697,21 +701,23 @@ Move Position::best_move(std::span<Move> _moves, int depth, std::optional<double
     return best_move;
 }
 
-Move Position::best_move_easy(int depth, std::optional<double> time_limit, std::optional<SearchParameters> params) {
+Move Position::best_move_easy(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit, std::optional<SearchParameters> params) {
     std::array<Move, 256> move_buf;
     std::span<Move> moves = generate_moves(move_buf);
     filter_moves(moves);
-    return best_move(moves, depth, time_limit, params);
+    return best_move(moves, depth, should_stop, time_limit, params);
 }
 
 int64_t Position::eval_at_depth(int depth){
+    std::atomic<bool> should_stop = false;
+
     SearchContext s = {
         .tt = {},
         .killers {},
         .history = {},
         .eval_history = {},
         .params = {},
-        .should_stop = false,
+        .should_stop = should_stop,
         .time_limit = std::nullopt,
         .search_start = Clock::now(),
     };

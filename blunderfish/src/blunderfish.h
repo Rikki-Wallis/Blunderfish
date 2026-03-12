@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <array>
 #include <chrono>
+#include <atomic>
 
 #include "common.h"
 
@@ -242,7 +243,7 @@ struct SearchContext {
 
     SearchParameters params;
 
-    bool should_stop;
+    std::atomic<bool>& should_stop;
     std::optional<double> time_limit;
     TimePoint search_start;
 
@@ -285,10 +286,6 @@ struct Position {
         zobrist = compute_zobrist();
         reset_benchmarking_statistics();
     }
-
-    Position(Position&&) = default;
-    Position(const Position&) = delete;
-    const Position& operator=(const Position&) = delete;
 
     void display(bool display_metadata=false) const;
     static std::optional<Position> decode_fen_string(const std::string& fen);
@@ -336,8 +333,8 @@ struct Position {
     int32_t mvv_lva_score(Move mv, int32_t offset) const;
 
     std::pair<Move, int64_t> best_move_internal(SearchContext& s, std::span<Move> moves, int depth, Move last_best_move, int64_t alpha, int64_t beta);
-    Move best_move(std::span<Move> moves, int depth, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt);
-    Move best_move_easy(int depth, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt);
+    Move best_move(std::span<Move> moves, int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt);
+    Move best_move_easy(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt);
 
     std::optional<int> game_result();
 
