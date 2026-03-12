@@ -12,7 +12,7 @@ std::mt19937 rng(std::random_device{}());
 std::uniform_int_distribution<int> twin_dist(0, 1);
 std::uniform_int_distribution<size_t> opening_dist(0, std::size(openings)-1);
 
-constexpr double time_limit_per_move = 1.0f; 
+constexpr double time_limit_per_move = 0.05f; 
 constexpr int ngames = 32;
 
 struct Param {
@@ -28,23 +28,23 @@ float perturb_amount(const Param& param, int iteration) {
 // These are continuously updated but rounded to integers in most cases
 struct Params {
     std::map<std::string, Param> params = {
-        { "lmr_rate_base", { 0.5f, 0.0f, 3.0f }},
-        { "lmr_rate_divisor", { 1.35f, 0.5f, 5.0f }},
-        { "singular_margin_factor", { 2.0f, 0.5f, 5.0f }},
-        { "rfp_margin_factor", { 120.0f, 10.0f, 1000.0f }},
-        { "rfp_improving_bonus", { 60.0f, 0.0f, 1000.0f }},
-        { "fp_margin_factor", { 200.0f, 10.0f, 1000.0f }},
-        { "lmr_history_bonus_threshold", { 1000.0f, 100.0f, 5000.0f }},
-        { "history_bonus_factor", { 1.0f, 0.1f, 5.0f }},
-        { "history_malus_factor", { 1.0f, 0.1f, 5.0f }},
-        { "qsearch_big_delta", { 1100.0f, 400.0f, 2000.0f }},
-        { "qsearch_delta_margin", { 200.0f, 50.0f, 1000.0f }},
-        { "asp_initial_window_size", { 30.0f, 10.0f, 100.0f }},
-        { "asp_window_growth_factor", { 2.0f, 1.1f, 100.0f }},
-        { "nmp_r_base", { 3.0f, 1.0f, 6.0f }},
-        { "nmp_r_divisor", { 6.0f, 1.0f, 12.0f }},
-        { "lmp_index_base", { 3.0f, 1.0f, 5.0f }},
-        { "lmp_index_factor", { 2.0f, 0.5f, 5.0f }},
+        { "lmr_rate_base", { 0.575117f, 0.0f, 3.0f }},
+        { "lmr_rate_divisor", { 1.6918f, 0.5f, 5.0f }},
+        { "singular_margin_factor", { 1.94691f, 0.5f, 5.0f }},
+        { "rfp_margin_factor", { 101.0f, 10.0f, 1000.0f }},
+        { "rfp_improving_bonus", { 9.0f, 0.0f, 1000.0f }},
+        { "fp_margin_factor", { 565.0f, 10.0f, 1000.0f }},
+        { "lmr_history_bonus_threshold", { 1387.0f, 100.0f, 5000.0f }},
+        { "history_bonus_factor", { 0.9777f, 0.1f, 5.0f }},
+        { "history_malus_factor", { 0.80322, 0.1f, 5.0f }},
+        { "qsearch_big_delta", { 1255.0f, 400.0f, 2000.0f }},
+        { "qsearch_delta_margin", { 203.0f, 50.0f, 1000.0f }},
+        { "asp_initial_window_size", { 23.0f, 10.0f, 100.0f }},
+        { "asp_window_growth_factor", { 2.4046f, 1.1f, 100.0f }},
+        { "nmp_r_base", { 2.528f, 1.0f, 6.0f }},
+        { "nmp_r_divisor", { 6.287f, 1.0f, 12.0f }},
+        { "lmp_index_base", { 3.346f, 1.0f, 5.0f }},
+        { "lmp_index_factor", { 2.3924f, 0.5f, 5.0f }},
     };
 
     void dump() {
@@ -197,6 +197,7 @@ int main() {
     std::vector<Params> history{params};
 
     int nthreads = std::max((unsigned int)1, std::thread::hardware_concurrency());
+    print("Running with {} threads.\n", nthreads);
 
     for (int iteration = 0; iteration < 1000; ++iteration) {
         
@@ -297,50 +298,71 @@ int main() {
         }
     }
 }
-*/
+    */
 
 int main() {
+    //SearchParameters baseline = {
+    //    .lmr_rate_base = 0.5f,
+    //    .lmr_rate_divisor = 1.1f,
+    //    .singular_margin_factor = 2.0f,
+    //    .rfp_margin_factor = 120,
+    //    .rfp_improving_bonus = 60,
+    //    .fp_margin_factor = 200,
+    //    .lmr_history_bonus_threshold = 1000,
+    //    .history_bonus_factor = 1.0f,
+    //    .history_malus_factor = 1.0f,
+    //    .qsearch_big_delta = 1100,
+    //    .qsearch_delta_margin = 200,
+    //    .asp_initial_window_size = 30,
+    //    .asp_window_growth_factor = 2.0f,
+    //    .nmp_r_base = 3.0f,
+    //    .nmp_r_divisor = 6.0f,
+    //    .lmp_index_base = 3.0f,
+    //    .lmp_index_factor = 2.0f,
+    //};
+
     SearchParameters baseline = {
-        .lmr_rate_base = 0.5f,
-        .lmr_rate_divisor = 1.35f,
-        .singular_margin_factor = 2.0f,
+        .lmr_rate_base = 0.697732f,
+        .lmr_rate_divisor = 1.1f,
+        .singular_margin_factor = 2.06158f,
         .rfp_margin_factor = 120,
-        .rfp_improving_bonus = 60,
-        .fp_margin_factor = 200,
-        .lmr_history_bonus_threshold = 1000,
-        .history_bonus_factor = 1.0f,
-        .history_malus_factor = 1.0f,
-        .qsearch_big_delta = 1100,
-        .qsearch_delta_margin = 200,
-        .asp_initial_window_size = 30,
-        .asp_window_growth_factor = 2.0f,
-        .nmp_r_base = 3.0f,
-        .nmp_r_divisor = 6.0f,
-        .lmp_index_base = 3.0f,
-        .lmp_index_factor = 2.0f,
+        .rfp_improving_bonus = 12,
+        .fp_margin_factor = 606,
+        .lmr_history_bonus_threshold = 1677,
+        .history_bonus_factor = 0.841214f,
+        .history_malus_factor = 0.667858f,
+        .qsearch_big_delta = 1292,
+        .qsearch_delta_margin = 219,
+        .asp_initial_window_size = 21,
+        .asp_window_growth_factor = 5.24969f,
+        .nmp_r_base = 2.52267f,
+        .nmp_r_divisor = 6.61207f,
+        .lmp_index_base = 3.37083f,
+        .lmp_index_factor = 2.41325f
     };
+
 
     SearchParameters tuned = {
-        .lmr_rate_base = 0.575117f,
-        .lmr_rate_divisor = 1.6918f,
-        .singular_margin_factor = 1.94691f,
-        .rfp_margin_factor = 101,
-        .rfp_improving_bonus = 9,
-        .fp_margin_factor = 565,
-        .lmr_history_bonus_threshold = 1387,
-        .history_bonus_factor = 0.977785f,
-        .history_malus_factor = 0.80322f,
-        .qsearch_big_delta = 1255,
-        .qsearch_delta_margin = 203,
-        .asp_initial_window_size = 23,
-        .asp_window_growth_factor = 2.40463f,
-        .nmp_r_base = 2.52832f,
-        .nmp_r_divisor = 6.28705f,
-        .lmp_index_base = 3.34623f,
-        .lmp_index_factor = 2.39237f,
+        .lmr_rate_base = 0.697732f,
+        .lmr_rate_divisor = 1.98407f,
+        .singular_margin_factor = 2.06158f,
+        .rfp_margin_factor = 120,
+        .rfp_improving_bonus = 12,
+        .fp_margin_factor = 606,
+        .lmr_history_bonus_threshold = 1677,
+        .history_bonus_factor = 0.841214f,
+        .history_malus_factor = 0.667858f,
+        .qsearch_big_delta = 1292,
+        .qsearch_delta_margin = 219,
+        .asp_initial_window_size = 21,
+        .asp_window_growth_factor = 5.24969f,
+        .nmp_r_base = 2.52267f,
+        .nmp_r_divisor = 6.61207f,
+        .lmp_index_base = 3.37083f,
+        .lmp_index_factor = 2.41325f
     };
 
-    size_t ngames = 100;
+    size_t ngames = 1024;
     int nthreads = std::max((unsigned int)1, std::thread::hardware_concurrency());
 
     std::vector<std::thread> threads;
