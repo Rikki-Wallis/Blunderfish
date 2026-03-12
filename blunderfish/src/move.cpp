@@ -43,12 +43,12 @@ static const std::array<int, 64> rook_jump_from = gen_rook_jump_from_table();
 static const std::array<int, 64> rook_jump_to = gen_rook_jump_to_table();
 
 // King
-static uint64_t king_moves(int from, uint64_t allies) {
+uint64_t king_moves(int from, uint64_t allies) {
     return king_move_table[from] & (~allies);
 }
 
 // Knights
-static uint64_t knight_moves(int from, uint64_t allies) {
+uint64_t knight_moves(int from, uint64_t allies) {
     return knight_move_table[from] & (~allies);
 }
 

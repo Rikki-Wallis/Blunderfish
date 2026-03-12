@@ -1,5 +1,6 @@
 #include "blunderfish.h"
 
+
 int64_t Side::material_value() const {
     int64_t sum = 0;
 
@@ -12,7 +13,6 @@ int64_t Side::material_value() const {
 }
 
 // stolen from https://www.chessprogramming.org/Simplified_Evaluation_Function
-
 static const int MG_PAWN_PST[64] = {
     0,  0,  0,  0,  0,  0,  0,  0,
     5, 10, 10,-20,-20, 10, 10,  5,
@@ -150,11 +150,11 @@ static const int* MG_PST[NUM_PIECE_TYPES] = {
 
 static const int* EG_PST[NUM_PIECE_TYPES] = {
     ZEROED_PST,
-    MG_PAWN_PST,
-    MG_ROOK_PST,
+    EG_PAWN_PST,
+    EG_ROOK_PST,
     KNIGHT_PST,
-    MG_BISHOP_PST,
-    MG_QUEEN_PST,
+    EG_BISHOP_PST,
+    EG_QUEEN_PST,
     EG_KING_PST,
 };
 
@@ -224,6 +224,8 @@ int64_t Position::compute_eval() const {
     value += king_safety(BLACK, black_king, black_pawns);
     value += pawn_structure(WHITE, white_pawns);
     value += pawn_structure(BLACK, black_pawns);
+    value += mobility(WHITE);
+    value += mobility(BLACK);
     value += bishop_imbalance();
     
     return value;
@@ -414,6 +416,39 @@ int64_t Position::bishop_imbalance() const {
     }
 
     return 0;
+}
+
+int64_t Position::mobility(int colour) const {
+    int64_t value = 0;
+
+    uint64_t allies = sides[colour].all();
+    uint64_t all = all_pieces();
+
+
+    for (int sq : set_bits(sides[colour].bb[PIECE_KNIGHT])) {
+        uint64_t knight_attacks = knight_moves(sq, allies);
+        value += std::popcount(knight_attacks);
+    }
+
+    for (int sq : set_bits(sides[colour].bb[PIECE_BISHOP])) {
+        uint64_t bishop_attacks = bishop_moves(sq, all, allies);
+        value += std::popcount(bishop_attacks);
+    }
+
+    for (int sq : set_bits(sides[colour].bb[PIECE_ROOK])) {
+        uint64_t rook_attacks = rook_moves(sq, all, allies);
+        value += std::popcount(rook_attacks);
+    }
+
+    for (int sq : set_bits(sides[colour].bb[PIECE_QUEEN])) {
+        uint64_t queen_attacks = queen_moves(sq, all, allies);
+        value += std::popcount(queen_attacks);
+    }
+
+
+    int64_t return_val = colour == WHITE ? value : -value;
+
+    return return_val;
 }
 
 
