@@ -249,6 +249,7 @@ struct SearchContext {
     TimePoint search_start;
 
     bool out_of_time() const;
+    double elapsed_time() const;
 };
 
 struct Position {
@@ -334,8 +335,8 @@ struct Position {
     int32_t mvv_lva_score(Move mv, int32_t offset) const;
 
     std::pair<Move, int64_t> best_move_internal(SearchContext& s, std::span<Move> moves, int depth, Move last_best_move, int64_t alpha, int64_t beta);
-    Move best_move(std::span<Move> moves, int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt);
-    Move best_move_easy(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt);
+    Move best_move(std::span<Move> moves, int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt, bool enable_uci_info=false);
+    Move best_move_easy(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt, bool enable_uci_info=false);
 
     std::optional<int> game_result();
 
@@ -434,3 +435,5 @@ template<typename T>
 static T bool_to_mask(bool x) {
     return static_cast<T>(-static_cast<int>(x));
 }
+
+std::string to_uci_move(Move move);

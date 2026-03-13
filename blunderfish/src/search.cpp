@@ -1,5 +1,6 @@
 #include <array>
 #include <cmath>
+#include <iostream>
 
 #include "blunderfish.h"
 
@@ -657,7 +658,7 @@ std::pair<Move, int64_t> Position::best_move_internal(SearchContext& s, std::spa
     return {best_move, best_score};
 }
 
-Move Position::best_move(std::span<Move> _moves, int depth, std::atomic<bool>& should_stop, std::optional<double> limit, std::optional<SearchParameters> params_in) {
+Move Position::best_move(std::span<Move> _moves, int depth, std::atomic<bool>& should_stop, std::optional<double> limit, std::optional<SearchParameters> params_in, bool enable_uci_info) {
     reset_benchmarking_statistics();
 
     if (_moves.size() == 0) {
@@ -710,16 +711,34 @@ Move Position::best_move(std::span<Move> _moves, int depth, std::atomic<bool>& s
                 break;
             }
         }
+
+        // UCI output
+
+        if (enable_uci_info) {
+            double elapsed = s.elapsed_time();
+            int nps = int(double(node_count)/elapsed);
+
+            std::string score_str;
+            if (std::abs(best_score) > MATE_SCORE - 1000) {
+                int moves_to_mate = int((MATE_SCORE - std::abs(best_score) + 1) / 2);
+                score_str = std::format("mate {}", best_score > 0 ? moves_to_mate : -moves_to_mate);
+            } else {
+                score_str = std::format("cp {}", best_score);
+            }
+
+            std::cout << std::format("info depth {} score {} nodes {} nps {} time {} pv {}\n", i, score_str, node_count, nps, elapsed, to_uci_move(best_move));
+        }
+
     }
 
     return best_move;
 }
 
-Move Position::best_move_easy(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit, std::optional<SearchParameters> params) {
+Move Position::best_move_easy(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit, std::optional<SearchParameters> params, bool enable_uci_info) {
     std::array<Move, 256> move_buf;
     std::span<Move> moves = generate_moves(move_buf);
     filter_moves(moves);
-    return best_move(moves, depth, should_stop, time_limit, params);
+return best_move(moves, depth, should_stop, time_limit, params, enable_uci_info);
 }
 
 int64_t Position::eval_at_depth(int depth){
@@ -741,12 +760,15 @@ int64_t Position::eval_at_depth(int depth){
 
 bool SearchContext::out_of_time() const {
     if (time_limit) {
-        auto now = Clock::now();
-        auto elapsed_nano = now - search_start;
-        auto elapsed = double(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed_nano).count())/1000.0;
-        return elapsed > *time_limit;
+        return elapsed_time() > *time_limit;
     }
     else {
         return false;
     }
+}
+
+double SearchContext::elapsed_time() const {
+    auto now = Clock::now();
+    auto elapsed_nano = now - search_start;
+    return double(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed_nano).count())/1000.0;
 }

@@ -932,3 +932,37 @@ uint64_t Position::generate_pin_mask(int side) const {
 
     return pinned;
 }
+
+std::string to_uci_move(Move move) {
+    int from = move_from(move);
+    int to = move_to(move);
+
+    char from_f = char(from & 7) + 'a';
+    char from_r = char(from >> 3) + '1';
+    
+    char to_f = char(to & 7) + 'a';
+    char to_r = char(to >> 3) + '1';
+
+    std::string result = std::format("{}{}{}{}", from_f, from_r, to_f, to_r);
+
+    if (move_type(move) == MOVE_PROMOTION) {
+        switch (move_end_piece(move)) {
+            default:
+                break;
+            case PIECE_QUEEN:
+                result.push_back('q');
+                break;
+            case PIECE_KNIGHT:
+                result.push_back('n');
+                break;
+            case PIECE_BISHOP:
+                result.push_back('b');
+                break;
+            case PIECE_ROOK:
+                result.push_back('r');
+                break;
+        }
+    }
+
+    return result;
+}

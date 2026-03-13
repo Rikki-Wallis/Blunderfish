@@ -66,40 +66,6 @@ static Move parse_uci_move(Position* pos, const std::string& move) {
     return encode_move(from, to, move_type, end_piece, pos->to_move, captured_piece);
 }
 
-const std::string to_uci_move(Move move) {
-    int from = move_from(move);
-    int to = move_to(move);
-
-    char from_f = char(from & 7) + 'a';
-    char from_r = char(from >> 3) + '1';
-    
-    char to_f = char(to & 7) + 'a';
-    char to_r = char(to >> 3) + '1';
-
-    std::string result = std::format("{}{}{}{}", from_f, from_r, to_f, to_r);
-
-    if (move_type(move) == MOVE_PROMOTION) {
-        switch (move_end_piece(move)) {
-            default:
-                break;
-            case PIECE_QUEEN:
-                result.push_back('q');
-                break;
-            case PIECE_KNIGHT:
-                result.push_back('n');
-                break;
-            case PIECE_BISHOP:
-                result.push_back('b');
-                break;
-            case PIECE_ROOK:
-                result.push_back('r');
-                break;
-        }
-    }
-
-    return result;
-}
-
 static void parse_position(const std::string& line, Position* pos) {
     const char* moves_string = " moves ";
     size_t moves_start = line.find(moves_string);
@@ -231,15 +197,15 @@ int main() {
 
             GoParams g = parse_go_command(line);
 
-            should_stop = false;
-
             int time_ms = calculate_move_time(g, position.to_move);
             double time_s = double(time_ms)/1000.0*0.95;
 
-            int depth = g.depth.value_or(20);
+            int depth = g.depth.value_or(40);
 
-            thread = std::thread([&](){
-                Move move = position.best_move_easy(depth, should_stop, time_s);
+            should_stop = false;
+            
+            thread = std::thread([&position, depth, &should_stop, time_s](){
+                Move move = position.best_move_easy(depth, should_stop, time_s, std::nullopt, true);
                 std::cout << "bestmove " << to_uci_move(move) << "\n";
             });
         }
