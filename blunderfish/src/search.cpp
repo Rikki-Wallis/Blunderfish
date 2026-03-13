@@ -274,14 +274,9 @@ int64_t Position::pruned_negamax(SearchContext& s, int depth, int ply, bool allo
         }
     }
 
-    // we didn't find a TT move; search at a lower depth to try and populate a best move
+    // we didn't find a TT move; branch probably boring
     if (tt_move == NULL_MOVE && depth >= 4) {
-        pruned_negamax(s, depth-2, ply, true, alpha, beta, NULL_MOVE, extensions_so_far, root_depth);
-
-        TTEntry& e = find_entry(s.tt, zobrist);
-        if (e.key32 == compress_zobrist(zobrist)) {
-            tt_move = e.best_move;
-        }
+        depth--;
     }
 
     int64_t best_score = -MATE_SCORE;
