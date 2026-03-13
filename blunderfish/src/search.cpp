@@ -186,6 +186,10 @@ int64_t Position::pruned_negamax(SearchContext& s, int depth, int ply, bool allo
 
     node_count++;
 
+    if (is_threefold_repetition()) {
+        return 0;
+    }
+
     if (depth == 0) {
         return quiescence(s, ply, alpha, beta);
     }
@@ -407,7 +411,7 @@ int64_t Position::pruned_negamax(SearchContext& s, int depth, int ply, bool allo
             }
 
             if (futility_prune && quiet && !gives_check) {
-                unmake_move(m);
+                unmake_move();
                 continue;
             }
 
@@ -416,7 +420,7 @@ int64_t Position::pruned_negamax(SearchContext& s, int depth, int ply, bool allo
             if (depth <= 4 && !currently_checked && quiet && !gives_check) {
                 int move_threshold = int(std::round(s.params.lmp_index_base + s.params.lmp_index_factor * float(depth * depth)));
                 if (move_index > move_threshold) { 
-                    unmake_move(m);
+                    unmake_move();
                     continue; 
                 }
             }
@@ -454,7 +458,7 @@ int64_t Position::pruned_negamax(SearchContext& s, int depth, int ply, bool allo
             move_index++;
         }
 
-        unmake_move(m);
+        unmake_move();
 
         if (cutoff) {
             if (quiet) {
@@ -505,12 +509,22 @@ int64_t Position::pruned_negamax(SearchContext& s, int depth, int ply, bool allo
 }
 
 int64_t Position::quiescence(SearchContext& s, int ply, int64_t alpha, int64_t beta) {
+    if ((node_count & 4095) == 0) {
+        if (s.out_of_time()) {
+            s.should_stop = true;
+        }
+    }
+
     if (s.should_stop) {
         return 0;
     }
 
     node_count++;
     qnode_count++;
+
+    if (is_threefold_repetition()) {
+        return 0;
+    }
 
     int side = to_move;
     bool currently_checked = is_checked[side];
@@ -593,7 +607,7 @@ int64_t Position::quiescence(SearchContext& s, int ply, int64_t alpha, int64_t b
             }
         }
 
-        unmake_move(mv);
+        unmake_move();
 
         if (cutoff) {
             beta_cutoffs++;
@@ -625,7 +639,7 @@ std::pair<Move, int64_t> Position::best_move_internal(SearchContext& s, std::spa
         make_move(m); // no need to filter for check here - assumes filtered moves given
         PREFETCH_TT();
         int64_t score = -pruned_negamax(s, depth-1, ply+1, true, -beta, -alpha, NULL_MOVE, 0, depth-1);
-        unmake_move(m);
+        unmake_move();
 
         if (score > best_score) {
             best_score = score;

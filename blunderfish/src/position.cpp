@@ -413,6 +413,10 @@ std::optional<int> Position::game_result() {
     std::span<Move> moves = generate_moves(move_buf);
     filter_moves(moves);
 
+    if (is_threefold_repetition()) {
+        return 0;
+    }
+
     if (moves.size() != 0) {
         return std::nullopt;
     }
@@ -425,6 +429,22 @@ std::optional<int> Position::game_result() {
     }
 }
 
-void Position::clear_undo_stack() {
-    undo_count = 0;
+bool Position::is_threefold_repetition() const {
+    int count = 0;
+
+    for (int i = undo_count-1; i >= 0; i -= 2) {
+        const Undo& undo = undo_stack[i];
+
+        if (undo.zobrist == zobrist) {
+            count++;
+        }
+
+        if (count >= 2) return true;
+
+        if (move_captured_piece(undo.move) != PIECE_NONE) {
+            break; // irreversible move - position cannot repeat across them
+        }
+    } 
+
+    return false;
 }

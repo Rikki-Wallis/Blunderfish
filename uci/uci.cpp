@@ -122,7 +122,6 @@ static void parse_position(const std::string& line, Position* pos) {
     while (ss >> move) {
         Move mv = parse_uci_move(pos, move);
         pos->make_move(mv);
-        pos->clear_undo_stack();
     }
 }
 

@@ -550,7 +550,7 @@ void Position::filter_moves(std::span<Move>& moves) {
             illegal = true;
         }
 
-        unmake_move(moves[i]);
+        unmake_move();
 
         if (illegal) {
             moves[i] = moves.back();
@@ -626,7 +626,7 @@ std::unordered_map<std::string, Move> Position::name_moves(std::span<Move> moves
                     check_suffix = "+";
                 }
             }
-            unmake_move(m);
+            unmake_move();
 
             std::string name = "";
 
@@ -708,6 +708,7 @@ void Position::make_move(Move move) {
     // Before we modify anything, record the destroyable data in the undo stack
     Undo undo = {
         .flags = flags,
+        .move = move,
         .en_passant_sq = en_passant_sq,
         .zobrist = initial_zobrist,
         .incremental_eval = initial_eval,
@@ -814,9 +815,13 @@ void Position::update_is_checked() {
     is_checked[BLACK] = is_king_square_attacked(BLACK, std::countr_zero(sides[BLACK].bb[PIECE_KING]));
 }
 
-void Position::unmake_move(Move move) {
+void Position::unmake_move() {
     assert(undo_count > 0);
     Undo undo = undo_stack[--undo_count];
+
+    assert(undo.move != NULL_MOVE);
+
+    Move move = undo.move;
 
     is_checked[WHITE] = undo.is_checked[WHITE];
     is_checked[BLACK] = undo.is_checked[BLACK];
@@ -868,6 +873,7 @@ void Position::make_null_move() {
     assert(undo_count < MAX_DEPTH);
     undo_stack[undo_count++] = Undo {
         .flags = flags,
+        .move = NULL_MOVE,
         .en_passant_sq = en_passant_sq,
         .zobrist = zobrist,
         .incremental_eval = incremental_eval,

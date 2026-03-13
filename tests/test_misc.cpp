@@ -20,7 +20,7 @@ static void test_capture_gen(Position& pos, int depth) {
         for (Move mv : moves) {
             pos.make_move(mv);
             test_capture_gen(pos, depth-1);
-            pos.unmake_move(mv);
+            pos.unmake_move();
         }
     }
 

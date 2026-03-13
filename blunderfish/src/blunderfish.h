@@ -16,7 +16,7 @@ using TimePoint = std::chrono::time_point<Clock>;
 #define ZOBRIST_INCLUDE_EN_PASSANT_SQ
 #define ZOBRIST_INCLUDE_SIDE
 
-#define MAX_DEPTH 256
+#define MAX_DEPTH 512
 
 constexpr int64_t INF        = 400000000;
 constexpr int64_t MATE_SCORE = 32000; // just shy of int16 bounds
@@ -117,6 +117,7 @@ static constexpr int NULL_SQUARE = -1;
 
 struct Undo {
     uint32_t flags;
+    Move move;
     int en_passant_sq;
     uint64_t zobrist;
     int64_t incremental_eval;
@@ -299,7 +300,7 @@ struct Position {
     uint64_t all_pieces() const;
 
     void make_move(Move move);
-    void unmake_move(Move move);
+    void unmake_move();
 
     void make_null_move();
     void unmake_null_move();
@@ -351,7 +352,7 @@ struct Position {
     int64_t king_safety(int colour, uint64_t king_bb, uint64_t pawn_bb) const;
     int64_t bishop_imbalance() const;
 
-    void clear_undo_stack();
+    bool is_threefold_repetition() const;
 };
 
 int get_captured_square(int to, MoveType ty, int side);

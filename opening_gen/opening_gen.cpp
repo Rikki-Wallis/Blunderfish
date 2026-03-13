@@ -39,7 +39,7 @@ static void explore(FILE* stream, Position& pos, int depth, TSet& seen, size_t& 
             Move mv = moves[idx];
             pos.make_move(mv);
             explore(stream, pos, depth-1, seen, count);
-            pos.unmake_move(mv);
+            pos.unmake_move();
         }
     }
 }

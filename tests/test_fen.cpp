@@ -27,7 +27,7 @@ static void test_fen(Position& pos, int depth) {
             test_fen(pos, depth-1);
         }
 
-        pos.unmake_move(mv);
+        pos.unmake_move();
     }
 }
 
