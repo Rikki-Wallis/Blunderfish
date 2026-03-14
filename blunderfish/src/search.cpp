@@ -738,6 +738,10 @@ Move Position::best_move(std::span<Move> _moves, int depth, std::atomic<bool>& s
             }
         }
 
+        if (s.should_stop) {
+            break;
+        }
+
         // UCI output
 
         if (enable_uci_info) {
@@ -752,9 +756,8 @@ Move Position::best_move(std::span<Move> _moves, int depth, std::atomic<bool>& s
                 score_str = std::format("cp {}", best_score);
             }
 
-            std::cout << std::format("info depth {} score {} nodes {} nps {} time {} pv {}\n", i, score_str, node_count, nps, int(elapsed*1000.0), to_uci_move(best_move));
+            std::cout << std::format("info depth {} seldepth {} score {} nodes {} nps {} time {} pv {}\n", i, max_ply, score_str, node_count, nps, int(elapsed*1000.0), to_uci_move(best_move));
         }
-
     }
 
     return best_move;

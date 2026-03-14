@@ -49,7 +49,9 @@ static void benchmark_pos_method(const std::string& name, int start_depth, int m
     for (int depth = start_depth; depth <= max_depth; ++depth) {
         auto start = std::chrono::high_resolution_clock::now();
 
-        Position pos = *Position::decode_fen_string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        const char* fen = "1nbq1bnr/3kp2p/1p2Q1p1/r2B2B1/3PP3/p4N2/PPP2PPP/R3K2R b KQ - 5 14";
+        //const char* fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+        Position pos = *Position::decode_fen_string(fen);
 
         pos.reset_benchmarking_statistics();
         std::forward<Func>(func)(pos, depth);
