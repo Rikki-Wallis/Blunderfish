@@ -137,51 +137,34 @@ struct TTCluster {
     TTEntry entries[4];
 };
 
-/*
 struct SearchParameters {
-    float lmr_rate_base = 0.5f;
-    float lmr_rate_divisor = 1.35f;
-    float singular_margin_factor = 2.0f;
-    int rfp_margin_factor = 120;
-    int rfp_improving_bonus = 60;
-    int fp_margin_factor = 200;
-    int lmr_history_bonus_threshold = 1000;
-    float history_bonus_factor = 1.0f;
-    float history_malus_factor = 1.0f;
-    int qsearch_big_delta = 1100;
-    int qsearch_delta_margin = 200;
-    int asp_initial_window_size = 30;
-    float asp_window_growth_factor = 2.0f;
-    float nmp_r_base = 3.0f;
-    float nmp_r_divisor = 6.0f;
-    float lmp_index_base = 3.0f;
-    float lmp_index_factor = 2.0f;
-};
-*/
-
-struct SearchParameters {
-    float lmr_rate_base = 0.575117f;
-    float lmr_rate_divisor = 1.6918f;
-    float singular_margin_factor = 1.94691f;
-    int rfp_margin_factor = 101;
-    int rfp_improving_bonus = 9;
-    int fp_margin_factor = 565;
-    int lmr_history_bonus_threshold = 1387;
-    float history_bonus_factor = 0.977785f;
-    float history_malus_factor = 0.80322f;
-    int qsearch_big_delta = 1255;
-    int qsearch_delta_margin = 203;
-    int asp_initial_window_size = 23;
-    float asp_window_growth_factor = 2.40463f;
-    float nmp_r_base = 2.52832f;
-    float nmp_r_divisor = 6.28705f;
-    float lmp_index_base = 3.34623f;
-    float lmp_index_factor = 2.39237f;
+    float lmr_rate_base = 0.609352f;
+    float lmr_rate_divisor = 1.78544f;
+    float singular_margin_factor = 1.94709f;
+    int rfp_margin_factor = 132;
+    int rfp_improving_bonus = 28;
+    int fp_margin_factor = 828;
+    int lmr_history_bonus_threshold = 1594;
+    float history_bonus_factor = 1.02898f;
+    float history_malus_factor = 0.95008f;
+    float cont_history_bonus_factor = 0.46919f;
+    float cont_history_malus_factor = 0.48449f;
+    int qsearch_big_delta = 1223;
+    int qsearch_delta_margin = 70;
+    int asp_initial_window_size = 12;
+    float asp_window_growth_factor = 5.39f;
+    float nmp_r_base = 2.4091f;
+    float nmp_r_divisor = 7.25516f;
+    float lmp_index_base = 3.44978f;
+    float lmp_index_factor = 2.32816f;
 };
 
 using KillerTable = std::array<std::array<Move, 2>, MAX_DEPTH>;
 using HistoryTable = std::array<std::array<int32_t, 64>, NUM_PIECE_TYPES>;
 using EvalHistory = std::array<int64_t, MAX_DEPTH>;
+
+using ContinuationTable = std::array<std::array<int32_t, 64>, NUM_PIECE_TYPES>;
+using ContinuationHistory = std::array<std::array<ContinuationTable, 64>, NUM_PIECE_TYPES>;
 
 class TranspositionTable {
 public:
@@ -241,6 +224,7 @@ struct SearchContext {
     KillerTable killers;
     HistoryTable history;
     EvalHistory eval_history;
+    ContinuationHistory cont_history;
 
     SearchParameters params;
 
@@ -327,7 +311,7 @@ struct Position {
     void update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side);
     void update_is_checked();
 
-    int64_t pruned_negamax(SearchContext& s, int depth, int ply, bool allow_null, int64_t alpha, int64_t beta, Move excluded_move, int extensions_so_far, int root_depth);
+    int64_t pruned_negamax(SearchContext& s, int depth, int ply, bool allow_null, int64_t alpha, int64_t beta, Move excluded_move, int extensions_so_far, int root_depth, ContinuationTable* cont);
     int64_t quiescence(SearchContext& s, int ply, int64_t alpha, int64_t beta);
 
     int64_t eval_at_depth(int depth);

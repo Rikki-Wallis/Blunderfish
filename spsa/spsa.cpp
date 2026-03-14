@@ -37,6 +37,8 @@ struct Params {
         { "lmr_history_bonus_threshold", { 1387.0f, 100.0f, 5000.0f }},
         { "history_bonus_factor", { 0.9777f, 0.1f, 5.0f }},
         { "history_malus_factor", { 0.80322, 0.1f, 5.0f }},
+        { "cont_history_bonus_factor", { 0.5f, 0.1f, 5.0f }},
+        { "cont_history_malus_factor", { 0.5f, 0.1f, 5.0f }},
         { "qsearch_big_delta", { 1255.0f, 400.0f, 2000.0f }},
         { "qsearch_delta_margin", { 203.0f, 50.0f, 1000.0f }},
         { "asp_initial_window_size", { 23.0f, 10.0f, 100.0f }},
@@ -69,6 +71,8 @@ struct Params {
             match_int(lmr_history_bonus_threshold), 
             match(history_bonus_factor), 
             match(history_malus_factor), 
+            match(cont_history_bonus_factor), 
+            match(cont_history_malus_factor), 
             match_int(qsearch_big_delta), 
             match_int(qsearch_delta_margin), 
             match_int(asp_initial_window_size), 
@@ -184,13 +188,12 @@ static int run_double_sided_game(size_t game_index, const char* opening, const S
 
     {
         std::lock_guard<std::mutex> lock(print_mutex);
-        //print("Game {}: ({} {})\n", game_index, results[0], results[1]);
+        print("Game {}: ({} {})\n", game_index, results[0], results[1]);
     }
 
     return aggregate;
 }
 
-/*
 int main() {
     Params params{};
 
@@ -297,115 +300,4 @@ int main() {
             }
         }
     }
-}
-    */
-
-int main() {
-    //SearchParameters baseline = {
-    //    .lmr_rate_base = 0.5f,
-    //    .lmr_rate_divisor = 1.1f,
-    //    .singular_margin_factor = 2.0f,
-    //    .rfp_margin_factor = 120,
-    //    .rfp_improving_bonus = 60,
-    //    .fp_margin_factor = 200,
-    //    .lmr_history_bonus_threshold = 1000,
-    //    .history_bonus_factor = 1.0f,
-    //    .history_malus_factor = 1.0f,
-    //    .qsearch_big_delta = 1100,
-    //    .qsearch_delta_margin = 200,
-    //    .asp_initial_window_size = 30,
-    //    .asp_window_growth_factor = 2.0f,
-    //    .nmp_r_base = 3.0f,
-    //    .nmp_r_divisor = 6.0f,
-    //    .lmp_index_base = 3.0f,
-    //    .lmp_index_factor = 2.0f,
-    //};
-
-    SearchParameters baseline = {
-        .lmr_rate_base = 0.697732f,
-        .lmr_rate_divisor = 1.1f,
-        .singular_margin_factor = 2.06158f,
-        .rfp_margin_factor = 120,
-        .rfp_improving_bonus = 12,
-        .fp_margin_factor = 606,
-        .lmr_history_bonus_threshold = 1677,
-        .history_bonus_factor = 0.841214f,
-        .history_malus_factor = 0.667858f,
-        .qsearch_big_delta = 1292,
-        .qsearch_delta_margin = 219,
-        .asp_initial_window_size = 21,
-        .asp_window_growth_factor = 5.24969f,
-        .nmp_r_base = 2.52267f,
-        .nmp_r_divisor = 6.61207f,
-        .lmp_index_base = 3.37083f,
-        .lmp_index_factor = 2.41325f
-    };
-
-
-    SearchParameters tuned = {
-        .lmr_rate_base = 0.697732f,
-        .lmr_rate_divisor = 1.98407f,
-        .singular_margin_factor = 2.06158f,
-        .rfp_margin_factor = 120,
-        .rfp_improving_bonus = 12,
-        .fp_margin_factor = 606,
-        .lmr_history_bonus_threshold = 1677,
-        .history_bonus_factor = 0.841214f,
-        .history_malus_factor = 0.667858f,
-        .qsearch_big_delta = 1292,
-        .qsearch_delta_margin = 219,
-        .asp_initial_window_size = 21,
-        .asp_window_growth_factor = 5.24969f,
-        .nmp_r_base = 2.52267f,
-        .nmp_r_divisor = 6.61207f,
-        .lmp_index_base = 3.37083f,
-        .lmp_index_factor = 2.41325f
-    };
-
-    size_t ngames = 1024;
-    int nthreads = std::max((unsigned int)1, std::thread::hardware_concurrency());
-
-    std::vector<std::thread> threads;
-    threads.reserve(nthreads);
-
-    std::atomic<size_t> opening_index{0};
-    std::vector<int> thread_results(nthreads, 0);
-
-    for (int t = 0; t < nthreads; ++t) {
-        threads.emplace_back([&, t](){
-            int local_sum = 0;
-
-            while (true) {
-                size_t i = opening_index.fetch_add(1);
-
-                if (i >= ngames) {
-                    break;
-                }
-
-                const char* fen = openings[opening_dist(rng)];
-                int res = run_double_sided_game(i, fen, tuned, baseline);
-                local_sum += res;
-                
-                print("Game {}/{}: '{}': {}\n", i, ngames, fen, res);
-            }
-
-            thread_results[t] = local_sum;
-        });
-    }
-
-    for (auto& t : threads) {
-        t.join();
-    }
-
-    int result_aggregate = 0;
-
-    for (auto x : thread_results) {
-        result_aggregate += x;
-    }
-
-    float avg = float(result_aggregate) / float(ngames * 2);
-
-    print("Average result: {}\n", avg);
-
-    return 0;
 }
