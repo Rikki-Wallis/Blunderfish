@@ -352,6 +352,9 @@ int64_t Position::pruned_negamax(SearchContext& s, int depth, int ply, bool allo
 
     int move_index = 0; // the index of move out of all LEGAL moves
 
+    std::array<Move, 256> searched_quiets;
+    int searched_quiet_count = 0;
+
     for (int mv_idx_raw = 0; mv_idx_raw < (int)moves.size(); ++mv_idx_raw) {
         Move m = select_best(moves, move_scores, mv_idx_raw);
 
@@ -480,21 +483,20 @@ int64_t Position::pruned_negamax(SearchContext& s, int depth, int ply, bool allo
                     *c = std::clamp(*c, -MAX_HISTORY_SCORE, MAX_HISTORY_SCORE);
                 }
 
-                for (int i = 0; i < mv_idx_raw; ++i) { // we have a quiet cutoff, penalize all previous cutoffs in the history table
-                    Move punished = moves[i];
-                    if (!is_capture(punished)) {
-                        Piece punished_piece = Piece(piece_at[move_from(punished)]);
-                        int punished_to = move_to(punished);
-                        
-                        auto hist = &s.history[punished_piece][punished_to];
-                        *hist -= int(std::round(s.params.history_malus_factor * float(depth * depth)));
-                        *hist = std::clamp(*hist, -MAX_HISTORY_SCORE, MAX_HISTORY_SCORE);
+                for (int i = 0; i < searched_quiet_count; ++i) { // we have a quiet cutoff, penalize all previous cutoffs in the history table
+                    Move punished = searched_quiets[i];
 
-                        if (cont) {
-                            auto c = &cont->at(punished_piece)[punished_to];
-                            *c -= int(std::round(s.params.cont_history_malus_factor * float(depth*depth)));
-                            *c = std::clamp(*c, -MAX_HISTORY_SCORE, MAX_HISTORY_SCORE);
-                        }
+                    Piece punished_piece = Piece(piece_at[move_from(punished)]);
+                    int punished_to = move_to(punished);
+                    
+                    auto hist = &s.history[punished_piece][punished_to];
+                    *hist -= int(std::round(s.params.history_malus_factor * float(depth * depth)));
+                    *hist = std::clamp(*hist, -MAX_HISTORY_SCORE, MAX_HISTORY_SCORE);
+
+                    if (cont) {
+                        auto c = &cont->at(punished_piece)[punished_to];
+                        *c -= int(std::round(s.params.cont_history_malus_factor * float(depth*depth)));
+                        *c = std::clamp(*c, -MAX_HISTORY_SCORE, MAX_HISTORY_SCORE);
                     }
                 }
             }
@@ -505,6 +507,11 @@ int64_t Position::pruned_negamax(SearchContext& s, int depth, int ply, bool allo
 
             break;
         } 
+        else {
+            if (quiet) {
+                searched_quiets[searched_quiet_count++] = m;
+            }
+        }
     }
 
     if (move_index == 0) { // no legal moves
