@@ -26,7 +26,7 @@ void eval_search(int depth, Position& position) {
                 eval_search(depth-1, position);
             }
             
-            position.unmake_move(move);
+            position.unmake_move();
             position.verify_integrity();
         }
 

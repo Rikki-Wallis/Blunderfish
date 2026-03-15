@@ -4,6 +4,7 @@
 
 #include "blunderfish.h"
 
+/*
 template <typename Func>
 static uint64_t run_and_time(Func&& func) {
     // Time perft search
@@ -40,6 +41,7 @@ static void benchmark_perft() {
         
     };
 }
+*/
 
 template<typename Func>
 static void benchmark_pos_method(const std::string& name, int start_depth, int max_depth, Func&& func)
@@ -47,7 +49,9 @@ static void benchmark_pos_method(const std::string& name, int start_depth, int m
     for (int depth = start_depth; depth <= max_depth; ++depth) {
         auto start = std::chrono::high_resolution_clock::now();
 
-        Position pos = *Position::decode_fen_string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        const char* fen = "1nbq1bnr/3kp2p/1p2Q1p1/r2B2B1/3PP3/p4N2/PPP2PPP/R3K2R b KQ - 5 14";
+        //const char* fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+        Position pos = *Position::decode_fen_string(fen);
 
         pos.reset_benchmarking_statistics();
         std::forward<Func>(func)(pos, depth);
@@ -60,15 +64,21 @@ static void benchmark_pos_method(const std::string& name, int start_depth, int m
         double ebf = pow((double)pos.node_count, 1.0/(double)depth);
         double avg_cutoff_index = (double)pos.cutoff_index_sum/(double)pos.cutoff_index_count;
 
+        double reduced_fail_high_rate = double(pos.reduced_fail_high)/(double)(pos.reduced_searches);
+
         print("{} (depth={}):\n", name, depth);
         print("  time: {}ms\n", ms);
+        print("  max-ply: {}\n", pos.max_ply);
         print("  nodes: {}\n", pos.node_count);
         print("  qnodes: {}\n", pos.qnode_count);
+        print("  pv_nodes: {}\n", pos.pv_node_count);
         print("  beta_cutoffs: {}\n", pos.beta_cutoffs);
         print("  null-prunes: {}\n", pos.null_prunes);
         print("  NPS: {:.2}\n", nps);
-        print("  EBF: {:.2}\n", ebf);
+        print("  reduced-searches: {}\n", pos.reduced_searches);
+        print("  reduced-fail-high: {} ({:.2}%)\n", pos.reduced_fail_high, reduced_fail_high_rate*100.0);
         print("  avg-cutoff-idx: {:.2}\n", avg_cutoff_index);
+        print("  EBF: {:.2}\n", ebf);
         print("\n");
     }
 }
@@ -78,22 +88,13 @@ static void benchmark_best_move() {
         std::array<Move, 256> move_buf;
         std::span<Move> moves = pos.generate_moves(move_buf);
         pos.filter_moves(moves);
-        pos.best_move(moves, depth);
-    });
-}
-
-static void benchmark_pruned_negamax() {
-    benchmark_pos_method("Pruned Negamax", 7, 12, [](Position& pos, int depth){
-        KillerTable killers{};
-        HistoryTable history{};
-        TranspositionTable tt;
-        pos.pruned_negamax(depth, tt, history, killers, 1, true, -INF, INF);
+        std::atomic<bool> should_stop = false;
+        pos.best_move(moves, depth, should_stop);
     });
 }
 
 int main() {
-    benchmark_perft();
-    benchmark_pruned_negamax();
+    //benchmark_perft();
     benchmark_best_move();
     return 0;
 }

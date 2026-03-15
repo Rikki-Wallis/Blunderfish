@@ -240,8 +240,105 @@ std::optional<Position> Position::decode_fen_string(const std::string& fen) {
 
     pos.zobrist = pos.compute_zobrist();
     pos.incremental_eval = pos.compute_eval();
+    pos.update_is_checked();
 
     return pos;
+}
+
+std::string Position::fen() const {
+    std::string result{};
+
+    uint64_t white_pieces = sides[WHITE].all(); 
+
+    for (int r = 7; r >= 0; --r) {
+        int f = 0;
+
+        if (r < 7) {
+            result.push_back('/');
+        }
+
+        while (f < 8) {
+            int sq = r*8+f;
+            bool is_white = (sq_to_bb(sq) & white_pieces) != 0;
+            switch (piece_at[sq]) {
+                case PIECE_PAWN:
+                    result.push_back(is_white ? 'P' : 'p');
+                    f++;
+                    break;
+                case PIECE_ROOK:
+                    result.push_back(is_white ? 'R' : 'r');
+                    f++;
+                    break;
+                case PIECE_KNIGHT:
+                    result.push_back(is_white ? 'N' : 'n');
+                    f++;
+                    break;
+                case PIECE_BISHOP:
+                    result.push_back(is_white ? 'B' : 'b');
+                    f++;
+                    break;
+                case PIECE_KING:
+                    result.push_back(is_white ? 'K' : 'k');
+                    f++;
+                    break;
+                case PIECE_QUEEN:
+                    result.push_back(is_white ? 'Q' : 'q');
+                    f++;
+                    break;
+
+                case PIECE_NONE: {
+                    int start = f;
+                    while (f < 8 && piece_at[r*8+f] == PIECE_NONE) {
+                        f++;
+                    }
+                    result.push_back(char(f-start) + '0');
+                } break;
+            }
+        }
+    }
+
+    result.push_back(' ');
+    result.push_back(to_move == WHITE ? 'w' : 'b');
+
+    // castling rights
+    result.push_back(' ');
+    if (flags == 0) {
+        result.push_back('-');
+    }
+    else {
+        if (flags & POSITION_FLAG_WHITE_KCASTLE) {
+            result.push_back('K');
+        }
+
+        if (flags & POSITION_FLAG_WHITE_QCASTLE) {
+            result.push_back('Q');
+        }
+
+        if (flags & POSITION_FLAG_BLACK_KCASTLE) {
+            result.push_back('k');
+        }
+
+        if (flags & POSITION_FLAG_BLACK_QCASTLE) {
+            result.push_back('q');
+        }
+    }
+
+    result.push_back(' ');
+    if (en_passant_sq == NULL_SQUARE) {
+        result.push_back('-');
+    }
+    else {
+        auto [file, rank] = square_alg(en_passant_sq);
+        result.push_back(file);
+        result.push_back(char(rank) + '0');
+    }
+
+    result.push_back(' ');
+    result.push_back(to_move == WHITE ? '2' : '3');
+    result.push_back(' ');
+    result.push_back('1');
+
+    return result;
 }
 
 uint64_t Position::all_pieces() const {
@@ -282,11 +379,11 @@ void Position::verify_integrity() const {
     assert(memcmp(map, piece_at, sizeof(map)) == 0);
 }
 
-int64_t Position::total_non_pawn_value() const {
+int64_t Position::non_pawn_value(int side) const {
     int64_t value = 0;
 
     for (int p = PIECE_PAWN + 1; p < NUM_PIECE_TYPES; ++p) {
-        int count = std::popcount(sides[WHITE].bb[p]) + std::popcount(sides[BLACK].bb[p]);
+        int count = std::popcount(sides[side].bb[p]);
         value += piece_value_table[p] * count;
     }
 
@@ -294,15 +391,60 @@ int64_t Position::total_non_pawn_value() const {
 }
 
 void Position::reset_benchmarking_statistics() {
+    max_ply = 0;
     node_count = 0;
     qnode_count = 0;
+    pv_node_count = 0;
     beta_cutoffs = 0;
     null_prunes = 0;
     cutoff_index_count = 0;
     cutoff_index_sum = 0;
+    reduced_searches = 0;
+    reduced_fail_high = 0;
 }
 
 int Position::get_king_sq(int side) const {
     assert(std::popcount(sides[side].bb[PIECE_KING]) == 1);
     return std::countr_zero(sides[side].bb[PIECE_KING]);
+}
+
+std::optional<int> Position::game_result() {
+    std::array<Move, 256> move_buf;
+    std::span<Move> moves = generate_moves(move_buf);
+    filter_moves(moves);
+
+    if (is_threefold_repetition()) {
+        return 0;
+    }
+
+    if (moves.size() != 0) {
+        return std::nullopt;
+    }
+
+    if (is_checked[to_move]) {
+        return to_move == WHITE ? -1 : 1;
+    }
+    else {
+        return 0;
+    }
+}
+
+bool Position::is_threefold_repetition() const {
+    int count = 0;
+
+    for (int i = undo_count-2; i >= 0; i -= 2) {
+        const Undo& undo = undo_stack[i];
+
+        if (undo.zobrist == zobrist) {
+            count++;
+        }
+
+        if (count >= 2) return true;
+
+        if (move_captured_piece(undo.move) != PIECE_NONE) {
+            break; // irreversible move - position cannot repeat across them
+        }
+    } 
+
+    return false;
 }

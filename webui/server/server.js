@@ -17,9 +17,13 @@ app.post('/api/bestmove', (req, res) => {
       return res.status(500).json({ error: 'Engine failed' })
     }
 
-    console.log("Engine plays " + stdout.trim());
+    const lines = stdout.trim().split('\n');
+    const depthReached = lines[0].trim();
+    const move = lines.pop().trim();
+    console.log(depthReached);
+    console.log("Engine plays " + move);
 
-    res.json({ move: stdout.trim() })
+    res.json({ move })
   })
 })
 

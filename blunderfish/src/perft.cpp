@@ -26,7 +26,7 @@ uint64_t perft_search(int depth, Position& position) {
             nodes += perft_search(depth-1, position);
         }
 
-        position.unmake_move(move);
+        position.unmake_move();
         position.verify_integrity();
     }
 

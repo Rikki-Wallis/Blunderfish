@@ -3,6 +3,8 @@
 #include <optional>
 #include <unordered_map>
 #include <array>
+#include <chrono>
+#include <atomic>
 #include <vector>
 #include <fstream>
 #include <iostream>
@@ -10,12 +12,15 @@
 
 #include "common.h"
 
+using Clock = std::chrono::steady_clock;
+using TimePoint = std::chrono::time_point<Clock>;
+
 #define ZOBRIST_INCLUDE_PIECES
 #define ZOBRIST_INCLUDE_FLAGS
 #define ZOBRIST_INCLUDE_EN_PASSANT_SQ
 #define ZOBRIST_INCLUDE_SIDE
 
-#define MAX_DEPTH 128
+#define MAX_DEPTH 512
 
 constexpr int64_t INF        = 400000000;
 constexpr int64_t MATE_SCORE = 32000; // just shy of int16 bounds
@@ -116,6 +121,7 @@ static constexpr int NULL_SQUARE = -1;
 
 struct Undo {
     uint32_t flags;
+    Move move;
     int en_passant_sq;
     uint64_t zobrist;
     int64_t incremental_eval;
@@ -123,19 +129,46 @@ struct Undo {
 };
 
 struct TTEntry {
-    uint16_t key16; // top 16 bits
+    uint32_t key32;
     int16_t score;
     uint8_t depth;
     uint8_t flag;
     Move best_move;
+    uint32_t padding;
 };
 
 struct TTCluster {
     TTEntry entries[4];
 };
 
+struct SearchParameters {
+    float lmr_rate_base = 0.609352f;
+    float lmr_rate_divisor = 1.78544f;
+    float singular_margin_factor = 1.94709f;
+    int rfp_margin_factor = 132;
+    int rfp_improving_bonus = 28;
+    int fp_margin_factor = 828;
+    int lmr_history_bonus_threshold = 1594;
+    float history_bonus_factor = 1.02898f;
+    float history_malus_factor = 0.95008f;
+    float cont_history_bonus_factor = 0.46919f;
+    float cont_history_malus_factor = 0.48449f;
+    int qsearch_big_delta = 1223;
+    int qsearch_delta_margin = 70;
+    int asp_initial_window_size = 12;
+    float asp_window_growth_factor = 5.39f;
+    float nmp_r_base = 2.4091f;
+    float nmp_r_divisor = 7.25516f;
+    float lmp_index_base = 3.44978f;
+    float lmp_index_factor = 2.32816f;
+};
+
 using KillerTable = std::array<std::array<Move, 2>, MAX_DEPTH>;
 using HistoryTable = std::array<std::array<int32_t, 64>, NUM_PIECE_TYPES>;
+using EvalHistory = std::array<int64_t, MAX_DEPTH>;
+
+using ContinuationTable = std::array<std::array<int32_t, 64>, NUM_PIECE_TYPES>;
+using ContinuationHistory = std::array<std::array<ContinuationTable, 64>, NUM_PIECE_TYPES>;
 
 class TranspositionTable {
 public:
@@ -190,6 +223,23 @@ struct EvalParameters {
     int passed_pawn_bonus;
 };
 
+struct SearchContext {
+    TranspositionTable tt;
+    KillerTable killers;
+    HistoryTable history;
+    EvalHistory eval_history;
+    ContinuationHistory cont_history;
+
+    SearchParameters params;
+
+    std::atomic<bool>& should_stop;
+    std::optional<double> time_limit;
+    TimePoint search_start;
+
+    bool out_of_time() const;
+    double elapsed_time() const;
+};
+
 // Pack as exactly 16 bytes
 #pragma pack(push, 1)
 struct PolyglotEntry {
@@ -213,12 +263,16 @@ struct Position {
     uint64_t zobrist;
 
     // benchmarking statistics
+    int max_ply;
     int node_count;
     int qnode_count;
+    int pv_node_count;
     int beta_cutoffs;
     int null_prunes; 
     int cutoff_index_count;
     int cutoff_index_sum;
+    int reduced_searches;
+    int reduced_fail_high;
 
     std::array<Undo, MAX_DEPTH> undo_stack;
     int undo_count;
@@ -233,12 +287,9 @@ struct Position {
         reset_benchmarking_statistics();
     }
 
-    Position(Position&&) = default;
-    Position(const Position&) = delete;
-    const Position& operator=(const Position&) = delete;
-
     void display(bool display_metadata=false) const;
     static std::optional<Position> decode_fen_string(const std::string& fen);
+    std::string fen() const;
 
     std::span<Move> generate_moves(std::span<Move> move_buf) const;
     std::span<Move> generate_captures(std::span<Move> move_buf) const;
@@ -248,7 +299,7 @@ struct Position {
     uint64_t all_pieces() const;
 
     void make_move(Move move);
-    void unmake_move(Move move);
+    void unmake_move();
 
     void make_null_move();
     void unmake_null_move();
@@ -274,20 +325,25 @@ struct Position {
     void update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side);
     void update_is_checked();
 
-    int64_t pruned_negamax(int depth, TranspositionTable& tt, HistoryTable& history, KillerTable& killers, int ply, bool allow_null, int64_t alpha, int64_t beta);
-    int64_t quiescence(int ply, int64_t alpha, int64_t beta);
+    int64_t pruned_negamax(SearchContext& s, int depth, int ply, bool allow_null, int64_t alpha, int64_t beta, Move excluded_move, int extensions_so_far, int root_depth, ContinuationTable* cont);
+    int64_t quiescence(SearchContext& s, int ply, int64_t alpha, int64_t beta);
+
+    int64_t eval_at_depth(int depth);
 
     int32_t mvv_lva_score(Move mv, int32_t offset) const;
 
-    std::pair<Move, int64_t> best_move_internal(std::span<Move> moves, int depth, TranspositionTable& tt, Move last_best_move, HistoryTable& history, KillerTable& killers, int64_t alpha, int64_t beta);
-    Move best_move(std::span<Move> moves, int depth);
+    std::pair<Move, int64_t> best_move_internal(SearchContext& s, std::span<Move> moves, int depth, Move last_best_move, int64_t alpha, int64_t beta);
+    Move best_move(std::span<Move> moves, int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt, bool enable_uci_info=false);
+    Move best_move_easy(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt, bool enable_uci_info=false);
+
+    std::optional<int> game_result();
     Move think(std::span<Move> moves);
 
     uint64_t compute_zobrist() const;
 
     void update_en_passant_sq(int sq);
 
-    int64_t total_non_pawn_value() const; // used for null move reduction heuristic
+    int64_t non_pawn_value(int side) const; // used for null move reduction heuristic
 
     void reset_benchmarking_statistics();
 
@@ -295,6 +351,8 @@ struct Position {
     int64_t pawn_structure(int colour, uint64_t ally_pawn_bb) const;
     int64_t king_safety(int colour, uint64_t king_bb, uint64_t pawn_bb) const;
     int64_t bishop_imbalance() const;
+
+    bool is_threefold_repetition() const;
     int64_t mobility(int colour) const;
 
     // polygot encoding & decoding
@@ -372,11 +430,8 @@ inline Move encode_move(int from, int to, MoveType type, Piece end_piece, int si
 inline uint64_t bb_to_file(uint64_t bb) {
     static const uint64_t file_table[8] = { FILE_A, FILE_B, FILE_C, FILE_D, FILE_E, FILE_F, FILE_G, FILE_H };
     if (bb == 0) return 0;
-
-    unsigned long index;
-    _BitScanForward64(&index, bb); 
-
-    int file = index % 8; 
+    int sq = std::countr_zero(bb);
+    int file = sq & 7; 
     return file_table[file];
 }
 
@@ -396,3 +451,5 @@ template<typename T>
 static T bool_to_mask(bool x) {
     return static_cast<T>(-static_cast<int>(x));
 }
+
+std::string to_uci_move(Move move);

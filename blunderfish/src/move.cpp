@@ -260,6 +260,10 @@ static uint64_t restrictions(int sq, uint64_t pin_mask, int king_sq) {
     return pinned(sq, pin_mask) ? line[sq][king_sq] : UINT64_MAX;
 }
 
+static bool illegal_pin_move(int from, int to, int king_sq, uint64_t pin_mask) {
+    return pinned(from, pin_mask) && ((sq_to_bb(to) & line[from][king_sq]) == 0);
+}
+
 std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     Move* next = move_buf.data();
 
@@ -379,37 +383,55 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
     for (int to : set_bits(pawn_single_push(sides[to_move].bb[PIECE_PAWN], all))) {
         int offset[] = { -8, 8 };
         int from = to + offset[to_move];
-        new_pawn_single_move(from, to);
+
+        if (!illegal_pin_move(from, to, king_sq, pin_mask)) {
+            new_pawn_single_move(from, to);
+        }
     }
 
     for (int to : set_bits(pawn_double_push(sides[to_move].bb[PIECE_PAWN], all))) {
         int offset[] = { -16, 16 };
         int from = to + offset[to_move];
-        new_move(from, to, MOVE_DOUBLE_PUSH, PIECE_PAWN);
+
+        if (!illegal_pin_move(from, to, king_sq, pin_mask)) {
+            new_move(from, to, MOVE_DOUBLE_PUSH, PIECE_PAWN);
+        }
     }
 
     for (int to : set_bits(pawn_left_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & opps)) {
         int offset[] = { -7, 9 };
         int from = to + offset[to_move];
-        new_pawn_single_move(from, to);
+
+        if (!illegal_pin_move(from, to, king_sq, pin_mask)) {
+            new_pawn_single_move(from, to);
+        }
     }
 
     for (int to : set_bits(pawn_right_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & opps)) {
         int offset[] = { -9, 7 };
         int from = to + offset[to_move];
-        new_pawn_single_move(from, to);
+
+        if (!illegal_pin_move(from, to, king_sq, pin_mask)) {
+            new_pawn_single_move(from, to);
+        }
     }
 
     for (int to : set_bits(pawn_left_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & ep_mask)) {
         int offset[] = { -7, 9 };
         int from = to + offset[to_move];
-        new_move(from, to, MOVE_EN_PASSANT, PIECE_PAWN);
+
+        if (!illegal_pin_move(from, to, king_sq, pin_mask)) {
+            new_move(from, to, MOVE_EN_PASSANT, PIECE_PAWN);
+        }
     }
 
     for (int to : set_bits(pawn_right_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & ep_mask)) {
         int offset[] = { -9, 7 };
         int from = to + offset[to_move];
-        new_move(from, to, MOVE_EN_PASSANT, PIECE_PAWN);
+
+        if (!illegal_pin_move(from, to, king_sq, pin_mask)) {
+            new_move(from, to, MOVE_EN_PASSANT, PIECE_PAWN);
+        }
     }
 
     return move_buf.subspan(0, next-move_buf.data());
@@ -423,32 +445,38 @@ std::span<Move> Position::generate_captures(std::span<Move> move_buf) const {
     uint64_t allies = sides[to_move].all();
     uint64_t all = all_pieces();
 
+    int king_sq = get_king_sq(to_move);
+    uint64_t pin_mask = generate_pin_mask(to_move);
+
     for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KING])) {
         for (uint8_t to : set_bits(king_moves(from, allies) & opps)) {
             new_move(from, to, MOVE_NORMAL, PIECE_KING);
         }
     }
 
-    for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KNIGHT])) {
+    for (uint8_t from : set_bits(sides[to_move].bb[PIECE_KNIGHT] & ~(pin_mask))) {
         for (uint8_t to : set_bits(knight_moves(from, allies) & opps)) {
             new_move(from, to, MOVE_NORMAL, PIECE_KNIGHT);
         }
     }
 
     for (uint8_t from: set_bits(sides[to_move].bb[PIECE_ROOK])) {
-        for (uint8_t to : set_bits(rook_moves(from, all, allies) & opps)) {
+        uint64_t bb = rook_moves(from, all, allies) & opps & restrictions(from, pin_mask, king_sq);
+        for (uint8_t to : set_bits(bb)) {
             new_move(from, to, MOVE_NORMAL, PIECE_ROOK);
         }
     }
 
     for (uint8_t from: set_bits(sides[to_move].bb[PIECE_BISHOP])) {
-        for (uint8_t to : set_bits(bishop_moves(from, all, allies) & opps)) {
+        uint64_t bb = bishop_moves(from, all, allies) & opps & restrictions(from, pin_mask, king_sq);
+        for (uint8_t to : set_bits(bb)) {
             new_move(from, to, MOVE_NORMAL, PIECE_BISHOP);
         }
     }
 
     for (uint8_t from: set_bits(sides[to_move].bb[PIECE_QUEEN])) {
-        for (uint8_t to : set_bits(queen_moves(from, all, allies) & opps)) {
+        uint64_t bb = queen_moves(from, all, allies) & opps & restrictions(from, pin_mask, king_sq);
+        for (uint8_t to : set_bits(bb)) {
             new_move(from, to, MOVE_NORMAL, PIECE_QUEEN);
         }
     }
@@ -474,25 +502,37 @@ std::span<Move> Position::generate_captures(std::span<Move> move_buf) const {
     for (int to : set_bits(pawn_left_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & opps)) {
         int offset[] = { -7, 9 };
         int from = to + offset[to_move];
-        new_pawn_single_move(from, to);
+
+        if (!illegal_pin_move(from, to, king_sq, pin_mask)) {
+            new_pawn_single_move(from, to);
+        }
     }
 
     for (int to : set_bits(pawn_right_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & opps)) {
         int offset[] = { -9, 7 };
         int from = to + offset[to_move];
-        new_pawn_single_move(from, to);
+
+        if (!illegal_pin_move(from, to, king_sq, pin_mask)) {
+            new_pawn_single_move(from, to);
+        }
     }
 
     for (int to : set_bits(pawn_left_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & ep_mask)) {
         int offset[] = { -7, 9 };
         int from = to + offset[to_move];
-        new_move(from, to, MOVE_EN_PASSANT, PIECE_PAWN);
+
+        if (!illegal_pin_move(from, to, king_sq, pin_mask)) {
+            new_move(from, to, MOVE_EN_PASSANT, PIECE_PAWN);
+        }
     }
 
     for (int to : set_bits(pawn_right_capture_no_mask(sides[to_move].bb[PIECE_PAWN]) & ep_mask)) {
         int offset[] = { -9, 7 };
         int from = to + offset[to_move];
-        new_move(from, to, MOVE_EN_PASSANT, PIECE_PAWN);
+
+        if (!illegal_pin_move(from, to, king_sq, pin_mask)) {
+            new_move(from, to, MOVE_EN_PASSANT, PIECE_PAWN);
+        }
     }
 
     return move_buf.subspan(0, next-move_buf.data());
@@ -510,7 +550,7 @@ void Position::filter_moves(std::span<Move>& moves) {
             illegal = true;
         }
 
-        unmake_move(moves[i]);
+        unmake_move();
 
         if (illegal) {
             moves[i] = moves.back();
@@ -586,7 +626,7 @@ std::unordered_map<std::string, Move> Position::name_moves(std::span<Move> moves
                     check_suffix = "+";
                 }
             }
-            unmake_move(m);
+            unmake_move();
 
             std::string name = "";
 
@@ -668,6 +708,7 @@ void Position::make_move(Move move) {
     // Before we modify anything, record the destroyable data in the undo stack
     Undo undo = {
         .flags = flags,
+        .move = move,
         .en_passant_sq = en_passant_sq,
         .zobrist = initial_zobrist,
         .incremental_eval = initial_eval,
@@ -774,9 +815,13 @@ void Position::update_is_checked() {
     is_checked[BLACK] = is_king_square_attacked(BLACK, std::countr_zero(sides[BLACK].bb[PIECE_KING]));
 }
 
-void Position::unmake_move(Move move) {
+void Position::unmake_move() {
     assert(undo_count > 0);
     Undo undo = undo_stack[--undo_count];
+
+    assert(undo.move != NULL_MOVE);
+
+    Move move = undo.move;
 
     is_checked[WHITE] = undo.is_checked[WHITE];
     is_checked[BLACK] = undo.is_checked[BLACK];
@@ -828,6 +873,7 @@ void Position::make_null_move() {
     assert(undo_count < MAX_DEPTH);
     undo_stack[undo_count++] = Undo {
         .flags = flags,
+        .move = NULL_MOVE,
         .en_passant_sq = en_passant_sq,
         .zobrist = zobrist,
         .incremental_eval = incremental_eval,
@@ -885,4 +931,38 @@ uint64_t Position::generate_pin_mask(int side) const {
     }
 
     return pinned;
+}
+
+std::string to_uci_move(Move move) {
+    int from = move_from(move);
+    int to = move_to(move);
+
+    char from_f = char(from & 7) + 'a';
+    char from_r = char(from >> 3) + '1';
+    
+    char to_f = char(to & 7) + 'a';
+    char to_r = char(to >> 3) + '1';
+
+    std::string result = std::format("{}{}{}{}", from_f, from_r, to_f, to_r);
+
+    if (move_type(move) == MOVE_PROMOTION) {
+        switch (move_end_piece(move)) {
+            default:
+                break;
+            case PIECE_QUEEN:
+                result.push_back('q');
+                break;
+            case PIECE_KNIGHT:
+                result.push_back('n');
+                break;
+            case PIECE_BISHOP:
+                result.push_back('b');
+                break;
+            case PIECE_ROOK:
+                result.push_back('r');
+                break;
+        }
+    }
+
+    return result;
 }

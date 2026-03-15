@@ -4,9 +4,7 @@
 
 #include "blunderfish.h"
 
-static void test_capture_gen(const std::string& FEN) {
-    Position pos = *Position::decode_fen_string(FEN);
-
+static void test_capture_gen(Position& pos, int depth) {
     std::array<Move, 256> move_buf;
     std::array<Move, 256> capture_buf;
 
@@ -15,6 +13,18 @@ static void test_capture_gen(const std::string& FEN) {
 
     pos.filter_moves(moves);
     pos.filter_moves(captures);
+
+    // recurse
+
+    if (depth > 0) {
+        for (Move mv : moves) {
+            pos.make_move(mv);
+            test_capture_gen(pos, depth-1);
+            pos.unmake_move();
+        }
+    }
+
+    // remove non-captures
 
     for (int i = (int)moves.size()-1; i >= 0; --i) {
         Move mv = moves[i];
@@ -25,15 +35,17 @@ static void test_capture_gen(const std::string& FEN) {
         }
     }
 
+    // compare
+
     std::unordered_set move_set(moves.begin(), moves.end());
     std::unordered_set capture_set(captures.begin(), captures.end());
 
-    REQUIRE(move_set.size() > 0);
     REQUIRE(move_set == capture_set);
 }
 
 TEST_CASE("Generate-Captures Equals Captures from Generate-Moves") {
-    test_capture_gen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -"); 
+    auto pos = *Position::decode_fen_string("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -");
+    test_capture_gen(pos, 4); 
 }
 
 static void test_pin_case(const std::string& fen, const std::unordered_set<int>& white_pins, const std::unordered_set<int>& black_pins) {
