@@ -3,6 +3,10 @@
 #include <optional>
 #include <unordered_map>
 #include <array>
+#include <vector>
+#include <fstream>
+#include <iostream>
+#include <cstdio>
 
 #include "common.h"
 
@@ -186,6 +190,16 @@ struct EvalParameters {
     int passed_pawn_bonus;
 };
 
+// Pack as exactly 16 bytes
+#pragma pack(push, 1)
+struct PolyglotEntry {
+    uint64_t key;
+    uint16_t move;
+    uint16_t weight;
+    uint32_t learn;
+};
+#pragma pack(pop)
+
 struct Position {
     Side sides[2];
     int to_move;
@@ -267,6 +281,7 @@ struct Position {
 
     std::pair<Move, int64_t> best_move_internal(std::span<Move> moves, int depth, TranspositionTable& tt, Move last_best_move, HistoryTable& history, KillerTable& killers, int64_t alpha, int64_t beta);
     Move best_move(std::span<Move> moves, int depth);
+    Move think(std::span<Move> moves);
 
     uint64_t compute_zobrist() const;
 
@@ -280,6 +295,11 @@ struct Position {
     int64_t pawn_structure(int colour, uint64_t ally_pawn_bb) const;
     int64_t king_safety(int colour, uint64_t king_bb, uint64_t pawn_bb) const;
     int64_t bishop_imbalance() const;
+    int64_t mobility(int colour) const;
+
+    // polygot encoding & decoding
+    uint64_t encode_polyglot();
+    Move decode_polyglot(PolyglotEntry move);
 };
 
 int get_captured_square(int to, MoveType ty, int side);
@@ -359,6 +379,18 @@ inline uint64_t bb_to_file(uint64_t bb) {
     int file = index % 8; 
     return file_table[file];
 }
+
+uint64_t knight_moves(int from, uint64_t allies);
+uint64_t rook_moves(int from, uint64_t all_pieces, uint64_t allies);
+uint64_t bishop_moves(int from, uint64_t all_pieces, uint64_t allies);
+uint64_t queen_moves(int from, uint64_t all_pieces, uint64_t allies);
+
+// Polygot
+PolyglotEntry read_entry(uint64_t index);
+uint64_t find_first(uint64_t key, uint64_t num_entries);
+std::vector<PolyglotEntry> probe_book(uint64_t key);
+PolyglotEntry choose_move(const std::vector<PolyglotEntry>& moves);
+
 
 template<typename T>
 static T bool_to_mask(bool x) {
