@@ -1,6 +1,8 @@
 #include <cstdio>
 #include <iostream>
 #include <array>
+#include <fstream>
+#include <filesystem>
 
 #include "blunderfish.h"
 
@@ -28,9 +30,16 @@ static int play_main() {
 
     Position pos(std::move(*maybe_pos));
 
+    // Open openings .bin file
+    std::ifstream book("Titans.bin", std::ios::binary);
+    if (!book) {
+        std::cout << "Failed to open book\n";
+        std::cout << std::filesystem::current_path() << "\n";
+        std::perror("Reason");
+    }
+
     for (;;) {
         pos.display(false);
-
         std::array<Move, 256> move_buffer;
         std::span<Move> moves = pos.generate_moves(move_buffer);
         pos.filter_moves(moves);
@@ -56,10 +65,8 @@ static int play_main() {
 
             Move m = select_move(names); 
             pos.make_move(m);
-        }
-        else {
-            Move best = pos.best_move(moves, 14);
-            assert(best != NULL_MOVE);
+        } else {
+            Move best = pos.think(moves);
 
             for (auto& [name, mv] : names) {
                 if (mv == best) {

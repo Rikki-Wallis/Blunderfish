@@ -187,7 +187,6 @@ std::vector<PolyglotEntry> probe_book(uint64_t key) {
     uint64_t idx = find_first(key, num_entries);
     std::vector<PolyglotEntry> moves;
 
-    // TODO: This seems sus
     while (idx < num_entries) {
 
         PolyglotEntry e = read_entry(idx);
@@ -205,8 +204,9 @@ std::vector<PolyglotEntry> probe_book(uint64_t key) {
 
 PolyglotEntry choose_move(const std::vector<PolyglotEntry>& moves) {
 
+    // Safety check
     if (moves.empty()) {
-            return {}; // Safety check in case an empty vector is passed
+            return {}; 
         }
 
     uint32_t total = 0;
@@ -215,12 +215,11 @@ PolyglotEntry choose_move(const std::vector<PolyglotEntry>& moves) {
         total += m.weight;
     }
 
-// Set up modern C++ RNG. 
-    // 'static' ensures the generator is only seeded once and persists across function calls.
-    static std::random_device rd;  // Obtains a random seed from the hardware
-    static std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
+    // Create rng
+    static std::random_device rd;  
+    static std::mt19937 gen(rd());
 
-// Edge case: If all moves have 0 weight, pick one uniformly at random
+    // If all moves have 0 weight, pick one uniformly at random
     if (total == 0) {
         std::uniform_int_distribution<size_t> dist(0, moves.size() - 1);
         return moves[dist(gen)];
@@ -237,5 +236,5 @@ PolyglotEntry choose_move(const std::vector<PolyglotEntry>& moves) {
         r -= m.weight;
     }
 
-    return moves[0]; // Fallback
+    return moves[0];
 }

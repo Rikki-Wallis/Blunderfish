@@ -550,3 +550,27 @@ Move Position::best_move(std::span<Move> _moves, int depth) {
 
     return best_move;
 }
+
+/**
+    Chooses between an opening move and searching for best move
+ */
+Move Position::think(std::span<Move> moves) {
+    int depth = 14;
+    uint64_t hash = encode_polyglot();
+    std::vector<PolyglotEntry> p_moves = probe_book(hash);
+
+    if (!p_moves.empty()) {
+        PolyglotEntry line = choose_move(p_moves);
+        Move move = decode_polyglot(line);
+        
+        std::cout << "Played Opening Move" << std::endl;
+        return move;
+
+    } else {
+
+        Move best = best_move(moves, depth);
+        assert(best != NULL_MOVE);
+    
+        return best;
+    }
+}
