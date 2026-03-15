@@ -308,6 +308,48 @@ uint64_t black_pawn_attacks_at(int from) {
     return left | right;
 }
 
+uint64_t white_passed_pawn_mask(int from) {
+    uint64_t pawn_bb = (uint64_t)1 << from;
+    uint64_t left_file = bb_to_file(((single_pawn_bb << 1) & ~FILE_A));
+    uint64_t right_file = bb_to_file(((single_pawn_bb >> 1) & ~FILE_H));
+    uint64_t middle_file = bb_to_file(pawn_bb);
+
+    uint64_t all_files = left_file | right_file | middle_file;
+    uint64_t rank_search_order[8] = {RANK_8, RANK_7, RANK_6, RANK_5, RANK_4, RANK_3, RANK_2, RANK_1};
+    uint64_t passed_mask = 0;
+
+    for (auto rank : rank_search_order) {
+        if (pawn_bb & rank) {
+            break;
+        } else {
+            passed_mask |= (rank & all_files);
+        }
+    }
+
+    return passed_mask;
+}
+
+uint64_t black_passed_pawn_mask(int from) {
+    uint64_t pawn_bb = (uint64_t)1 << from;
+    uint64_t left_file = bb_to_file(((single_pawn_bb >> 1) & ~FILE_H));
+    uint64_t right_file = bb_to_file(((single_pawn_bb << 1) & ~FILE_A));
+    uint64_t middle_file = bb_to_file(pawn_bb);
+
+    uint64_t all_files = left_file | right_file | middle_file;
+    uint64_t rank_search_order[8] = {RANK_1, RANK_2, RANK_3, RANK_4, RANK_5, RANK_6, RANK_7, RANK_8};
+    uint64_t passed_mask = 0;
+
+    for (auto rank : rank_search_order) {
+        if (pawn_bb & rank) {
+            break;
+        } else {
+            passed_mask |= (rank & all_files);
+        }
+    }
+
+    return passed_mask;
+}
+
 static void dump_trivial_move_table(FILE* file, const std::string& name, uint64_t(*moves_at)(int)) {
     fprint(file, "const uint64_t {}[] = {{\n", name);
     for (int i = 0; i < 64; ++i) {
