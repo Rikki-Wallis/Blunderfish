@@ -11,13 +11,43 @@
 
 #include <bit>
 
+uint16_t byteswap_u16(uint16_t val) {
+    #if defined(_MSC_VER)
+        return _byteswap_ushort(val); //
+    #elif defined(__GNUC__)
+        return __builtin_bswap16(val); //
+    #else
+    #error
+    #endif
+}
+
+uint32_t byteswap_u32(uint32_t val) {
+    #if defined(_MSC_VER)
+        return _byteswap_ulong(val); //
+    #elif defined(__GNUC__)
+        return __builtin_bswap32(val); //
+    #else
+    #error
+    #endif
+}
+
+uint64_t byteswap_u64(uint64_t val) {
+    #if defined(_MSC_VER)
+        return _byteswap_ulonglong(val); //
+    #elif defined(__GNUC__)
+        return __builtin_bswap64(val); //
+    #else
+    #error
+    #endif
+}
+
+
 uint64_t to_big_endian(uint64_t x) {
     if constexpr (std::endian::native == std::endian::little)
-        return _byteswap_uint64(x);
+        return byteswap_u64(x);
     else
         return x;
 }
-
 
 // Position Methods
 
@@ -146,19 +176,16 @@ Move Position::decode_polyglot(PolyglotEntry move) {
 
 
 
-// Const methods
-
-
 PolyglotEntry read_entry(uint64_t index) {
     const PolyglotEntry* entries = reinterpret_cast<const PolyglotEntry*>(OPENING_BOOK);
     PolyglotEntry e = entries[index];
 
     // convert big endian to little endian
     // TODO: Check if windows or linux system.
-    e.key = _byteswap_uint64(e.key);
-    e.move = _byteswap_ushort(e.move);
-    e.weight = _byteswap_ushort(e.weight);
-    e.learn = _byteswap_ulong(e.learn);
+    e.key = byteswap_u64(e.key);
+    e.move = byteswap_u16(e.move);
+    e.weight = byteswap_u16(e.weight);
+    e.learn = byteswap_u32(e.learn);
 
     return e;
 }

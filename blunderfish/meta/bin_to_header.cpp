@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <iomanip>
+#include <cstring>
 
 int main(int argc, char* argv[]) {
     if (argc < 3) {
