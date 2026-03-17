@@ -143,7 +143,7 @@ static GoParams parse_go_command(const std::string& line) {
 }
 
 static int allocate_time(int time, int inc) {
-    return time/20 + inc;
+    return time/40 + inc/2;
 }
 
 static int calculate_move_time(const GoParams& p, int to_move) {
