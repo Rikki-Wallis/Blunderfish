@@ -138,7 +138,8 @@ Move Position::decode_polyglot(PolyglotEntry move) {
     }
 
     // Get captured piece
-    Piece captured = static_cast<Piece>(piece_at[to]);
+    int captured_sq = get_captured_square(to, type, to_move);
+    Piece captured = static_cast<Piece>(piece_at[captured_sq]);
 
     return encode_move(from, to, type, end_piece, to_move, captured);
 }

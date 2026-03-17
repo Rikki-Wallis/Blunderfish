@@ -335,9 +335,11 @@ struct Position {
     std::pair<Move, int64_t> best_move_internal(SearchContext& s, std::span<Move> moves, int depth, Move last_best_move, int64_t alpha, int64_t beta);
     Move best_move(std::span<Move> moves, int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt, bool enable_uci_info=false);
     Move best_move_easy(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt, bool enable_uci_info=false);
+    
+    bool is_move_legal_slow(Move move);
 
     std::optional<int> game_result();
-    Move think(std::span<Move> moves);
+    Move think(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params_in = std::nullopt, bool enable_uci_info = false);
 
     uint64_t compute_zobrist() const;
 

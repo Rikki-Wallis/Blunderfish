@@ -966,3 +966,17 @@ std::string to_uci_move(Move move) {
 
     return result;
 }
+
+bool Position::is_move_legal_slow(Move move) {
+    std::array<Move, 256> move_buf;
+    std::span<Move> moves = generate_moves(move_buf);
+    filter_moves(moves);
+
+    for (Move mv : moves) {
+        if (mv == move) {
+            return true;
+        }
+    } 
+
+    return false;
+}

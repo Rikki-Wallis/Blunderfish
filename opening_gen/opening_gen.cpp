@@ -7,7 +7,7 @@ constexpr size_t COUNT = 1024*128;
 constexpr size_t TSET_SIZE = size_t(1) << 20;
 constexpr size_t TSET_MASK = TSET_SIZE - 1;
 
-constexpr int depth = 16;
+constexpr int opening_depth = 16;
 constexpr int eval_depth = 14;
 
 using TSet = Bitset<TSET_SIZE>;
@@ -57,7 +57,7 @@ int main() {
     size_t count = 0;
 
     while (count < COUNT) {
-        explore(file, pos, depth, seen, count);
+        explore(file, pos, opening_depth, seen, count);
     }
 
     fclose(file);

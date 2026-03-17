@@ -1,6 +1,7 @@
 #include <array>
 #include <cmath>
 #include <iostream>
+#include <algorithm>
 
 #include "blunderfish.h"
 
@@ -16,7 +17,7 @@ constexpr uint64_t TT_MASK = TRANSPOSITION_TABLE_SIZE - 1;
 //using LMRTable = std::array<std::array<int, 64>,64>;
 
 static int get_reduction(int d, int i, const SearchParameters& params) {
-    float reduction = params.lmr_rate_base + std::log(d) * std::log(i) / params.lmr_rate_divisor;
+    float reduction = params.lmr_rate_base + std::log(float(d)) * std::log(float(i)) / params.lmr_rate_divisor;
     int r = int(reduction);
     if (r < 0) r = 0;
     return r;
@@ -806,21 +807,18 @@ double SearchContext::elapsed_time() const {
 /**
     Chooses between an opening move and searching for best move
  */
-Move Position::think(std::span<Move> moves) {
-    int depth = 14;
+Move Position::think(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit, std::optional<SearchParameters> params_in, bool enable_uci_info) {
     uint64_t hash = encode_polyglot();
     std::vector<PolyglotEntry> p_moves = probe_book(hash);
 
     if (!p_moves.empty()) {
         PolyglotEntry line = choose_move(p_moves);
         Move move = decode_polyglot(line);
-        
-        std::cout << "Played Opening Move" << std::endl;
+        assert(is_move_legal_slow(move));
         return move;
-
     } else {
 
-        Move best = best_move(moves, depth);
+        Move best = best_move_easy(depth, should_stop, time_limit, params_in, enable_uci_info);
         assert(best != NULL_MOVE);
     
         return best;

@@ -87,6 +87,7 @@ static void parse_position(const std::string& line, Position* pos) {
 
     while (ss >> move) {
         Move mv = parse_uci_move(pos, move);
+        assert(pos->is_move_legal_slow(mv));
         pos->make_move(mv);
     }
 }
@@ -205,7 +206,7 @@ int main() {
             should_stop = false;
             
             thread = std::thread([&position, depth, &should_stop, time_s](){
-                Move move = position.best_move_easy(depth, should_stop, time_s, std::nullopt, true);
+                Move move = position.think(depth, should_stop, time_s, std::nullopt, true);
                 std::cout << "bestmove " << to_uci_move(move) << "\n";
             });
         }

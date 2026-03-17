@@ -22,7 +22,7 @@ struct Param {
 
 float perturb_amount(const Param& param, int iteration) {
     float c = std::max((param.hi-param.lo) * 0.05f, 0.01f);
-    return c / std::pow(iteration + 1, 0.101f);
+    return c / std::pow(float(iteration + 1), 0.101f);
 }
 
 // These are continuously updated but rounded to integers in most cases
@@ -36,7 +36,7 @@ struct Params {
         { "fp_margin_factor", { 565.0f, 10.0f, 1000.0f }},
         { "lmr_history_bonus_threshold", { 1387.0f, 100.0f, 5000.0f }},
         { "history_bonus_factor", { 0.9777f, 0.1f, 5.0f }},
-        { "history_malus_factor", { 0.80322, 0.1f, 5.0f }},
+        { "history_malus_factor", { 0.80322f, 0.1f, 5.0f }},
         { "cont_history_bonus_factor", { 0.5f, 0.1f, 5.0f }},
         { "cont_history_malus_factor", { 0.5f, 0.1f, 5.0f }},
         { "qsearch_big_delta", { 1255.0f, 400.0f, 2000.0f }},
@@ -211,7 +211,7 @@ int main() {
             games.push_back(opening);
         }
 
-        float ak = 0.005f / std::pow(iteration + 10, 0.3f);
+        float ak = 0.005f / std::pow(float(iteration + 10), 0.3f);
 
         auto [p1, p2] = params.perturb(iteration);
 
