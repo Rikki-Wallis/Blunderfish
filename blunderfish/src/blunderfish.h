@@ -333,8 +333,8 @@ struct Position {
     int32_t mvv_lva_score(Move mv, int32_t offset) const;
 
     std::pair<Move, int64_t> best_move_internal(SearchContext& s, std::span<Move> moves, int depth, Move last_best_move, int64_t alpha, int64_t beta);
-    Move best_move(std::span<Move> moves, int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt, bool enable_uci_info=false);
-    Move best_move_easy(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt, bool enable_uci_info=false);
+    Move best_move(std::span<Move> moves, int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt, bool enable_uci_info=false, int64_t* score_out=nullptr);
+    Move best_move_easy(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt, bool enable_uci_info=false, int64_t* score_out=nullptr);
     
     bool is_move_legal_slow(Move move);
 

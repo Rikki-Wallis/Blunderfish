@@ -684,7 +684,7 @@ std::pair<Move, int64_t> Position::best_move_internal(SearchContext& s, std::spa
     return {best_move, best_score};
 }
 
-Move Position::best_move(std::span<Move> _moves, int depth, std::atomic<bool>& should_stop, std::optional<double> limit, std::optional<SearchParameters> params_in, bool enable_uci_info) {
+Move Position::best_move(std::span<Move> _moves, int depth, std::atomic<bool>& should_stop, std::optional<double> limit, std::optional<SearchParameters> params_in, bool enable_uci_info, int64_t* score_out) {
     reset_benchmarking_statistics();
 
     if (_moves.size() == 0) {
@@ -761,14 +761,18 @@ Move Position::best_move(std::span<Move> _moves, int depth, std::atomic<bool>& s
         }
     }
 
+    if (score_out) {
+        *score_out = best_score;
+    }
+
     return best_move;
 }
 
-Move Position::best_move_easy(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit, std::optional<SearchParameters> params, bool enable_uci_info) {
+Move Position::best_move_easy(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit, std::optional<SearchParameters> params, bool enable_uci_info, int64_t* score_out) {
     std::array<Move, 256> move_buf;
     std::span<Move> moves = generate_moves(move_buf);
     filter_moves(moves);
-    return best_move(moves, depth, should_stop, time_limit, params, enable_uci_info);
+    return best_move(moves, depth, should_stop, time_limit, params, enable_uci_info, score_out);
 }
 
 int64_t Position::eval_at_depth(int depth){
