@@ -16,18 +16,17 @@ static const char* START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQ
 
 static std::mutex io_mutex;
 
-template<typename...Args>
-static int fprint(FILE* stream, const std::format_string<Args...>& fmt, Args&&...args) {
-    std::string res = std::format(fmt, std::forward<Args>(args)...);
-    return fprintf(stream, "%s", res.c_str());
-}
+struct Record {
+    uint64_t bbs[12];
+    int32_t score;
+};
 
 static int run_match(FILE* file) {
     Position pos = *Position::decode_fen_string(START_FEN);
 
     std::array<Move, 256> move_buf;
 
-    std::vector<std::pair<std::string, int64_t>> positions;
+    std::vector<Record> records;
 
     int result = 67;
 
@@ -54,7 +53,22 @@ static int run_match(FILE* file) {
             pos.make_move(mv);
         }
         else { // after that, we let the engine make the move
-            std::string fen = pos.fen();
+            Record r;
+
+            Piece pieces[6] = {
+                PIECE_PAWN,
+                PIECE_KNIGHT,
+                PIECE_BISHOP,
+                PIECE_ROOK,
+                PIECE_QUEEN,
+                PIECE_KING
+            };
+
+            for (int side = 0; side < 2; ++side) {
+                for (int pid = 0; pid < 6; ++pid) {
+                    r.bbs[side*6+pid] = pos.sides[side].bb[pieces[pid]];
+                }
+            }
 
             std::atomic<bool> should_stop = false;
 
@@ -65,8 +79,10 @@ static int run_match(FILE* file) {
                 score *= -1;
             }
 
+            r.score = int32_t(score);
+
             if (std::abs(score) < (MATE_SCORE - 1000)) { // filter out mate scores
-                positions.push_back({fen, score});
+                records.push_back(r);
             }
 
             pos.make_move(mv);
@@ -75,12 +91,14 @@ static int run_match(FILE* file) {
 
     assert(result != 67);
 
-    float outcome = float(result) * 0.5f + 0.5f;
+    int32_t outcome = int32_t(result);
 
     {
         std::lock_guard g(io_mutex);
-        for (auto& [fen, score] : positions) {
-            fprint(file, "\"{}\" {} {:.1f}\n", fen, score, outcome);
+        for (Record& r : records) {
+            fwrite(&r.bbs, sizeof(r.bbs), 1, file);
+            fwrite(&r.score, sizeof(r.score), 1, file);
+            fwrite(&outcome, sizeof(outcome), 1, file);
         }
     }
 
@@ -88,8 +106,8 @@ static int run_match(FILE* file) {
 }
 
 int main() {
-    std::string filename = std::format("data_{:%Y%m%d_%H%M%S}.txt", std::chrono::system_clock::now());
-    FILE* file = fopen(filename.c_str(), "w");
+    std::string filename = std::format("data_{:%Y%m%d_%H%M%S}.bin", std::chrono::system_clock::now());
+    FILE* file = fopen(filename.c_str(), "wb");
 
     std::atomic<int> match_count = 0;
 
