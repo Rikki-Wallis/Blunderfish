@@ -7,6 +7,7 @@
 
 static thread_local std::mt19937 rng(std::random_device{}());
 
+constexpr int NUM_ITERATIONS = 100;
 constexpr int NUM_MATCHES = 1000;
 constexpr int RANDOM_HALF_MOVES = 10;
 
@@ -106,39 +107,41 @@ static int run_match(FILE* file) {
 }
 
 int main() {
-    std::string filename = std::format("data_{:%Y%m%d_%H%M%S}.bin", std::chrono::system_clock::now());
-    FILE* file = fopen(filename.c_str(), "wb");
+    for (int iter = 0; iter < NUM_ITERATIONS; ++iter) {
+        std::string filename = std::format("data_{:%Y%m%d_%H%M%S}.bin", std::chrono::system_clock::now());
+        FILE* file = fopen(filename.c_str(), "wb");
 
-    std::atomic<int> match_count = 0;
+        std::atomic<int> match_count = 0;
 
-    int nthreads = std::thread::hardware_concurrency();
+        int nthreads = std::thread::hardware_concurrency();
 
-    std::vector<std::thread> threads;
+        std::vector<std::thread> threads;
 
-    for (int t = 0; t < nthreads; ++t) {
-        threads.push_back(std::thread([&match_count, file](){
-            for (;;) {
-                int mid = match_count.fetch_add(1);
+        for (int t = 0; t < nthreads; ++t) {
+            threads.push_back(std::thread([&match_count, file, iter](){
+                for (;;) {
+                    int mid = match_count.fetch_add(1);
 
-                if (mid >= NUM_MATCHES) {
-                    break;
+                    if (mid >= NUM_MATCHES) {
+                        break;
+                    }
+
+                    int result = run_match(file);
+
+                    {
+                        std::lock_guard guard(io_mutex);
+                        print("Batch {}/{}: Game {}/{}: {}\n", iter+1, NUM_ITERATIONS, mid+1, NUM_MATCHES, result);
+                    }
                 }
+            }));
+        }
 
-                int result = run_match(file);
+        for (auto& t : threads) {
+            t.join();
+        }
 
-                {
-                    std::lock_guard guard(io_mutex);
-                    print("Game {}/{} result: {}\n", mid+1, NUM_MATCHES, result);
-                }
-            }
-        }));
+        fclose(file);
     }
-
-    for (auto& t : threads) {
-        t.join();
-    }
-
-    fclose(file);
 
     return 0;
 }
