@@ -6,11 +6,21 @@
 
 static const char* START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-static Move parse_uci_move(Position* pos, const std::string& move) {
+static std::optional<Move> parse_uci_move(Position* pos, const std::string& move) {
     int from_f = move[0] - 'a';
     int from_r = move[1] - '1';
     int to_f   = move[2] - 'a';
     int to_r   = move[3] - '1';
+
+    #define ASSERT_COORD_RANGE(coord) \
+        if (coord < 0 || coord > 7) { \
+            return std::nullopt; \
+        } \
+
+    ASSERT_COORD_RANGE(from_f);
+    ASSERT_COORD_RANGE(from_r);
+    ASSERT_COORD_RANGE(to_f);
+    ASSERT_COORD_RANGE(to_r);
 
     int from = from_r * 8 + from_f;
     int to   = to_r * 8 + to_f;
@@ -32,6 +42,8 @@ static Move parse_uci_move(Position* pos, const std::string& move) {
             case 'n':
                 end_piece = PIECE_KNIGHT;
                 break;
+            default:
+                return std::nullopt;
         }
     }
 
@@ -90,7 +102,15 @@ static void parse_position(const std::string& line, Position* pos) {
     std::string move;
 
     while (ss >> move) {
-        Move mv = parse_uci_move(pos, move);
+        std::optional<Move> mv_result = parse_uci_move(pos, move);
+
+        if (!mv_result.has_value()) {
+            std::cout << "Illegal move " << move << "\n";
+            break;
+        }
+
+        Move mv = *mv_result;
+
         if (!pos->is_move_legal_slow(mv)) {
             std::cout << "Illegal move " << move << "\n";
             break;

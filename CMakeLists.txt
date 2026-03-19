@@ -21,7 +21,6 @@ add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 
 add_subdirectory(blunderfish)
 add_subdirectory(uci)
-add_subdirectory(opening_gen)
 add_subdirectory(tests)
 add_subdirectory(benchmark)
 add_subdirectory(spsa)
