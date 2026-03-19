@@ -33,7 +33,7 @@ uint32_t byteswap_u32(uint32_t val) {
 
 uint64_t byteswap_u64(uint64_t val) {
     #if defined(_MSC_VER)
-        return _byteswap_ulonglong(val); //
+        return _byteswap_uint64(val); //
     #elif defined(__GNUC__)
         return __builtin_bswap64(val); //
     #else
