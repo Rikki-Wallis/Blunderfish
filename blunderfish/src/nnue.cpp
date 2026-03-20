@@ -39,8 +39,9 @@ inline float sigmoid(float x) {
     return 1.0f / (1.0f + std::exp(-x));
 }
 
-float nnue_infer(std::span<uint64_t> bbs) {
-    float input[768] = {};
+inline std::array<float, NNUE_INPUT_FEATURES> bbs_to_input(std::span<uint64_t> bbs) 
+{
+    std::array<float, NNUE_INPUT_FEATURES> input{};
 
     for (int side = 0; side < 2; ++side) {
         for (int p = 0; p < 6; ++p) {
@@ -50,7 +51,13 @@ float nnue_infer(std::span<uint64_t> bbs) {
         }
     }
 
-    float a0[256];
+    return input;
+}
+
+float nnue_infer(std::span<uint64_t> bbs) {
+    auto input = bbs_to_input(bbs);
+
+    float a0[std::size(nnue.b0)];
 
     for (size_t i = 0; i < std::size(a0); ++i) {
         a0[i] = nnue.b0[i];
@@ -62,7 +69,7 @@ float nnue_infer(std::span<uint64_t> bbs) {
         a0[i] = relu(a0[i]);
     }
 
-    float a1[32];
+    float a1[std::size(nnue.b1)];
 
     for (size_t i = 0; i < std::size(a1); ++i) {
         a1[i] = nnue.b1[i];
@@ -82,26 +89,118 @@ float nnue_infer(std::span<uint64_t> bbs) {
     return sigmoid(out);
 }
 
-int64_t Position::nnue_eval() const {
-    uint64_t bbs[12];
+inline int64_t wdl_to_centipawns(float wdl) {
+    wdl = std::clamp(wdl, 1e-7f, 1.0f - 1e-7f);
+    int64_t centipawns = int64_t(400.0f * logf(wdl/(1.0f-wdl)));
+    return centipawns;
+}
 
-    Piece pieces[6] = {
-        PIECE_PAWN,
-        PIECE_KNIGHT,
-        PIECE_BISHOP,
-        PIECE_ROOK,
-        PIECE_QUEEN,
-        PIECE_KING
+int64_t Position::nnue_eval() const {
+    auto bbs = to_bitboards();
+    float wdl = nnue_infer(bbs);
+    return wdl_to_centipawns(wdl);
+}
+
+void Position::reset_nnue_accumulator() {
+#ifdef USE_NNUE
+    auto bbs = to_bitboards();
+    auto input = bbs_to_input(bbs);
+
+    for (size_t i = 0; i < std::size(accumulator); ++i) {
+        accumulator[i] = nnue.b0[i];
+
+        for (size_t j = 0; j < input.size(); ++j) {
+            accumulator[i] += nnue.w0[i][j] * input[j];
+        }
+    }
+#endif
+}
+
+static const size_t bbs_piece_index[NUM_PIECE_TYPES] = {
+    0xffffffff,
+    0,
+    3,
+    1,
+    2,
+    4,
+    5,
+}; 
+
+void Position::update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side, int sign) {
+    (void)captured_piece;
+    (void)captured_pos;
+    (void)moving_piece_start;
+    (void)moving_piece_end;
+    (void)move_from;
+    (void)move_to;
+    (void)rook_from;
+    (void)rook_to;
+    (void)side;
+    (void)sign;
+
+#ifdef USE_NNUE
+    auto feature = [](Piece piece, int pos, int side) {
+        return (side * 6 + bbs_piece_index[piece])*64+pos;
     };
 
-    for (int side = 0; side < 2; ++side) {
-        for (int pid = 0; pid < 6; ++pid) {
-            bbs[side*6+pid] = sides[side].bb[pieces[pid]];
+    float sf = float(sign);
+
+    // move the piece and castle rook moves
+
+    for (size_t i = 0; i < std::size(nnue.b0); ++i) {
+        accumulator[i] -= sf * nnue.w0[i][feature(moving_piece_start, move_from, side)];
+        accumulator[i] += sf * nnue.w0[i][feature(moving_piece_end, move_to, side)];
+
+        accumulator[i] -= sf * nnue.w0[i][feature(PIECE_ROOK, rook_from, side)];
+        accumulator[i] += sf * nnue.w0[i][feature(PIECE_ROOK, rook_to, side)];
+    }
+
+    // remove the captured piece
+
+    if (captured_piece != PIECE_NONE) {
+        for (size_t i = 0; i < std::size(nnue.b0); ++i) {
+            accumulator[i] -= sf * nnue.w0[i][feature(captured_piece, captured_pos, opponent(side))];
         }
     }
 
-    float wdl = nnue_infer(bbs);
-    int64_t centipawns = int64_t(400.0f * logf(wdl/(1.0f-wdl)));
+    float a0[std::size(nnue.b0)];
 
-    return centipawns;
+    for (size_t i = 0; i < std::size(a0); ++i) {
+        a0[i] = relu(accumulator[i]);
+    }
+
+    float a1[std::size(nnue.b1)];
+
+    for (size_t i = 0; i < std::size(a1); ++i) {
+        a1[i] = nnue.b1[i];
+
+        for (size_t j = 0; j < std::size(a0); ++j) {
+            a1[i] += nnue.w1[i][j] * a0[j];
+        }
+
+        a1[i] = relu(a1[i]);
+    }
+
+    float out = nnue.b2[0];
+
+    for (size_t j = 0; j < std::size(a1); ++j) {
+        out += nnue.w2[0][j] * a1[j];
+    }
+
+    incremental_eval = wdl_to_centipawns(sigmoid(out));
+
+#else
+    incremental_eval = compute_eval();
+    //// NOTE: if rook_from == rook_to there is NO castle
+    //// ensure that if that is the case, your castling operations have a NET ZERO
+
+    //incremental_eval -= piece_delta(captured_piece, captured_pos, opponent(side));
+
+    //incremental_eval -= piece_delta(moving_piece_start, move_from, side);
+    //incremental_eval += piece_delta(moving_piece_end, move_to, side);
+
+    //// since these are symmetric, should have net zero when rook_from == rook_to
+    //incremental_eval -= piece_delta(PIECE_ROOK, rook_from, to_move);
+    //incremental_eval += piece_delta(PIECE_ROOK, rook_to, to_move);
+#endif
 }

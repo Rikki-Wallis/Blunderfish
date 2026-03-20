@@ -241,6 +241,7 @@ std::optional<Position> Position::decode_fen_string(const std::string& fen) {
     pos.zobrist = pos.compute_zobrist();
     pos.incremental_eval = pos.compute_eval();
     pos.update_is_checked();
+    pos.reset_nnue_accumulator();
 
     return pos;
 }
@@ -447,4 +448,25 @@ bool Position::is_threefold_repetition() const {
     } 
 
     return false;
+}
+
+std::array<uint64_t, 12> Position::to_bitboards() const {
+    std::array<uint64_t, 12> bbs;
+
+    Piece pieces[6] = {
+        PIECE_PAWN,
+        PIECE_KNIGHT,
+        PIECE_BISHOP,
+        PIECE_ROOK,
+        PIECE_QUEEN,
+        PIECE_KING
+    };
+
+    for (int side = 0; side < 2; ++side) {
+        for (int pid = 0; pid < 6; ++pid) {
+            bbs[side*6+pid] = sides[side].bb[pieces[pid]];
+        }
+    }
+
+    return bbs;
 }

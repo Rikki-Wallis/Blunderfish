@@ -181,7 +181,9 @@ int32_t eg_unsigned_pst_value(Piece piece, int square, int side) {
 }
 
 int64_t Position::compute_eval() const {
-
+    #ifdef USE_NNUE
+        return nnue_eval();
+    #else
     int64_t value = sides[WHITE].material_value() - sides[BLACK].material_value();
 
     // Compute phase
@@ -229,6 +231,7 @@ int64_t Position::compute_eval() const {
     value += bishop_imbalance();
     
     return value;
+#endif
 }
 
 
@@ -463,18 +466,4 @@ inline int32_t piece_delta(Piece piece, int sq, int side) {
     value += sign * mg_unsigned_pst_value(piece, sq, side);
     value += sign * piece_value_table[piece];
     return value;
-}
-
-void Position::update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side) {
-    // NOTE: if rook_from == rook_to there is NO castle
-    // ensure that if that is the case, your castling operations have a NET ZERO
-
-    incremental_eval -= piece_delta(captured_piece, captured_pos, opponent(side));
-
-    incremental_eval -= piece_delta(moving_piece_start, move_from, side);
-    incremental_eval += piece_delta(moving_piece_end, move_to, side);
-
-    // since these are symmetric, should have net zero when rook_from == rook_to
-    incremental_eval -= piece_delta(PIECE_ROOK, rook_from, to_move);
-    incremental_eval += piece_delta(PIECE_ROOK, rook_to, to_move);
 }

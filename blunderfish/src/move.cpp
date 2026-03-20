@@ -692,7 +692,6 @@ void Position::update_en_passant_sq(int sq) {
 
 void Position::make_move(Move move) {
     // Update eval
-    int64_t initial_eval = incremental_eval;
     uint64_t initial_zobrist = zobrist;
 
     // First, check for a capture and remove the piece
@@ -711,7 +710,6 @@ void Position::make_move(Move move) {
         .move = move,
         .en_passant_sq = en_passant_sq,
         .zobrist = initial_zobrist,
-        .incremental_eval = initial_eval,
         .is_checked = {
             is_checked[0],
             is_checked[1]
@@ -803,9 +801,6 @@ void Position::make_move(Move move) {
 #endif
 
     update_is_checked();
-
-    // For testing
-    incremental_eval = compute_eval();
 }
 
 void Position::update_is_checked() {
@@ -863,10 +858,11 @@ void Position::unmake_move() {
     sides[opponent(to_move)].bb[captured_piece] ^= captured_mask;
     piece_at[captured_square] = static_cast<uint8_t>(captured_piece);
 
+    update_eval(move_captured_piece(move), move_captured_square(move), start_piece, end_piece, move_from(move), move_to(move), rook_from, rook_to, move_side(move), -1);
+
     flags = undo.flags;
     en_passant_sq = undo.en_passant_sq;
     zobrist = undo.zobrist;
-    incremental_eval = undo.incremental_eval;
 }
 
 void Position::make_null_move() {
@@ -876,7 +872,6 @@ void Position::make_null_move() {
         .move = NULL_MOVE,
         .en_passant_sq = en_passant_sq,
         .zobrist = zobrist,
-        .incremental_eval = incremental_eval,
         .is_checked = {
             is_checked[0],
             is_checked[1]
@@ -901,7 +896,6 @@ void Position::unmake_null_move(){
     flags = undo.flags;
     en_passant_sq = undo.en_passant_sq;
     zobrist = undo.zobrist;
-    incremental_eval = undo.incremental_eval;
 }
 
 uint64_t Position::generate_pin_mask(int side) const {

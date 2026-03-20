@@ -13,9 +13,12 @@
 #include "common.h"
 
 #define LOAD_NNUE
+//#define USE_NNUE
+
+#define NNUE_INPUT_FEATURES 768
 
 struct NNUE {
-    float w0[256][768], b0[256];
+    float w0[256][NNUE_INPUT_FEATURES], b0[256];
     float w1[32][256], b1[32];
     float w2[1][32], b2[1];
 };
@@ -136,7 +139,6 @@ struct Undo {
     Move move;
     int en_passant_sq;
     uint64_t zobrist;
-    int64_t incremental_eval;
     bool is_checked[2];
 };
 
@@ -289,6 +291,8 @@ struct Position {
     std::array<Undo, MAX_DEPTH> undo_stack;
     int undo_count;
 
+    float accumulator[std::size(nnue.b0)];
+
     Position()
         : to_move(WHITE), en_passant_sq(NULL_SQUARE), flags(0), undo_count(0)
     {
@@ -302,6 +306,8 @@ struct Position {
     void display(bool display_metadata=false) const;
     static std::optional<Position> decode_fen_string(const std::string& fen);
     std::string fen() const;
+
+    std::array<uint64_t, 12> to_bitboards() const;
 
     std::span<Move> generate_moves(std::span<Move> move_buf) const;
     std::span<Move> generate_captures(std::span<Move> move_buf) const;
@@ -336,7 +342,7 @@ struct Position {
     int64_t signed_eval() const;
 
     // @note if no castle, make rook_from == rook_ro
-    void update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side);
+    void update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side, int sign=1);
     void update_is_checked();
 
     int64_t pruned_negamax(SearchContext& s, int depth, int ply, bool allow_null, int64_t alpha, int64_t beta, Move excluded_move, int extensions_so_far, int root_depth, ContinuationTable* cont);
@@ -370,6 +376,8 @@ struct Position {
 
     bool is_threefold_repetition() const;
     int64_t mobility(int colour) const;
+
+    void reset_nnue_accumulator();
 
     // polygot encoding & decoding
     uint64_t encode_polyglot();
