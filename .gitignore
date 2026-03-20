@@ -5,3 +5,5 @@
 /.vscode/
 /Testing/
 /engine/
+*.bin
+*.pt
