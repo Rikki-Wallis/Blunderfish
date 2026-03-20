@@ -12,6 +12,18 @@
 
 #include "common.h"
 
+#define LOAD_NNUE
+
+struct NNUE {
+    float w0[256][768], b0[256];
+    float w1[32][256], b1[32];
+    float w2[1][32], b2[1];
+};
+
+extern NNUE nnue;
+
+float nnue_infer(std::span<uint64_t> bbs);
+
 using Clock = std::chrono::steady_clock;
 using TimePoint = std::chrono::time_point<Clock>;
 
@@ -319,6 +331,8 @@ struct Position {
     void verify_integrity() const;
 
     int64_t compute_eval() const;
+    int64_t nnue_eval() const;
+
     int64_t signed_eval() const;
 
     // @note if no castle, make rook_from == rook_ro

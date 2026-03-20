@@ -756,8 +756,14 @@ Move Position::best_move(std::span<Move> _moves, int depth, std::atomic<bool>& s
             } else {
                 score_str = std::format("cp {}", best_score);
             }
+            
+            int64_t nnue_score = nnue_eval();
 
-            std::cout << std::format("info depth {} seldepth {} score {} nodes {} nps {} time {} pv {}\n", i, max_ply, score_str, node_count, nps, int(elapsed*1000.0), to_uci_move(best_move));
+            if (to_move == BLACK) {
+                nnue_score *= -1;
+            }
+
+            std::cout << std::format("info depth {} seldepth {} score {} nnuescore {} nodes {} nps {} time {} pv {}\n", i, max_ply, score_str, nnue_score, node_count, nps, int(elapsed*1000.0), to_uci_move(best_move));
         }
     }
 

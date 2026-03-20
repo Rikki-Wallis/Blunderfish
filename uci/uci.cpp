@@ -89,7 +89,12 @@ static void parse_position(const std::string& line, Position* pos) {
     }
     else if (pos_part.find("fen") != std::string::npos) {
         std::string fen = pos_part.substr(pos_part.find("fen") + 4);
-        *pos = *Position::decode_fen_string(fen);
+        auto pos_result = Position::decode_fen_string(fen);
+        if (!pos_result.has_value()) {
+            std::cout << "Invalid FEN " << fen << "\n";
+            return;
+        }
+        *pos = std::move(*pos_result);
     }
     else {
         std::cout << "Unrecognized position type\n";
@@ -233,7 +238,7 @@ int main() {
             should_stop = false;
             
             thread = std::thread([&position, depth, &should_stop, time_s](){
-                Move move = position.think(depth, should_stop, time_s, std::nullopt, true);
+                Move move = position.best_move_easy(depth, should_stop, time_s, std::nullopt, true);
                 std::cout << "bestmove " << to_uci_move(move) << "\n";
             });
         }
