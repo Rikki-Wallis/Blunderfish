@@ -13,7 +13,7 @@ struct NNUE {
 };
 
 static NNUE load_nnue() {
-#ifdef LOAD_NNUE
+#ifdef USE_NNUE
     NNUE nn;
 
     FILE* file = fopen("/home/lyndon/dev/nn/model.bin", "rb");

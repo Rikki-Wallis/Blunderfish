@@ -12,8 +12,7 @@
 
 #include "common.h"
 
-#define LOAD_NNUE
-#define USE_NNUE
+//#define USE_NNUE
 
 constexpr size_t NNUE_ACCUMULATOR_SIZE = 256;
 constexpr size_t NNUE_INPUT_FEATURES = 768;
