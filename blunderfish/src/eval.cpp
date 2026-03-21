@@ -455,9 +455,9 @@ int64_t Position::mobility(int colour) const {
 }
 
 
-int64_t Position::signed_eval() const {
+int64_t Position::signed_eval() {
     int64_t sign = to_move == WHITE ? 1 : -1;
-    return incremental_eval * sign;
+    return get_eval() * sign;
 }
  
 inline int32_t piece_delta(Piece piece, int sq, int side) {

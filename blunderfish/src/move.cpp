@@ -693,6 +693,7 @@ void Position::update_en_passant_sq(int sq) {
 void Position::make_move(Move move) {
     // Update eval
     uint64_t initial_zobrist = zobrist;
+    int64_t initial_eval = get_eval();
 
     // First, check for a capture and remove the piece
     Piece captured_piece = move_captured_piece(move);
@@ -709,6 +710,7 @@ void Position::make_move(Move move) {
         .flags = flags,
         .move = move,
         .en_passant_sq = en_passant_sq,
+        .incremental_eval = initial_eval,
         .zobrist = initial_zobrist,
         .is_checked = {
             is_checked[0],
@@ -791,6 +793,7 @@ void Position::make_move(Move move) {
 #endif
 
     update_eval(captured_piece, captured_pos, start_piece, end_piece, move_from(move), move_to(move), rook_from, rook_to, to_move);
+    eval_cache = std::nullopt;
 
     // update to_move
     
@@ -859,6 +862,7 @@ void Position::unmake_move() {
     piece_at[captured_square] = static_cast<uint8_t>(captured_piece);
 
     update_eval(move_captured_piece(move), move_captured_square(move), start_piece, end_piece, move_from(move), move_to(move), rook_from, rook_to, move_side(move), -1);
+    eval_cache = undo.incremental_eval;
 
     flags = undo.flags;
     en_passant_sq = undo.en_passant_sq;
@@ -871,6 +875,7 @@ void Position::make_null_move() {
         .flags = flags,
         .move = NULL_MOVE,
         .en_passant_sq = en_passant_sq,
+        .incremental_eval = get_eval(),
         .zobrist = zobrist,
         .is_checked = {
             is_checked[0],
@@ -893,6 +898,7 @@ void Position::unmake_null_move(){
     assert(undo_count > 0);
     Undo undo = undo_stack[--undo_count];
 
+    eval_cache = undo.incremental_eval;
     flags = undo.flags;
     en_passant_sq = undo.en_passant_sq;
     zobrist = undo.zobrist;

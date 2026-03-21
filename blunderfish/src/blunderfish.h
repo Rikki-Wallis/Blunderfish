@@ -13,17 +13,10 @@
 #include "common.h"
 
 #define LOAD_NNUE
-//#define USE_NNUE
+#define USE_NNUE
 
-#define NNUE_INPUT_FEATURES 768
-
-struct NNUE {
-    float w0[256][NNUE_INPUT_FEATURES], b0[256];
-    float w1[32][256], b1[32];
-    float w2[1][32], b2[1];
-};
-
-extern NNUE nnue;
+constexpr size_t NNUE_ACCUMULATOR_SIZE = 256;
+constexpr size_t NNUE_INPUT_FEATURES = 768;
 
 float nnue_infer(std::span<uint64_t> bbs);
 
@@ -138,6 +131,7 @@ struct Undo {
     uint32_t flags;
     Move move;
     int en_passant_sq;
+    int64_t incremental_eval;
     uint64_t zobrist;
     bool is_checked[2];
 };
@@ -270,7 +264,6 @@ struct Position {
     int en_passant_sq;
     uint8_t piece_at[64];
     uint32_t flags;
-    int64_t incremental_eval;
 
     bool is_checked[2];
 
@@ -291,10 +284,11 @@ struct Position {
     std::array<Undo, MAX_DEPTH> undo_stack;
     int undo_count;
 
-    float accumulator[std::size(nnue.b0)];
+    alignas(32) float accumulator[NNUE_ACCUMULATOR_SIZE];
+    std::optional<int64_t> eval_cache;
 
     Position()
-        : to_move(WHITE), en_passant_sq(NULL_SQUARE), flags(0), undo_count(0)
+        : to_move(WHITE), en_passant_sq(NULL_SQUARE), flags(0), undo_count(0), eval_cache(std::nullopt)
     {
         memset(sides, 0, sizeof(sides));
         memset(piece_at, 0, sizeof(piece_at));
@@ -339,7 +333,9 @@ struct Position {
     int64_t compute_eval() const;
     int64_t nnue_eval() const;
 
-    int64_t signed_eval() const;
+    int64_t get_eval();
+
+    int64_t signed_eval();
 
     // @note if no castle, make rook_from == rook_ro
     void update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side, int sign=1);

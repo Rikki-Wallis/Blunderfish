@@ -3,6 +3,15 @@
 
 #include "blunderfish.h"
 
+struct NNUE {
+    alignas(32) float w0[NNUE_INPUT_FEATURES][NNUE_ACCUMULATOR_SIZE] /*TRANSPOSED!!*/;
+    alignas(32) float b0[NNUE_ACCUMULATOR_SIZE];
+    alignas(32) float w1[32][NNUE_ACCUMULATOR_SIZE];
+    alignas(32) float b1[32];
+    alignas(32) float w2[1][32];
+    alignas(32) float b2[1];
+};
+
 static NNUE load_nnue() {
 #ifdef LOAD_NNUE
     NNUE nn;
@@ -14,7 +23,15 @@ static NNUE load_nnue() {
         return {};
     }
 
-    fread(nn.w0, sizeof(nn.w0), 1, file);
+    float w0[std::size(nn.b0)][NNUE_INPUT_FEATURES];
+    fread(w0, sizeof(w0), 1, file);
+
+    for (size_t i = 0; i < std::size(nn.b0); ++i) {
+        for (size_t j = 0; j < NNUE_INPUT_FEATURES; ++j) {
+            nn.w0[j][i] = w0[i][j]; // tranpose the first weights
+        }
+    }
+
     fread(nn.b0, sizeof(nn.b0), 1, file);
     fread(nn.w1, sizeof(nn.w1), 1, file);
     fread(nn.b1, sizeof(nn.b1), 1, file);
@@ -63,7 +80,7 @@ float nnue_infer(std::span<uint64_t> bbs) {
         a0[i] = nnue.b0[i];
 
         for (size_t j = 0; j < std::size(input); ++j) {
-            a0[i] += nnue.w0[i][j] * input[j];
+            a0[i] += nnue.w0[j][i] * input[j];
         }
 
         a0[i] = relu(a0[i]);
@@ -110,7 +127,7 @@ void Position::reset_nnue_accumulator() {
         accumulator[i] = nnue.b0[i];
 
         for (size_t j = 0; j < input.size(); ++j) {
-            accumulator[i] += nnue.w0[i][j] * input[j];
+            accumulator[i] += nnue.w0[j][i] * input[j];
         }
     }
 #endif
@@ -148,21 +165,42 @@ void Position::update_eval(Piece captured_piece, int captured_pos, Piece moving_
     // move the piece and castle rook moves
 
     for (size_t i = 0; i < std::size(nnue.b0); ++i) {
-        accumulator[i] -= sf * nnue.w0[i][feature(moving_piece_start, move_from, side)];
-        accumulator[i] += sf * nnue.w0[i][feature(moving_piece_end, move_to, side)];
+        accumulator[i] -= sf * nnue.w0[feature(moving_piece_start, move_from, side)][i];
+        accumulator[i] += sf * nnue.w0[feature(moving_piece_end, move_to, side)][i];
 
-        accumulator[i] -= sf * nnue.w0[i][feature(PIECE_ROOK, rook_from, side)];
-        accumulator[i] += sf * nnue.w0[i][feature(PIECE_ROOK, rook_to, side)];
+        accumulator[i] -= sf * nnue.w0[feature(PIECE_ROOK, rook_from, side)][i];
+        accumulator[i] += sf * nnue.w0[feature(PIECE_ROOK, rook_to, side)][i];
     }
 
     // remove the captured piece
 
     if (captured_piece != PIECE_NONE) {
         for (size_t i = 0; i < std::size(nnue.b0); ++i) {
-            accumulator[i] -= sf * nnue.w0[i][feature(captured_piece, captured_pos, opponent(side))];
+            accumulator[i] -= sf * nnue.w0[feature(captured_piece, captured_pos, opponent(side))][i];
         }
     }
 
+#else
+    //// NOTE: if rook_from == rook_to there is NO castle
+    //// ensure that if that is the case, your castling operations have a NET ZERO
+
+    //incremental_eval -= piece_delta(captured_piece, captured_pos, opponent(side));
+
+    //incremental_eval -= piece_delta(moving_piece_start, move_from, side);
+    //incremental_eval += piece_delta(moving_piece_end, move_to, side);
+
+    //// since these are symmetric, should have net zero when rook_from == rook_to
+    //incremental_eval -= piece_delta(PIECE_ROOK, rook_from, to_move);
+    //incremental_eval += piece_delta(PIECE_ROOK, rook_to, to_move);
+#endif
+}
+
+int64_t Position::get_eval() {
+    if (eval_cache.has_value()) {
+        return *eval_cache;
+    }
+
+#ifdef USE_NNUE
     float a0[std::size(nnue.b0)];
 
     for (size_t i = 0; i < std::size(a0); ++i) {
@@ -187,20 +225,9 @@ void Position::update_eval(Piece captured_piece, int captured_pos, Piece moving_
         out += nnue.w2[0][j] * a1[j];
     }
 
-    incremental_eval = wdl_to_centipawns(sigmoid(out));
-
+    eval_cache = wdl_to_centipawns(sigmoid(out));
 #else
-    incremental_eval = compute_eval();
-    //// NOTE: if rook_from == rook_to there is NO castle
-    //// ensure that if that is the case, your castling operations have a NET ZERO
-
-    //incremental_eval -= piece_delta(captured_piece, captured_pos, opponent(side));
-
-    //incremental_eval -= piece_delta(moving_piece_start, move_from, side);
-    //incremental_eval += piece_delta(moving_piece_end, move_to, side);
-
-    //// since these are symmetric, should have net zero when rook_from == rook_to
-    //incremental_eval -= piece_delta(PIECE_ROOK, rook_from, to_move);
-    //incremental_eval += piece_delta(PIECE_ROOK, rook_to, to_move);
+    eval_cache = compute_eval();
 #endif
+    return *eval_cache;
 }

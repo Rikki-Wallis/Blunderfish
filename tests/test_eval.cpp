@@ -1,15 +1,18 @@
 #include <catch2/catch_test_macros.hpp>
 #include "blunderfish.h"
 
-void eval_search(int depth, Position& position) {
+static void check_eval(Position& position) {
     int64_t new_eval = position.compute_eval();
 
-    if (std::abs(new_eval - position.incremental_eval) > 2) {
+    if (std::abs(new_eval - position.get_eval()) > 2) {
         position.display();
     }
 
-    REQUIRE(std::abs(new_eval - position.incremental_eval) <= 2);
+    REQUIRE(std::abs(new_eval - position.get_eval()) <= 2);
+}
 
+void eval_search(int depth, Position& position) {
+    check_eval(position);
     int my_side = position.to_move;
 
     if (depth == 0) {
@@ -40,6 +43,8 @@ void eval_search(int depth, Position& position) {
             position.unmake_null_move();
         }
     }
+
+    check_eval(position);
 }
 
 TEST_CASE("Eval - increment_eval equals eval | STARTING POSITION") {
