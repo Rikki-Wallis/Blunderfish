@@ -12,7 +12,7 @@
 
 #include "common.h"
 
-#define USE_NNUE
+//#define USE_NNUE
 
 constexpr size_t ACCUMULATOR_SIZE = 256;
 
