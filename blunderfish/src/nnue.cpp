@@ -3,51 +3,9 @@
 #include <algorithm>
 
 #include "blunderfish.h"
+#include "nnue_embed.h"
 
-struct NNUE {
-    alignas(32) float w0[NNUE_INPUT_FEATURES][NNUE_ACCUMULATOR_SIZE] /*TRANSPOSED!!*/;
-    alignas(32) float b0[NNUE_ACCUMULATOR_SIZE];
-    alignas(32) float w1[32][NNUE_ACCUMULATOR_SIZE];
-    alignas(32) float b1[32];
-    alignas(32) float w2[1][32];
-    alignas(32) float b2[1];
-};
-
-static NNUE load_nnue() {
-#ifdef USE_NNUE
-    NNUE nn;
-
-    FILE* file = fopen("/home/lyndon/dev/nn/model.bin", "rb");
-
-    if (!file) {
-        print("Failed to load nnue.\n");
-        return {};
-    }
-
-    float w0[std::size(nn.b0)][NNUE_INPUT_FEATURES];
-    fread(w0, sizeof(w0), 1, file);
-
-    for (size_t i = 0; i < std::size(nn.b0); ++i) {
-        for (size_t j = 0; j < NNUE_INPUT_FEATURES; ++j) {
-            nn.w0[j][i] = w0[i][j]; // tranpose the first weights
-        }
-    }
-
-    fread(nn.b0, sizeof(nn.b0), 1, file);
-    fread(nn.w1, sizeof(nn.w1), 1, file);
-    fread(nn.b1, sizeof(nn.b1), 1, file);
-    fread(nn.w2, sizeof(nn.w2), 1, file);
-    fread(nn.b2, sizeof(nn.b2), 1, file);
-
-    fclose(file);
-
-    return nn;
-#else
-    return {};
-#endif
-}
-
-NNUE nnue = load_nnue();
+static_assert(ACCUMULATOR_SIZE == NNUE_ACCUMULATOR_SIZE);
 
 inline float relu(float x) {
     return std::max(x, 0.0f);
@@ -75,33 +33,33 @@ inline std::array<float, NNUE_INPUT_FEATURES> bbs_to_input(std::span<uint64_t> b
 float nnue_infer(std::span<uint64_t> bbs) {
     auto input = bbs_to_input(bbs);
 
-    float a0[std::size(nnue.b0)];
+    float a0[std::size(nnue_b0)];
 
     for (size_t i = 0; i < std::size(a0); ++i) {
-        a0[i] = nnue.b0[i];
+        a0[i] = nnue_b0[i];
 
         for (size_t j = 0; j < std::size(input); ++j) {
-            a0[i] += nnue.w0[j][i] * input[j];
+            a0[i] += nnue_w0[j][i] * input[j];
         }
 
         a0[i] = relu(a0[i]);
     }
 
-    float a1[std::size(nnue.b1)];
+    float a1[std::size(nnue_b1)];
 
     for (size_t i = 0; i < std::size(a1); ++i) {
-        a1[i] = nnue.b1[i];
+        a1[i] = nnue_b1[i];
 
         for (size_t j = 0; j < std::size(a0); ++j) {
-            a1[i] += nnue.w1[i][j] * a0[j];
+            a1[i] += nnue_w1[i][j] * a0[j];
         }
 
         a1[i] = relu(a1[i]);
     }
 
-    float out = nnue.b2[0];
+    float out = nnue_b2[0];
     for (size_t j = 0; j < std::size(a1); ++j) {
-        out += nnue.w2[0][j] * a1[j];
+        out += nnue_w2[0][j] * a1[j];
     }
 
     return sigmoid(out);
@@ -125,10 +83,10 @@ void Position::reset_nnue_accumulator() {
     auto input = bbs_to_input(bbs);
 
     for (size_t i = 0; i < std::size(accumulator); ++i) {
-        accumulator[i] = nnue.b0[i];
+        accumulator[i] = nnue_b0[i];
 
         for (size_t j = 0; j < input.size(); ++j) {
-            accumulator[i] += nnue.w0[j][i] * input[j];
+            accumulator[i] += nnue_w0[j][i] * input[j];
         }
     }
 #endif
@@ -165,19 +123,19 @@ void Position::update_eval(Piece captured_piece, int captured_pos, Piece moving_
 
     // move the piece and castle rook moves
 
-    for (size_t i = 0; i < std::size(nnue.b0); ++i) {
-        accumulator[i] -= sf * nnue.w0[feature(moving_piece_start, move_from, side)][i];
-        accumulator[i] += sf * nnue.w0[feature(moving_piece_end, move_to, side)][i];
+    for (size_t i = 0; i < std::size(nnue_b0); ++i) {
+        accumulator[i] -= sf * nnue_w0[feature(moving_piece_start, move_from, side)][i];
+        accumulator[i] += sf * nnue_w0[feature(moving_piece_end, move_to, side)][i];
 
-        accumulator[i] -= sf * nnue.w0[feature(PIECE_ROOK, rook_from, side)][i];
-        accumulator[i] += sf * nnue.w0[feature(PIECE_ROOK, rook_to, side)][i];
+        accumulator[i] -= sf * nnue_w0[feature(PIECE_ROOK, rook_from, side)][i];
+        accumulator[i] += sf * nnue_w0[feature(PIECE_ROOK, rook_to, side)][i];
     }
 
     // remove the captured piece
 
     if (captured_piece != PIECE_NONE) {
-        for (size_t i = 0; i < std::size(nnue.b0); ++i) {
-            accumulator[i] -= sf * nnue.w0[feature(captured_piece, captured_pos, opponent(side))][i];
+        for (size_t i = 0; i < std::size(nnue_b0); ++i) {
+            accumulator[i] -= sf * nnue_w0[feature(captured_piece, captured_pos, opponent(side))][i];
         }
     }
 
@@ -202,28 +160,28 @@ int64_t Position::get_eval() {
     }
 
 #ifdef USE_NNUE
-    float a0[std::size(nnue.b0)];
+    float a0[std::size(nnue_b0)];
 
     for (size_t i = 0; i < std::size(a0); ++i) {
         a0[i] = relu(accumulator[i]);
     }
 
-    float a1[std::size(nnue.b1)];
+    float a1[std::size(nnue_b1)];
 
     for (size_t i = 0; i < std::size(a1); ++i) {
-        a1[i] = nnue.b1[i];
+        a1[i] = nnue_b1[i];
 
         for (size_t j = 0; j < std::size(a0); ++j) {
-            a1[i] += nnue.w1[i][j] * a0[j];
+            a1[i] += nnue_w1[i][j] * a0[j];
         }
 
         a1[i] = relu(a1[i]);
     }
 
-    float out = nnue.b2[0];
+    float out = nnue_b2[0];
 
     for (size_t j = 0; j < std::size(a1); ++j) {
-        out += nnue.w2[0][j] * a1[j];
+        out += nnue_w2[0][j] * a1[j];
     }
 
     eval_cache = wdl_to_centipawns(sigmoid(out));

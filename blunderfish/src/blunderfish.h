@@ -12,10 +12,9 @@
 
 #include "common.h"
 
-//#define USE_NNUE
+#define USE_NNUE
 
-constexpr size_t NNUE_ACCUMULATOR_SIZE = 256;
-constexpr size_t NNUE_INPUT_FEATURES = 768;
+constexpr size_t ACCUMULATOR_SIZE = 256;
 
 float nnue_infer(std::span<uint64_t> bbs);
 
@@ -283,7 +282,7 @@ struct Position {
     std::array<Undo, MAX_DEPTH> undo_stack;
     int undo_count;
 
-    float accumulator[NNUE_ACCUMULATOR_SIZE];
+    float accumulator[ACCUMULATOR_SIZE];
     std::optional<int64_t> eval_cache;
 
     Position()
