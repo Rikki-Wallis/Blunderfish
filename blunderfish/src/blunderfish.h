@@ -283,7 +283,7 @@ struct Position {
     std::array<Undo, MAX_DEPTH> undo_stack;
     int undo_count;
 
-    alignas(32) float accumulator[NNUE_ACCUMULATOR_SIZE];
+    float accumulator[NNUE_ACCUMULATOR_SIZE];
     std::optional<int64_t> eval_cache;
 
     Position()

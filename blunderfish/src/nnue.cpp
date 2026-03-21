@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <cmath>
+#include <algorithm>
 
 #include "blunderfish.h"
 
