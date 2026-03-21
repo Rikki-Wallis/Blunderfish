@@ -10,8 +10,7 @@ static thread_local std::mt19937 rng(std::random_device{}());
 constexpr int NUM_ITERATIONS = 100;
 constexpr int NUM_MATCHES = 1000;
 constexpr int RANDOM_HALF_MOVES = 10;
-
-constexpr double TIME_LIMIT_PER_MOVE = 0.1;
+constexpr int SEARCH_DEPTH = 8;
 
 static const char* START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -74,7 +73,7 @@ static int run_match(FILE* file) {
             std::atomic<bool> should_stop = false;
 
             int64_t score = 0;
-            Move mv = pos.best_move_easy(40, should_stop, TIME_LIMIT_PER_MOVE, std::nullopt, false, &score);
+            Move mv = pos.best_move_easy(SEARCH_DEPTH, should_stop, std::nullopt, std::nullopt, false, &score);
 
             if (pos.to_move == BLACK) {
                 score *= -1;
