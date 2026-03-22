@@ -3,7 +3,7 @@ from nn import *
 import numpy as np
 
 model = NNUE()
-state_dict = torch.load("model_epoch1_val0.012021.pt", map_location="cpu")
+state_dict = torch.load("model_epoch10_val0.005863.pt", map_location="cpu")
 state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
 model.load_state_dict(state_dict)
 model.eval()

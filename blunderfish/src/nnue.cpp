@@ -7,8 +7,8 @@
 
 static_assert(ACCUMULATOR_SIZE == NNUE_ACCUMULATOR_SIZE);
 
-inline float relu(float x) {
-    return std::max(x, 0.0f);
+inline float crelu(float x) {
+    return std::clamp(x, 0.0f, 1.0f);
 }
 
 inline float sigmoid(float x) {
@@ -42,7 +42,7 @@ float nnue_infer(std::span<uint64_t> bbs) {
             a0[i] += nnue_w0[j][i] * input[j];
         }
 
-        a0[i] = relu(a0[i]);
+        a0[i] = crelu(a0[i]);
     }
 
     float a1[std::size(nnue_b1)];
@@ -54,7 +54,7 @@ float nnue_infer(std::span<uint64_t> bbs) {
             a1[i] += nnue_w1[i][j] * a0[j];
         }
 
-        a1[i] = relu(a1[i]);
+        a1[i] = crelu(a1[i]);
     }
 
     float out = nnue_b2[0];
@@ -163,7 +163,7 @@ int64_t Position::get_eval() {
     float a0[std::size(nnue_b0)];
 
     for (size_t i = 0; i < std::size(a0); ++i) {
-        a0[i] = relu(accumulator[i]);
+        a0[i] = crelu(accumulator[i]);
     }
 
     float a1[std::size(nnue_b1)];
@@ -175,7 +175,7 @@ int64_t Position::get_eval() {
             a1[i] += nnue_w1[i][j] * a0[j];
         }
 
-        a1[i] = relu(a1[i]);
+        a1[i] = crelu(a1[i]);
     }
 
     float out = nnue_b2[0];

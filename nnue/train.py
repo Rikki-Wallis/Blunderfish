@@ -13,7 +13,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = NNUE()
 model = torch.compile(model)
 model = model.to(device)
-#model.load_state_dict(torch.load("model_epoch10_val0.013123.pt"))
+model.load_state_dict(torch.load("model_epoch10_val0.005863.pt"))
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 loss_fn = nn.MSELoss()

@@ -60,9 +60,9 @@ class NNUE(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(768, 256),
-            nn.ReLU(),
+            nn.Hardtanh(0, 1),
             nn.Linear(256, 32),
-            nn.ReLU(),
+            nn.Hardtanh(0, 1),
             nn.Linear(32, 1),
             nn.Sigmoid()
         )
