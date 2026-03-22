@@ -1,5 +1,7 @@
 import argparse
 import struct
+import math
+import random
 
 parser = argparse.ArgumentParser(description="Embed NNUE model into a C++ header")
 parser.add_argument("model_bin_path", help="Path to the model binary file")
@@ -33,44 +35,6 @@ b1 = read_floats(n2)
 w2 = read_float_matrix(1, n2);
 b2 = read_floats(1)
 
-out = open(header_path, "w")
-
-out.write("#pragma once\n\n")
-out.write(f"constexpr size_t NNUE_INPUT_FEATURES = {ninputs};\n")
-out.write(f"constexpr size_t NNUE_ACCUMULATOR_SIZE = {n1};\n\n")
-
-def write_matrix(m, name):
-    global out
-
-    rows = len(m)
-    cols = len(m[0])
-
-    out.write(f"static const float nnue_{name}[{rows}][{cols}] = {{\n")
-    for i in range(rows):
-        out.write("    { ")
-        for j in range(cols):
-            if j > 0:
-                out.write(", ")
-            out.write(f"{m[i][j]}f")
-        out.write(" },\n")
-    out.write("};\n\n");
-
-def write_vector(v, name):
-    global out
-
-    n = len(v)
-
-    out.write(f"static const float nnue_{name}[{n}] = {{\n")
-    out.write("  ")
-
-    for i in range(n):
-        if i > 0:
-            out.write(", ")
-        out.write(f"{v[i]}f")
-
-    out.write("\n")
-    out.write("};\n\n");
-
 def transpose(m):
     rows = len(m)
     cols = len(m[0])
@@ -85,9 +49,70 @@ def transpose(m):
 
 w0_t = transpose(w0)
 
-write_matrix(w0_t, "w0")
-write_vector(b0, "b0")
-write_matrix(w1, "w1")
-write_vector(b1, "b1")
-write_matrix(w2, "w2")
-write_vector(b2, "b2")
+# quantize the weights
+
+def quantize_matrix(m, q, bitwidth):
+    qm = [[int(round(q*x)) for x in row] for row in m]
+    assert all(abs(x) <= (1 << bitwidth)-2 for row in qm for x in row)
+    return qm
+
+def quantize_vector(v, q, bitwidth):
+    qv = [int(round(q*x)) for x in v]
+    assert all(abs(x) <= (1 << bitwidth)-2 for x in qv)
+    return qv
+
+w0_t = quantize_matrix(w0_t, 64, 16)
+b0 = quantize_vector(b0, 64, 32)
+
+w1 = quantize_matrix(w1, 64, 16)
+b1 = quantize_vector(b1, 64*127, 32)
+
+w2 = quantize_matrix(w2, 64, 16)
+b2 = quantize_vector(b2, 64*127, 32)
+
+# write the header
+
+out = open(header_path, "w")
+
+out.write("#pragma once\n\n")
+out.write(f"constexpr size_t NNUE_INPUT_FEATURES = {ninputs};\n")
+out.write(f"constexpr size_t NNUE_ACCUMULATOR_SIZE = {n1};\n\n")
+
+def write_matrix(m, name, type):
+    global out
+
+    rows = len(m)
+    cols = len(m[0])
+
+    out.write(f"static const {type} nnue_{name}[{rows}][{cols}] = {{\n")
+    for i in range(rows):
+        out.write("    { ")
+        for j in range(cols):
+            if j > 0:
+                out.write(", ")
+            out.write(f"{m[i][j]}")
+        out.write(" },\n")
+    out.write("};\n\n");
+
+def write_vector(v, name, type):
+    global out
+
+    n = len(v)
+
+    out.write(f"static const {type} nnue_{name}[{n}] = {{\n")
+    out.write("  ")
+
+    for i in range(n):
+        if i > 0:
+            out.write(", ")
+        out.write(f"{v[i]}")
+
+    out.write("\n")
+    out.write("};\n\n");
+
+write_matrix(w0_t, "w0", "int16_t")
+write_vector(b0,   "b0", "int32_t")
+write_matrix(w1,   "w1", "int16_t")
+write_vector(b1,   "b1", "int32_t")
+write_matrix(w2,   "w2", "int16_t")
+write_vector(b2,   "b2", "int32_t")

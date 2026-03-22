@@ -5,19 +5,22 @@
 #include "blunderfish.h"
 #include "nnue_embed.h"
 
+static constexpr int32_t RELU_Q = 127;
+
 static_assert(ACCUMULATOR_SIZE == NNUE_ACCUMULATOR_SIZE);
 
-inline float crelu(float x) {
-    return std::clamp(x, 0.0f, 1.0f);
+inline int32_t scaled_crelu(int32_t x, int32_t q) {
+    return std::clamp(x*RELU_Q/q, 0, RELU_Q);
 }
 
-inline float sigmoid(float x) {
-    return 1.0f / (1.0f + std::exp(-x));
+inline float scaled_sigmoid(int32_t x, int32_t q) {
+    float xf = float(x)/float(q);
+    return 1.0f / (1.0f + std::exp(-xf));
 }
 
-inline std::array<float, NNUE_INPUT_FEATURES> bbs_to_input(std::span<uint64_t> bbs) 
+inline std::array<int16_t, NNUE_INPUT_FEATURES> bbs_to_input(std::span<uint64_t> bbs) 
 {
-    std::array<float, NNUE_INPUT_FEATURES> input{};
+    std::array<int16_t, NNUE_INPUT_FEATURES> input{};
 
     for (int side = 0; side < 2; ++side) {
         for (int p = 0; p < 6; ++p) {
@@ -33,36 +36,37 @@ inline std::array<float, NNUE_INPUT_FEATURES> bbs_to_input(std::span<uint64_t> b
 float nnue_infer(std::span<uint64_t> bbs) {
     auto input = bbs_to_input(bbs);
 
-    float a0[std::size(nnue_b0)];
+    int32_t a0[std::size(nnue_b0)];
 
     for (size_t i = 0; i < std::size(a0); ++i) {
         a0[i] = nnue_b0[i];
 
         for (size_t j = 0; j < std::size(input); ++j) {
-            a0[i] += nnue_w0[j][i] * input[j];
+            a0[i] += int32_t(nnue_w0[j][i]) * int32_t(input[j]);
         }
 
-        a0[i] = crelu(a0[i]);
+        a0[i] = scaled_crelu(a0[i], 64);
     }
 
-    float a1[std::size(nnue_b1)];
+    int32_t a1[std::size(nnue_b1)];
 
     for (size_t i = 0; i < std::size(a1); ++i) {
         a1[i] = nnue_b1[i];
 
         for (size_t j = 0; j < std::size(a0); ++j) {
-            a1[i] += nnue_w1[i][j] * a0[j];
+            a1[i] += int32_t(nnue_w1[i][j]) * int32_t(a0[j]);
         }
 
-        a1[i] = crelu(a1[i]);
+        a1[i] = scaled_crelu(a1[i], 64*127);
     }
 
-    float out = nnue_b2[0];
+    int32_t out = nnue_b2[0];
+
     for (size_t j = 0; j < std::size(a1); ++j) {
-        out += nnue_w2[0][j] * a1[j];
+        out += int32_t(nnue_w2[0][j]) * int32_t(a1[j]);
     }
 
-    return sigmoid(out);
+    return scaled_sigmoid(out, 64*127);
 }
 
 inline int64_t wdl_to_centipawns(float wdl) {
@@ -86,7 +90,7 @@ void Position::reset_nnue_accumulator() {
         accumulator[i] = nnue_b0[i];
 
         for (size_t j = 0; j < input.size(); ++j) {
-            accumulator[i] += nnue_w0[j][i] * input[j];
+            accumulator[i] += int32_t(nnue_w0[j][i]) * int32_t(input[j]);
         }
     }
 #endif
@@ -119,23 +123,21 @@ void Position::update_eval(Piece captured_piece, int captured_pos, Piece moving_
         return (side * 6 + bbs_piece_index[piece])*64+pos;
     };
 
-    float sf = float(sign);
-
     // move the piece and castle rook moves
 
     for (size_t i = 0; i < std::size(nnue_b0); ++i) {
-        accumulator[i] -= sf * nnue_w0[feature(moving_piece_start, move_from, side)][i];
-        accumulator[i] += sf * nnue_w0[feature(moving_piece_end, move_to, side)][i];
+        accumulator[i] -= sign * int32_t(nnue_w0[feature(moving_piece_start, move_from, side)][i]);
+        accumulator[i] += sign * int32_t(nnue_w0[feature(moving_piece_end, move_to, side)][i]);
 
-        accumulator[i] -= sf * nnue_w0[feature(PIECE_ROOK, rook_from, side)][i];
-        accumulator[i] += sf * nnue_w0[feature(PIECE_ROOK, rook_to, side)][i];
+        accumulator[i] -= sign * int32_t(nnue_w0[feature(PIECE_ROOK, rook_from, side)][i]);
+        accumulator[i] += sign * int32_t(nnue_w0[feature(PIECE_ROOK, rook_to, side)][i]);
     }
 
     // remove the captured piece
 
     if (captured_piece != PIECE_NONE) {
         for (size_t i = 0; i < std::size(nnue_b0); ++i) {
-            accumulator[i] -= sf * nnue_w0[feature(captured_piece, captured_pos, opponent(side))][i];
+            accumulator[i] -= sign * int32_t(nnue_w0[feature(captured_piece, captured_pos, opponent(side))][i]);
         }
     }
 
@@ -160,31 +162,31 @@ int64_t Position::get_eval() {
     }
 
 #ifdef USE_NNUE
-    float a0[std::size(nnue_b0)];
+    int32_t a0[std::size(nnue_b0)];
 
     for (size_t i = 0; i < std::size(a0); ++i) {
-        a0[i] = crelu(accumulator[i]);
+        a0[i] = scaled_crelu(accumulator[i], 64);
     }
 
-    float a1[std::size(nnue_b1)];
+    int32_t a1[std::size(nnue_b1)];
 
     for (size_t i = 0; i < std::size(a1); ++i) {
         a1[i] = nnue_b1[i];
 
         for (size_t j = 0; j < std::size(a0); ++j) {
-            a1[i] += nnue_w1[i][j] * a0[j];
+            a1[i] += int32_t(nnue_w1[i][j]) * int32_t(a0[j]);
         }
 
-        a1[i] = crelu(a1[i]);
+        a1[i] = scaled_crelu(a1[i], 64*127);
     }
 
-    float out = nnue_b2[0];
+    int32_t out = nnue_b2[0];
 
     for (size_t j = 0; j < std::size(a1); ++j) {
-        out += nnue_w2[0][j] * a1[j];
+        out += int32_t(nnue_w2[0][j]) * int32_t(a1[j]);
     }
 
-    eval_cache = wdl_to_centipawns(sigmoid(out));
+    eval_cache = wdl_to_centipawns(scaled_sigmoid(out, 64*127));
 #else
     eval_cache = compute_eval();
 #endif

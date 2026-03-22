@@ -12,7 +12,7 @@
 
 #include "common.h"
 
-//#define USE_NNUE
+#define USE_NNUE
 
 constexpr size_t ACCUMULATOR_SIZE = 256;
 
@@ -282,7 +282,7 @@ struct Position {
     std::array<Undo, MAX_DEPTH> undo_stack;
     int undo_count;
 
-    float accumulator[ACCUMULATOR_SIZE];
+    int32_t accumulator[ACCUMULATOR_SIZE];
     std::optional<int64_t> eval_cache;
 
     Position()
