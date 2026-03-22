@@ -980,3 +980,15 @@ bool Position::is_move_legal_slow(Move move) {
 
     return false;
 }
+
+bool Position::is_quiescent() {
+    if (is_checked[to_move]) {
+        return false;
+    }
+
+    std::array<Move, 256> move_buf;
+    std::span<Move> captures = generate_captures(move_buf);
+    filter_moves(captures);
+
+    return captures.size() == 0;
+}

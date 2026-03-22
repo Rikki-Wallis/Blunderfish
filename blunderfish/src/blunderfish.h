@@ -363,6 +363,8 @@ struct Position {
 
     void reset_benchmarking_statistics();
 
+    bool is_quiescent();
+
     // eval
     int64_t pawn_structure(int colour, uint64_t ally_pawn_bb) const;
     int64_t king_safety(int colour, uint64_t king_bb, uint64_t pawn_bb) const;

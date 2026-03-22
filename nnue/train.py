@@ -2,6 +2,7 @@ from nn import *
 
 dataset = NNUEDataset("dataset")
 #dataset.samples = dataset.samples[:100_000]
+print(f"Training on {len(dataset)} dataset samples")
 
 train, val = random_split(dataset, [0.9, 0.1])
 train_loader = DataLoader(train, batch_size=1024, shuffle=True)
@@ -12,7 +13,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = NNUE()
 model = torch.compile(model)
 model = model.to(device)
-model.load_state_dict(torch.load("model_epoch7_val0.012562.pt"))
+#model.load_state_dict(torch.load("model_epoch10_val0.013123.pt"))
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 loss_fn = nn.MSELoss()

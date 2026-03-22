@@ -17,7 +17,7 @@ static const char* START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQ
 static std::mutex io_mutex;
 
 struct Record {
-    uint64_t bbs[12];
+    std::array<uint64_t, 12> bbs;
     int32_t score;
 };
 
@@ -53,22 +53,6 @@ static int run_match(FILE* file) {
             pos.make_move(mv);
         }
         else { // after that, we let the engine make the move
-            Record r;
-
-            Piece pieces[6] = {
-                PIECE_PAWN,
-                PIECE_KNIGHT,
-                PIECE_BISHOP,
-                PIECE_ROOK,
-                PIECE_QUEEN,
-                PIECE_KING
-            };
-
-            for (int side = 0; side < 2; ++side) {
-                for (int pid = 0; pid < 6; ++pid) {
-                    r.bbs[side*6+pid] = pos.sides[side].bb[pieces[pid]];
-                }
-            }
 
             std::atomic<bool> should_stop = false;
 
@@ -79,9 +63,10 @@ static int run_match(FILE* file) {
                 score *= -1;
             }
 
-            r.score = int32_t(score);
-
-            if (std::abs(score) < (MATE_SCORE - 1000)) { // filter out mate scores
+            if (pos.is_quiescent() && std::abs(score) < (MATE_SCORE - 1000)) { // filter out mate scores
+                Record r;
+                r.score = int32_t(score);
+                r.bbs = pos.to_bitboards();
                 records.push_back(r);
             }
 
@@ -96,7 +81,7 @@ static int run_match(FILE* file) {
     {
         std::lock_guard g(io_mutex);
         for (Record& r : records) {
-            fwrite(&r.bbs, sizeof(r.bbs), 1, file);
+            fwrite(r.bbs.data(), r.bbs.size() * sizeof(uint64_t), 1, file);
             fwrite(&r.score, sizeof(r.score), 1, file);
             fwrite(&outcome, sizeof(outcome), 1, file);
         }
