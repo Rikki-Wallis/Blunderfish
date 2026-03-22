@@ -25,7 +25,7 @@ inline std::array<int16_t, NNUE_INPUT_FEATURES> bbs_to_input(std::span<uint64_t>
     for (int side = 0; side < 2; ++side) {
         for (int p = 0; p < 6; ++p) {
             for (int x : set_bits(bbs[side*6+p])) {
-                input[(side*6+p)*64+x] = 1.0f;
+                input[(side*6+p)*64+x] = 1;
             }
         }
     }
