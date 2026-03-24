@@ -1,6 +1,6 @@
 # Blunderfish
 
-A modern chess engine written in C++20 with UCI protocol support, SPSA parameter tuning, self-trained NNUE and comprehensive testing. On Lichess as [BlunderfishEngine]("https://lichess.org/@/BlunderfishEngine").
+A modern chess engine written in C++20 with UCI protocol support, SPSA parameter tuning, self-trained NNUE and comprehensive testing. On Lichess as [BlunderfishEngine](https://lichess.org/@/BlunderfishEngine).
 
 ## Features
 
