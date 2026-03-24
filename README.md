@@ -1,6 +1,6 @@
 # Blunderfish
 
-A modern chess engine written in C++20 with UCI protocol support, a web-based GUI, SPSA parameter tuning, and comprehensive testing.
+A modern chess engine written in C++20 with UCI protocol support, SPSA parameter tuning, self-trained NNUE and comprehensive testing.
 
 ## Features
 
@@ -24,6 +24,7 @@ A modern chess engine written in C++20 with UCI protocol support, a web-based GU
 - King safety (castling rights, pawn shelter, open files)
 - Pawn structure (isolated, doubled, connected, passed pawns)
 - Bishop pair bonus
+- Working on a Efficiently Updatable Neural Network (NNUE)
 
 ### Board Representation
 - Bitboards with magic bitboard move generation
@@ -31,11 +32,11 @@ A modern chess engine written in C++20 with UCI protocol support, a web-based GU
 
 ### Other
 - UCI protocol support
-- Web UI for playing against the engine in a browser
 - SPSA parameter tuning via self-play
-- Opening book generation
 - Perft testing
 - Benchmarking suite
+- Pytorch training
+- NNUE data-set generation via self-play
 
 ## Building
 
@@ -54,7 +55,7 @@ This builds the following targets:
 | `uci` | UCI protocol interface |
 | `benchmark` | Performance benchmarking tool |
 | `spsa` | SPSA parameter tuning via self-play |
-| `opening_gen` | Random opening position generator |
+| `datagen` | Position-label generator for training NNUE |
 | `precompute_tables` | Magic bitboard table generator (runs at build time) |
 
 Tests are built automatically and can be run with:
@@ -63,18 +64,6 @@ Tests are built automatically and can be run with:
 ctest
 ```
 
-## Web UI
-
-The web UI lets you play against Blunderfish in a browser with drag-and-drop piece movement, adjustable engine depth, move history, FEN input/output, PGN download, and board flipping.
-
-```bash
-cd webui
-npm install
-npm start
-```
-
-The server runs on `localhost:3000` and communicates with the engine binary via a REST API.
-
 ## Testing
 
 The test suite uses [Catch2](https://github.com/catchorg/Catch2) and covers:
@@ -82,7 +71,7 @@ The test suite uses [Catch2](https://github.com/catchorg/Catch2) and covers:
 - **Perft** — move generation correctness against known node counts
 - **FEN** — encoding/decoding roundtrip verification
 - **Zobrist** — hash function validation
-- **Eval** — evaluation function output verification
+- **Eval** — incremental evaluation function output verification
 - **Best move** — search result correctness
 - **Misc** — chess rules and utility functions
 
