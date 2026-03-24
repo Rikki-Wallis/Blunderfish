@@ -1,7 +1,7 @@
 from nn import *
 
 dataset = NNUEDataset("dataset")
-#dataset.samples = dataset.samples[:100_000]
+#dataset.samples = dataset.samples[:1000]
 print(f"Training on {len(dataset)} dataset samples")
 
 train, val = random_split(dataset, [0.9, 0.1])
@@ -13,14 +13,17 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = NNUE()
 model = torch.compile(model)
 model = model.to(device)
-model.load_state_dict(torch.load("model_epoch10_val0.005863.pt"))
+model.load_state_dict(torch.load("model_epoch1_val0.004138.pt"))
 
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+num_epochs = 30
+
+optimizer = torch.optim.AdamW(model.parameters(), lr=3e-5)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
 loss_fn = nn.MSELoss()
 
 start = time.perf_counter()
 
-for epoch in range(10):
+for epoch in range(num_epochs):
     train_loss = 0
 
     i = 0
@@ -38,7 +41,7 @@ for epoch in range(10):
 
         if (i + 1) % 100 == 0:
             elapsed = time.perf_counter() - start
-            print(f"Batch {i+1}: {elapsed:.2f}s per 100 batches")
+            print(f"Batch {i+1}: {elapsed:.2f}s per 100 batches (loss={loss.item()})")
             start = time.perf_counter()
 
         i += 1
@@ -57,3 +60,5 @@ for epoch in range(10):
     model.train()
 
     torch.save(model.state_dict(), f"model_epoch{epoch+1}_val{val_loss:.6f}.pt")
+
+    scheduler.step()
