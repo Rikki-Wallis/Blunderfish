@@ -20,19 +20,20 @@ def read_floats(n):
 def read_float_matrix(rows, cols):
     return [read_floats(cols) for _ in range(rows)]
 
-ninputs = 768
-n1 = 256
-n2 = 32
+num_inputs = 64*64*10
+l1_output = 256
+l2_input = l1_output*2
+l3_input = 32
 
 # load the weights
 
-w0 = read_float_matrix(n1, ninputs)
-b0 = read_floats(n1)
+w0 = read_float_matrix(l1_output, num_inputs)
+b0 = read_floats(l1_output)
 
-w1 = read_float_matrix(n2, n1)
-b1 = read_floats(n2)
+w1 = read_float_matrix(l3_input, l2_input)
+b1 = read_floats(l3_input)
 
-w2 = read_float_matrix(1, n2);
+w2 = read_float_matrix(1, l3_input);
 b2 = read_floats(1)
 
 def transpose(m):
@@ -75,8 +76,8 @@ b2 = quantize_vector(b2, 64*127, 32)
 out = open(header_path, "w")
 
 out.write("#pragma once\n\n")
-out.write(f"constexpr size_t NNUE_INPUT_FEATURES = {ninputs};\n")
-out.write(f"constexpr size_t NNUE_ACCUMULATOR_SIZE = {n1};\n\n")
+out.write(f"constexpr size_t NNUE_INPUT_FEATURES = {num_inputs};\n")
+out.write(f"constexpr size_t NNUE_ACCUMULATOR_SIZE = {l2_input};\n\n")
 
 def write_matrix(m, name, type):
     global out

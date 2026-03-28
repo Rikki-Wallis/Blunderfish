@@ -1,4 +1,4 @@
-from nn import *
+from model import *
 
 import argparse
 import numpy as np
@@ -13,7 +13,7 @@ state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
 model.load_state_dict(state_dict)
 model.eval()
 
-layers = [model.net[0], model.net[2], model.net[4]]
+layers = [model.l1, model.l2, model.l3]
 
 with open("model.bin", "wb") as f:
     for layer in layers:

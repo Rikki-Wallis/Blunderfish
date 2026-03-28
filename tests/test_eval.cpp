@@ -4,9 +4,7 @@
 static void check_eval(Position& position) {
     int64_t new_eval = position.compute_eval();
 
-    if (std::abs(new_eval - position.get_eval()) > 2) {
-        position.display();
-    }
+    //print("{}, {}\n", new_eval, position.get_eval());
 
     REQUIRE(std::abs(new_eval - position.get_eval()) <= 2);
 }
@@ -49,10 +47,10 @@ void eval_search(int depth, Position& position) {
 
 TEST_CASE("Eval - increment_eval equals eval | STARTING POSITION") {
     Position pos = *Position::decode_fen_string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-    eval_search(3, pos);
+    eval_search(4, pos);
 }
 
 TEST_CASE("Eval - increment_eval equals eval | KIWIPETE_POSITION") {
     Position pos = *Position::decode_fen_string("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -");
-    eval_search(3, pos);
+    eval_search(4, pos);
 }

@@ -1,11 +1,11 @@
-from nn import *
+from model import *
 
 import chess
 import subprocess
 import math
 
 model = NNUE()
-state_dict = torch.load("model_epoch30_val0.004332.pt", map_location="cpu")
+state_dict = torch.load("model_epoch2_val0.489208.pt", map_location="cpu")
 state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
 model.load_state_dict(state_dict)
 model.eval()
@@ -68,7 +68,7 @@ fens = [
     "1n1qkbnr/1p2pppp/r7/2pp1b2/p3P2P/N1P2N2/PP1P1PP1/R1BQK2R w Kk - 2 1",
 ]
 
-def fen_to_input(fen):
+def fen_to_bitboards(fen):
     board = chess.Board(fen)
 
     pieces = [
@@ -85,16 +85,34 @@ def fen_to_input(fen):
         chess.BLACK
     ]
 
-    input = [0.0]*768
+    bitboards = [0]*12
 
     for si, side in enumerate(sides):
         for pi, p in enumerate(pieces):
             sqs = board.pieces(p, side)
-            for i in range(64):
-                if i in sqs:
-                    input[(si*6+pi)*64+i] = 1.0
+            for sq in range(64):
+                if sq in sqs:
+                    bitboards[si*6+pi] |= (1<<sq)
 
-    return torch.tensor(input)
+    return bitboards
+
+def bitboards_to_inputs(bbs):
+    white_features = bitboards_to_indices(bbs, 0)
+    black_features = bitboards_to_indices(bbs, 1)
+
+    white_indices = torch.zeros(len(white_features),dtype=torch.long)
+    black_indices = torch.zeros(len(black_features),dtype=torch.long)
+
+    return (
+        torch.tensor(white_features,dtype=torch.long),
+        white_indices,
+        torch.tensor(black_features,dtype=torch.long),
+        black_indices,
+    )
+
+def fen_to_inputs(fen):
+    bbs = fen_to_bitboards(fen)
+    return bitboards_to_inputs(bbs)
 
 def clamp(x, x0, x1):
     return min(max(x, x0), x1)
@@ -109,8 +127,12 @@ def cpp_eval(fen):
         raise "cpp eval failed"
     return result.stdout.strip()
 
+def sigmoid(x):
+    return 1/(1+math.exp(-x))
+
 for f in fens:
-    x = fen_to_input(f)
-    y = model(x).item()
+    white_features, white_indices, black_features, black_indices = fen_to_inputs(f)
+    logits = model(1, white_features, white_indices, black_features, black_indices).item()
+    y = sigmoid(logits)
     z = cpp_eval(f)
     print(f"torch: {y}, cpp: {z}")
