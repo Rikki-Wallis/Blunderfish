@@ -3,16 +3,29 @@
 #include <algorithm>
 #include <bit>
 
+#include <immintrin.h>
+
 #include "blunderfish.h"
 #include "nnue_embed.h"
+
+//static int16_t nnue_w0[10][10];
+//static int16_t nnue_b0[10];
+//static int16_t nnue_w1[10][10];
+//static int32_t nnue_b1[10];
+//static int16_t nnue_w2[10][10];
+//static int32_t nnue_b2[10];
 
 static constexpr int32_t RELU_Q = 127;
 static constexpr int NNUE_INPUT_FEAUTURES = 64*10*64;
 
 static_assert(ACCUMULATOR_SIZE == NNUE_ACCUMULATOR_SIZE);
 
-inline int32_t scaled_crelu(int32_t x, int32_t q) {
-    return std::clamp(x*RELU_Q/q, 0, RELU_Q);
+template<typename T>
+inline T scaled_crelu(T x, T q) {
+    T sx = x*T(RELU_Q)/q;
+    T lo = 0;
+    T hi = RELU_Q;
+    return std::clamp(sx, lo, hi);
 }
 
 inline float scaled_sigmoid(int32_t x, int32_t q) {
@@ -24,8 +37,14 @@ inline int flip_sq(int sq) {
     return sq ^ 56;
 }
 
-static std::vector<int> get_king_perspective_indices(std::span<uint64_t> bbs, int king_side) {
-    std::vector<int> indices;
+struct ActiveIndices {
+    int data[64];
+    int count;
+};
+
+static ActiveIndices get_king_perspective_indices(std::span<uint64_t> bbs, int king_side) {
+    ActiveIndices indices;
+    indices.count = 0;
 
     int king_index[] = {
         5,
@@ -46,7 +65,9 @@ static std::vector<int> get_king_perspective_indices(std::span<uint64_t> bbs, in
             for (int sq : set_bits(bb)) {
                 int rel_sq = king_side == BLACK ? flip_sq(sq) : sq;
                 int idx = king_sq*64*10+(rel_side*5+piece)*64 + rel_sq;
-                indices.push_back(idx);
+
+                assert(indices.count < std::size(indices.data));
+                indices.data[indices.count++] = idx;
             }
         }
     }
@@ -54,38 +75,42 @@ static std::vector<int> get_king_perspective_indices(std::span<uint64_t> bbs, in
     return indices;
 }
 
-static void feed_l1(std::span<int32_t> a0, std::span<int> set_indices) {
+static void feed_l1(std::span<int16_t> a0, const ActiveIndices& set_indices) {
     for (size_t i = 0; i < std::size(a0); ++i) {
         a0[i] = nnue_b0[i];
 
-        for (int j : set_indices) {
-            a0[i] += int32_t(nnue_w0[j][i]);
+        for (int ji = 0; ji < set_indices.count; ++ji) {
+            int j = set_indices.data[ji];
+            a0[i] += nnue_w0[j][i];
         }
     }
 }
 
-float nnue_infer(std::span<uint64_t> bbs) {
-    std::array<int32_t, std::size(nnue_b0)*2> a0;
+static float forward_accumulator(std::span<int16_t> accumulator) {
+    alignas(32) int16_t a0[std::size(nnue_b0)*2];
 
-    auto white_persp = get_king_perspective_indices(bbs, WHITE);
-    auto black_persp = get_king_perspective_indices(bbs, BLACK);
-
-    feed_l1(std::span(a0).subspan(0, std::size(nnue_b0)), white_persp);
-    feed_l1(std::span(a0).subspan(std::size(nnue_b0), std::size(nnue_b0)), black_persp);
-
-    for (auto& x : a0) {
-        x = scaled_crelu(x, 64);
+    for (size_t i = 0; i < std::size(a0); ++i) {
+        a0[i] = scaled_crelu(accumulator[i], int16_t(64));
     }
 
     int32_t a1[std::size(nnue_b1)];
 
     for (size_t i = 0; i < std::size(a1); ++i) {
-        a1[i] = nnue_b1[i];
+        __m256i sum256 = _mm256_setzero_si256(); // 8x int32s to zero
 
-        for (size_t j = 0; j < std::size(a0); ++j) {
-            a1[i] += int32_t(nnue_w1[i][j]) * int32_t(a0[j]);
+        for (size_t j = 0; j < std::size(a0); j += 16) {
+            __m256i act = _mm256_load_si256((const __m256i*)&a0[j]);
+            __m256i w = _mm256_load_si256((const __m256i*)&nnue_w1[i][j]);
+
+            __m256i prod = _mm256_madd_epi16(act, w);
+            sum256 = _mm256_add_epi32(sum256, prod);
         }
 
+        __m128i sum128 = _mm_add_epi32(_mm256_castsi256_si128(sum256), _mm256_extracti128_si256(sum256, 1));
+        sum128 = _mm_add_epi32(sum128, _mm_shuffle_epi32(sum128, _MM_SHUFFLE(1, 0, 3, 2)));
+        sum128 = _mm_add_epi32(sum128, _mm_shuffle_epi32(sum128, _MM_SHUFFLE(2, 3, 0, 1)));
+
+        a1[i] = nnue_b1[i] + _mm_cvtsi128_si32(sum128);
         a1[i] = scaled_crelu(a1[i], 64*127);
     }
 
@@ -96,6 +121,19 @@ float nnue_infer(std::span<uint64_t> bbs) {
     }
 
     return scaled_sigmoid(out, 64*127);
+}
+
+
+float nnue_infer(std::span<uint64_t> bbs) {
+    std::array<int16_t, std::size(nnue_b0)*2> accumulator;
+
+    auto white_persp = get_king_perspective_indices(bbs, WHITE);
+    auto black_persp = get_king_perspective_indices(bbs, BLACK);
+
+    feed_l1(std::span(accumulator).subspan(0, std::size(nnue_b0)), white_persp);
+    feed_l1(std::span(accumulator).subspan(std::size(nnue_b0), std::size(nnue_b0)), black_persp);
+
+    return forward_accumulator(accumulator);
 }
 
 inline int64_t wdl_to_centipawns(float wdl) {
@@ -132,7 +170,24 @@ static const size_t bbs_piece_index[NUM_PIECE_TYPES] = {
     5,
 }; 
 
-static void update_accumulator_from_king_perspective(std::span<int32_t> accumulator, Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side, int sign, int king_sq, int king_side) {
+static void move_piece_in_accumulator(std::span<int16_t> accumulator_half, size_t add_feature, size_t remove_feature, int sign) {
+    if (sign == -1) {
+        std::swap(add_feature, remove_feature);
+    }
+
+    for (size_t i = 0; i < accumulator_half.size(); i += 16) {
+        __m256i a = _mm256_load_si256((__m256i*)(&accumulator_half[i]));
+        __m256i add = _mm256_load_si256((__m256i*)&nnue_w0[add_feature][i]);
+        __m256i sub = _mm256_load_si256((__m256i*)&nnue_w0[remove_feature][i]);
+
+        a = _mm256_add_epi16(a, add);
+        a = _mm256_sub_epi16(a, sub);
+
+        _mm256_store_si256((__m256i*)(&accumulator_half[i]), a);
+    }
+}
+
+static void update_accumulator_from_king_perspective(std::span<int16_t> accumulator, Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side, int sign, int king_sq, int king_side) {
     // move the piece and castle rook moves
 
     auto accumulator_half = accumulator.subspan(king_side==BLACK ? ACCUMULATOR_SIZE/2 : 0, ACCUMULATOR_SIZE/2);
@@ -150,23 +205,33 @@ static void update_accumulator_from_king_perspective(std::span<int32_t> accumula
         return king_sq*64*10 + (piece_side*5+bbs_piece_index[piece])*64 + sq;
     };
 
-    for (size_t i = 0; i < accumulator_half.size(); ++i) {
-        if (moving_piece_start != PIECE_KING) {
-            accumulator_half[i] -= sign * int32_t(nnue_w0[feature(moving_piece_start, move_from, side)][i]);
-            accumulator_half[i] += sign * int32_t(nnue_w0[feature(moving_piece_end, move_to, side)][i]);
-        }
+    // moving piece
 
-        if (rook_from != rook_to) {
-            accumulator_half[i] -= sign * int32_t(nnue_w0[feature(PIECE_ROOK, rook_from, side)][i]);
-            accumulator_half[i] += sign * int32_t(nnue_w0[feature(PIECE_ROOK, rook_to, side)][i]);
-        }
+    if (moving_piece_start != PIECE_KING) {
+        move_piece_in_accumulator(accumulator_half, feature(moving_piece_end, move_to, side), feature(moving_piece_start, move_from, side), sign);
+    }
+
+    // rook movement for castling
+
+    if (rook_from != rook_to) {
+        move_piece_in_accumulator(accumulator_half, feature(PIECE_ROOK, rook_to, side), feature(PIECE_ROOK, rook_from, side), sign);
     }
 
     // remove the captured piece
 
     if (captured_piece != PIECE_NONE) {
-        for (size_t i = 0; i < accumulator_half.size(); ++i) {
-            accumulator_half[i] -= sign * int32_t(nnue_w0[feature(captured_piece, captured_pos, opponent(side))][i]);
+        for (size_t i = 0; i < accumulator_half.size(); i += 16) {
+            __m256i a = _mm256_load_si256((__m256i*)(&accumulator_half[i]));
+            __m256i w = _mm256_load_si256((__m256i*)&nnue_w0[feature(captured_piece, captured_pos, opponent(side))][i]);
+
+            if (sign == -1) {
+                a = _mm256_add_epi16(a, w);
+            }
+            else {
+                a = _mm256_sub_epi16(a, w);
+            }
+
+            _mm256_store_si256((__m256i*)(&accumulator_half[i]), a);
         }
     }
 }
@@ -220,31 +285,8 @@ int64_t Position::get_eval() {
     }
 
 #ifdef USE_NNUE
-    int32_t a0[std::size(nnue_b0)*2];
-
-    for (size_t i = 0; i < std::size(a0); ++i) {
-        a0[i] = scaled_crelu(accumulator[i], 64);
-    }
-
-    int32_t a1[std::size(nnue_b1)];
-
-    for (size_t i = 0; i < std::size(a1); ++i) {
-        a1[i] = nnue_b1[i];
-
-        for (size_t j = 0; j < std::size(a0); ++j) {
-            a1[i] += int32_t(nnue_w1[i][j]) * int32_t(a0[j]);
-        }
-
-        a1[i] = scaled_crelu(a1[i], 64*127);
-    }
-
-    int32_t out = nnue_b2[0];
-
-    for (size_t j = 0; j < std::size(a1); ++j) {
-        out += int32_t(nnue_w2[0][j]) * int32_t(a1[j]);
-    }
-
-    eval_cache = wdl_to_centipawns(scaled_sigmoid(out, 64*127));
+    float x = forward_accumulator(accumulator);
+    eval_cache = wdl_to_centipawns(x);
 #else
     eval_cache = compute_eval();
 #endif

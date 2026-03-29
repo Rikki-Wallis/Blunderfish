@@ -85,7 +85,7 @@ def write_matrix(m, name, type):
     rows = len(m)
     cols = len(m[0])
 
-    out.write(f"static const {type} nnue_{name}[{rows}][{cols}] = {{\n")
+    out.write(f"alignas(32) static const {type} nnue_{name}[{rows}][{cols}] = {{\n")
     for i in range(rows):
         out.write("    { ")
         for j in range(cols):
@@ -100,7 +100,7 @@ def write_vector(v, name, type):
 
     n = len(v)
 
-    out.write(f"static const {type} nnue_{name}[{n}] = {{\n")
+    out.write(f"alignas(32) static const {type} nnue_{name}[{n}] = {{\n")
     out.write("  ")
 
     for i in range(n):
@@ -112,7 +112,7 @@ def write_vector(v, name, type):
     out.write("};\n\n");
 
 write_matrix(w0_t, "w0", "int16_t")
-write_vector(b0,   "b0", "int32_t")
+write_vector(b0,   "b0", "int16_t")
 write_matrix(w1,   "w1", "int16_t")
 write_vector(b1,   "b1", "int32_t")
 write_matrix(w2,   "w2", "int16_t")
