@@ -10,7 +10,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(MSVC)
     add_compile_options(
-        /W4 /WX /arch:AVX2 /wd4324
+        /W4 /WX /arch:AVX2 /wd4324 /wd4505
     )
 else()
     add_compile_options(
