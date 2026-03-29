@@ -149,25 +149,25 @@ struct TTCluster {
 
 #ifdef USE_NNUE
 struct SearchParameters {
-    float lmr_rate_base = 0.745546f;
-    float lmr_rate_divisor = 1.22021f;
-    float singular_margin_factor = 2.33643f;
-    int rfp_margin_factor = 162;
-    int rfp_improving_bonus = 27;
-    int fp_margin_factor = 919;
-    int lmr_history_bonus_threshold = 1913;
-    float history_bonus_factor = 1.2681f;
-    float history_malus_factor = 1.24323f;
-    float cont_history_bonus_factor = 0.373663f;
-    float cont_history_malus_factor = 0.873309f;
-    int qsearch_big_delta = 1204;
-    int qsearch_delta_margin = 273;
-    int asp_initial_window_size = 26;
-    float asp_window_growth_factor = 6.26217f;
-    float nmp_r_base = 1.83196f;
-    float nmp_r_divisor = 7.98059f;
-    float lmp_index_base = 3.10985f;
-    float lmp_index_factor = 1.94811f;
+    float lmr_rate_base = 0.51091f;
+    float lmr_rate_divisor = 0.77976f;
+    float singular_margin_factor = 2.1651f;
+    int rfp_margin_factor = 82;
+    int rfp_improving_bonus = 23;
+    int fp_margin_factor = 943;
+    int lmr_history_bonus_threshold = 1867;
+    float history_bonus_factor = 1.24317f;
+    float history_malus_factor = 1.07621f;
+    float cont_history_bonus_factor = 0.381102f;
+    float cont_history_malus_factor = 0.548828f;
+    int qsearch_big_delta = 1088;
+    int qsearch_delta_margin = 260;
+    int asp_initial_window_size = 19;
+    float asp_window_growth_factor = 4.56238f;
+    float nmp_r_base = 1.43495f;
+    float nmp_r_divisor = 6.41747f;
+    float lmp_index_base = 3.5142f;
+    float lmp_index_factor = 2.74838f;
 };
 #else
 struct SearchParameters {
