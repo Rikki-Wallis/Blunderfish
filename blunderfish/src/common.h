@@ -88,8 +88,11 @@ private:
 
 #if defined(__GNUC__) || defined(__clang__)
     #define RESTRICT __restrict__
+    #define ALWAYS_INLINE __attribute__((always_inline)) inline
 #elif defined(_MSC_VER)
     #define RESTRICT __restrict
+    #define ALWAYS_INLINE __forceinline
 #else
     #define RESTRICT
+    #define ALWAYS_INLINE inline
 #endif

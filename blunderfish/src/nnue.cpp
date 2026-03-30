@@ -194,16 +194,20 @@ static const size_t bbs_piece_index[NUM_PIECE_TYPES] = {
     5,
 }; 
 
-static void move_piece_in_accumulator(int16_t* RESTRICT accumulator_half, size_t add_feature, size_t remove_feature, int sign) {
-    if (sign == -1) {
-        std::swap(add_feature, remove_feature);
-    }
+template<int N_ADDS, int N_SUBS>
+ALWAYS_INLINE void update_accumulator_half(int16_t* RESTRICT accumulator_half, const size_t* adds, const size_t* subs) {
+    for (size_t i = 0; i < ACCUMULATOR_SIZE / 2; ++i) {
+        int16_t val = accumulator_half[i];
 
-    size_t N = ACCUMULATOR_SIZE / 2;
+        for (size_t j = 0; j < N_ADDS; ++j) {
+            val += int16_t(nnue_w0[adds[j]][i]);
+        }
 
-    for (size_t i = 0; i < N; ++i) {
-        accumulator_half[i] += int16_t(nnue_w0[add_feature][i]);
-        accumulator_half[i] -= int16_t(nnue_w0[remove_feature][i]);
+        for (size_t j = 0; j < N_SUBS; ++j) {
+            val -= int16_t(nnue_w0[subs[j]][i]);
+        }
+
+        accumulator_half[i] = val;
     }
 }
 
@@ -225,27 +229,75 @@ static void update_accumulator_from_king_perspective(int16_t* RESTRICT accumulat
         return king_sq*64*10 + (piece_side*5+bbs_piece_index[piece])*64 + sq;
     };
 
+
+    bool king_move = moving_piece_start == PIECE_KING;
+    bool is_castle = rook_from != rook_to;
+    bool is_capture = captured_piece != PIECE_NONE;
+
     // moving piece
 
-    if (moving_piece_start != PIECE_KING) {
-        move_piece_in_accumulator(accumulator_half, feature(moving_piece_end, move_to, side), feature(moving_piece_start, move_from, side), sign);
-    }
+    if (!king_move) {
+        if (is_capture) {
+            size_t adds[] = {
+                feature(moving_piece_end, move_to, side),
+            };
 
-    // rook movement for castling
+            size_t subs[] = {
+                feature(moving_piece_start, move_from, side),
+                feature(captured_piece, captured_pos, opponent(side))
+            };
 
-    if (rook_from != rook_to) {
-        move_piece_in_accumulator(accumulator_half, feature(PIECE_ROOK, rook_to, side), feature(PIECE_ROOK, rook_from, side), sign);
-    }
-
-    // remove the captured piece
-
-    if (captured_piece != PIECE_NONE) {
-        for (size_t i = 0; i < ACCUMULATOR_SIZE/2; i++) {
-            if (sign == -1) {
-                accumulator_half[i] += int16_t(nnue_w0[feature(captured_piece, captured_pos, opponent(side))][i]);
+            if (sign != -1) {
+                update_accumulator_half<std::size(adds), std::size(subs)>(accumulator_half, adds, subs);
             }
             else {
-                accumulator_half[i] -= int16_t(nnue_w0[feature(captured_piece, captured_pos, opponent(side))][i]);
+                update_accumulator_half<std::size(subs), std::size(adds)>(accumulator_half, subs, adds);
+            }
+        }
+        else {
+            size_t adds[] = {
+                feature(moving_piece_end, move_to, side),
+            };
+
+            size_t subs[] = {
+                feature(moving_piece_start, move_from, side),
+            };
+
+            if (sign != -1) {
+                update_accumulator_half<std::size(adds), std::size(subs)>(accumulator_half, adds, subs);
+            }
+            else {
+                update_accumulator_half<std::size(subs), std::size(adds)>(accumulator_half, subs, adds);
+            }
+        }
+    }
+    else {
+        if (is_castle) {
+            size_t adds[] = {
+                feature(PIECE_ROOK, rook_to, side)
+            };
+
+            size_t subs[] = {
+                feature(PIECE_ROOK, rook_from, side)
+            };
+
+            if (sign != -1) {
+                update_accumulator_half<std::size(adds), std::size(subs)>(accumulator_half, adds, subs);
+            }
+            else {
+                update_accumulator_half<std::size(subs), std::size(adds)>(accumulator_half, subs, adds);
+            }
+        }
+        else if (is_capture) {
+            size_t subs[] = {
+                feature(captured_piece, captured_pos, opponent(side))
+            };
+
+            if (sign != -1) {
+                update_accumulator_half<0, std::size(subs)>(accumulator_half, nullptr, subs);
+            }
+            else {
+                update_accumulator_half<std::size(subs), 0>(accumulator_half, subs, nullptr);
             }
         }
     }
