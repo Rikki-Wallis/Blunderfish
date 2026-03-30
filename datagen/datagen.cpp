@@ -24,8 +24,6 @@ struct Record {
 static int run_match(FILE* file) {
     Position pos = *Position::decode_fen_string(START_FEN);
 
-    std::array<Move, 256> move_buf;
-
     std::vector<Record> records;
 
     int result = 67;
@@ -44,11 +42,11 @@ static int run_match(FILE* file) {
         }
         
         if (hm < RANDOM_HALF_MOVES) { // For the first n moves, play random moves, to diversify the position
-            std::span<Move> moves = pos.generate_moves(move_buf);
+            MoveList moves = pos.generate_moves();
             pos.filter_moves(moves);
 
-            size_t move_idx = std::uniform_int_distribution<size_t>(0, moves.size() - 1)(rng);
-            Move mv = moves[move_idx];
+            size_t move_idx = std::uniform_int_distribution<size_t>(0, moves.count - 1)(rng);
+            Move mv = moves.data[move_idx];
 
             pos.make_move(mv);
         }
@@ -57,7 +55,7 @@ static int run_match(FILE* file) {
             std::atomic<bool> should_stop = false;
 
             int64_t score = 0;
-            Move mv = pos.best_move_easy(SEARCH_DEPTH, should_stop, std::nullopt, std::nullopt, false, &score);
+            Move mv = pos.best_move(SEARCH_DEPTH, should_stop, std::nullopt, std::nullopt, false, &score);
 
             if (pos.to_move == BLACK) {
                 score *= -1;

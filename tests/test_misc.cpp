@@ -5,11 +5,8 @@
 #include "blunderfish.h"
 
 static void test_capture_gen(Position& pos, int depth) {
-    std::array<Move, 256> move_buf;
-    std::array<Move, 256> capture_buf;
-
-    std::span<Move> moves = pos.generate_moves(move_buf);
-    std::span<Move> captures = pos.generate_captures(capture_buf);
+    MoveList moves = pos.generate_moves();
+    MoveList captures = pos.generate_captures();
 
     pos.filter_moves(moves);
     pos.filter_moves(captures);
@@ -26,19 +23,26 @@ static void test_capture_gen(Position& pos, int depth) {
 
     // remove non-captures
 
-    for (int i = (int)moves.size()-1; i >= 0; --i) {
-        Move mv = moves[i];
+    for (int i = moves.count-1; i >= 0; --i) {
+        Move mv = moves.data[i];
 
         if (!is_capture(mv)) {
-            moves[i] = moves.back();
-            moves = moves.subspan(0, moves.size()-1);
+            moves.data[i] = moves.data[--moves.count];
         }
     }
 
     // compare
 
-    std::unordered_set move_set(moves.begin(), moves.end());
-    std::unordered_set capture_set(captures.begin(), captures.end());
+    std::unordered_set<Move> move_set;
+    std::unordered_set<Move> capture_set;
+
+    for (Move mv : moves) {
+        move_set.insert(mv);
+    }
+
+    for (Move mv : captures) {
+        capture_set.insert(mv);
+    }
 
     REQUIRE(move_set == capture_set);
 }

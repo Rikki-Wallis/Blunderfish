@@ -6,15 +6,13 @@ uint64_t perft_search(int depth, Position& position) {
     
     // Bulk count instead
     if (depth == 1) {
-        std::array<Move, 256> move_buffer;
-        std::span<Move> moves = position.generate_moves(move_buffer);
+        MoveList moves = position.generate_moves();
         position.filter_moves(moves);
-        return moves.size();
+        return moves.count;
     }
 
     uint64_t nodes = 0;
-    std::array<Move, 256> move_buffer;
-    std::span<Move> moves = position.generate_moves(move_buffer);
+    MoveList moves = position.generate_moves();
 
     int side = position.to_move;
 

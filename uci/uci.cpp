@@ -238,7 +238,7 @@ int main() {
             should_stop = false;
             
             thread = std::thread([&position, depth, &should_stop, time_s](){
-                Move move = position.best_move_easy(depth, should_stop, time_s, std::nullopt, true);
+                Move move = position.best_move(depth, should_stop, time_s, std::nullopt, true);
                 std::cout << "bestmove " << to_uci_move(move) << "\n";
             });
         }

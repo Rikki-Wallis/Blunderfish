@@ -43,11 +43,11 @@ enum TTScoreFlag {
     TT_SCORE_LOWER
 };
 
-static Move select_best(std::span<Move>& moves, std::span<int32_t>& move_scores, int index) {
+static Move select_best(MoveList& moves, std::span<int32_t>& move_scores, int index) {
     int32_t best_score = INT32_MIN;
     int best_index = -1;
 
-    for (int i = index; i < (int)moves.size(); ++i) {
+    for (int i = index; i < moves.count; ++i) {
         int32_t score = move_scores[i];
 
         if (score > best_score) {
@@ -58,10 +58,10 @@ static Move select_best(std::span<Move>& moves, std::span<int32_t>& move_scores,
 
     assert(best_index != -1);
 
-    std::swap(moves[index], moves[best_index]);
+    std::swap(moves.data[index], moves.data[best_index]);
     std::swap(move_scores[index], move_scores[best_index]);
 
-    return moves[index];
+    return moves.data[index];
 }
 
 int32_t Position::mvv_lva_score(Move mv, int32_t offset) const{
@@ -110,11 +110,11 @@ bool update_tt_entry(TTEntry& entry, uint64_t zobrist, int depth, int64_t score,
     return false;
 }
 
-static std::span<int32_t> compute_move_scores(Position* pos, HistoryTable& history, KillerTable& killers, int ply, std::span<int32_t> score_buf, std::span<Move> moves, Move best_move, ContinuationTable* cont) {
-    std::span<int32_t> move_scores = score_buf.subspan(0, moves.size());
+static std::span<int32_t> compute_move_scores(Position* pos, HistoryTable& history, KillerTable& killers, int ply, std::span<int32_t> score_buf, const MoveList& moves, Move best_move, ContinuationTable* cont) {
+    std::span<int32_t> move_scores = score_buf.subspan(0, moves.count);
 
-    for (size_t i = 0; i < moves.size(); ++i) {
-        Move mv = moves[i];
+    for (int i = 0; i < moves.count; ++i) {
+        Move mv = moves.data[i];
 
         bool quiet = !is_capture(mv);
 
@@ -178,7 +178,7 @@ static TTEntry& find_entry(TranspositionTable& tt, uint64_t zobrist) {
     return cluster.entries[shallowest];
 }
 
-int64_t Position::pruned_negamax(SearchContext& s, int depth, int ply, bool allow_null, int64_t alpha, int64_t beta, Move excluded_move, int extensions_so_far, int root_depth, ContinuationTable* cont) {
+int64_t Position::negamax(SearchContext& s, int depth, int ply, bool allow_null, int64_t alpha, int64_t beta, Move excluded_move, int extensions_so_far, int root_depth, ContinuationTable* cont) {
     if ((node_count & 4095) == 0) {
         if (s.out_of_time()) {
             s.should_stop = true;
@@ -268,7 +268,7 @@ int64_t Position::pruned_negamax(SearchContext& s, int depth, int ply, bool allo
         int singular_margin = int(std::round(s.params.singular_margin_factor * float(depth)));
         int singular_beta = match.score - singular_margin;
 
-        int64_t exc_score = pruned_negamax(s, depth/2, ply, false, singular_beta-1, singular_beta, tt_move, extensions_so_far, root_depth, nullptr);
+        int64_t exc_score = negamax(s, depth/2, ply, false, singular_beta-1, singular_beta, tt_move, extensions_so_far, root_depth, nullptr);
 
         if (exc_score < singular_beta) {
             tt_is_singular = true; // no other move can even come close 
@@ -321,7 +321,7 @@ int64_t Position::pruned_negamax(SearchContext& s, int depth, int ply, bool allo
         int64_t null_alpha = beta - 1; // we only care if it can beat it, not the actual score
         int64_t null_beta = beta;
         
-        int64_t score = -pruned_negamax(s, depth - 1 - R, ply + 1, false, -null_beta, -null_alpha, NULL_MOVE, extensions_so_far, root_depth, nullptr);
+        int64_t score = -negamax(s, depth - 1 - R, ply + 1, false, -null_beta, -null_alpha, NULL_MOVE, extensions_so_far, root_depth, nullptr);
 
         unmake_null_move();
 
@@ -335,8 +335,7 @@ int64_t Position::pruned_negamax(SearchContext& s, int depth, int ply, bool allo
         }
     }
 
-    std::array<Move, 256> move_buf;
-    std::span<Move> moves = generate_moves(move_buf);
+    MoveList moves = generate_moves();
 
     std::array<int32_t, 256> score_buf;
     std::span<int32_t> move_scores = compute_move_scores(this, s.history, s.killers, ply, score_buf, moves, tt_move, cont);
@@ -356,7 +355,7 @@ int64_t Position::pruned_negamax(SearchContext& s, int depth, int ply, bool allo
     std::array<Move, 256> searched_quiets;
     int searched_quiet_count = 0;
 
-    for (int mv_idx_raw = 0; mv_idx_raw < (int)moves.size(); ++mv_idx_raw) {
+    for (int mv_idx_raw = 0; mv_idx_raw < moves.count; ++mv_idx_raw) {
         Move m = select_best(moves, move_scores, mv_idx_raw);
 
         if (m == excluded_move) {
@@ -435,15 +434,15 @@ int64_t Position::pruned_negamax(SearchContext& s, int depth, int ply, bool allo
             if (move_index == 0) {
                 int ext = m == tt_move ? (tt_is_singular && (extensions_so_far < root_depth/2)) : 0;
 
-                score = -pruned_negamax(s, depth - 1 + ext, ply + 1, true, -beta, -alpha, NULL_MOVE, extensions_so_far + ext, root_depth, next_cont);
+                score = -negamax(s, depth - 1 + ext, ply + 1, true, -beta, -alpha, NULL_MOVE, extensions_so_far + ext, root_depth, next_cont);
             }
             else {
                 reduced_searches += reduction > 0;
-                score = -pruned_negamax(s, depth - 1 - reduction, ply + 1, true, -alpha-1, -alpha, NULL_MOVE, extensions_so_far, root_depth, next_cont); // do null-window search
+                score = -negamax(s, depth - 1 - reduction, ply + 1, true, -alpha-1, -alpha, NULL_MOVE, extensions_so_far, root_depth, next_cont); // do null-window search
 
                 if (score > alpha) { // if beats alpha do full-window
                     reduced_fail_high += reduction > 0;
-                    score = -pruned_negamax(s, depth - 1, ply + 1, true, -beta, -alpha, NULL_MOVE, extensions_so_far, root_depth, next_cont);
+                    score = -negamax(s, depth - 1, ply + 1, true, -beta, -alpha, NULL_MOVE, extensions_so_far, root_depth, next_cont);
                 }
             }
 
@@ -574,20 +573,19 @@ int64_t Position::quiescence(SearchContext& s, int ply, int64_t alpha, int64_t b
         }
     }
 
-    std::array<Move, 256> move_buf;
-    std::span<Move> moves = currently_checked ? generate_moves(move_buf) : generate_captures(move_buf);
+    MoveList moves = currently_checked ? generate_moves() : generate_captures();
 
     std::array<int32_t, 256> score_buf;
-    std::span<int32_t> move_scores = std::span(score_buf).subspan(0, moves.size());
+    std::span<int32_t> move_scores = std::span(score_buf).subspan(0, moves.count);
 
-    for (size_t i = 0; i < moves.size(); ++i) {
-        Move mv = moves[i];
+    for (int i = 0; i < moves.count; ++i) {
+        Move mv = moves.data[i];
         move_scores[i] = mvv_lva_score(mv, 0);
     }
 
     bool legal_found = false;
 
-    for (int i = 0; i < (int)moves.size(); ++i) {
+    for (int i = 0; i < moves.count; ++i) {
         Move mv = select_best(moves, move_scores, i);
 
         bool quiet = !is_capture(mv);
@@ -644,7 +642,7 @@ int64_t Position::quiescence(SearchContext& s, int ply, int64_t alpha, int64_t b
     return best_score;
 }
 
-std::pair<Move, int64_t> Position::best_move_internal(SearchContext& s, std::span<Move> moves, int depth, Move last_best_move, int64_t alpha, int64_t beta) {
+std::pair<Move, int64_t> Position::best_move_internal(SearchContext& s, MoveList& moves, int depth, Move last_best_move, int64_t alpha, int64_t beta) {
     (void)last_best_move;
 
     int ply = 1;
@@ -655,7 +653,7 @@ std::pair<Move, int64_t> Position::best_move_internal(SearchContext& s, std::spa
     std::array<int32_t, 256> score_buf;
     std::span<int32_t> move_scores = compute_move_scores(this, s.history, s.killers, ply, score_buf, moves, last_best_move, nullptr);
 
-    for (int i = 0; i < (int)moves.size(); ++i) {
+    for (int i = 0; i < moves.count; ++i) {
         Move m = select_best(moves, move_scores, i);
 
         Piece piece = Piece(piece_at[move_from(m)]);
@@ -665,7 +663,7 @@ std::pair<Move, int64_t> Position::best_move_internal(SearchContext& s, std::spa
 
         make_move(m); // no need to filter for check here - assumes filtered moves given
         PREFETCH_TT();
-        int64_t score = -pruned_negamax(s, depth-1, ply+1, true, -beta, -alpha, NULL_MOVE, 0, depth-1, cont);
+        int64_t score = -negamax(s, depth-1, ply+1, true, -beta, -alpha, NULL_MOVE, 0, depth-1, cont);
         unmake_move();
 
         if (score > best_score) {
@@ -684,10 +682,13 @@ std::pair<Move, int64_t> Position::best_move_internal(SearchContext& s, std::spa
     return {best_move, best_score};
 }
 
-Move Position::best_move(std::span<Move> _moves, int depth, std::atomic<bool>& should_stop, std::optional<double> limit, std::optional<SearchParameters> params_in, bool enable_uci_info, int64_t* score_out) {
+Move Position::best_move(int depth, std::atomic<bool>& should_stop, std::optional<double> limit, std::optional<SearchParameters> params_in, bool enable_uci_info, int64_t* score_out) {
     reset_benchmarking_statistics();
 
-    if (_moves.size() == 0) {
+    MoveList moves = generate_moves();
+    filter_moves(moves);
+
+    if (moves.count == 0) {
         return NULL_MOVE;
     }
 
@@ -703,10 +704,8 @@ Move Position::best_move(std::span<Move> _moves, int depth, std::atomic<bool>& s
         .search_start = Clock::now(),
     };
 
-    Move best_move = _moves[0]; // have at least one move
+    Move best_move = moves.data[0]; // have at least one move
     int64_t best_score = 0;
-
-    std::vector<Move> moves(_moves.begin(), _moves.end());
 
     for (int i = 1; i <= depth; ++i) {
         int64_t window = s.params.asp_initial_window_size; // start the window small
@@ -774,13 +773,6 @@ Move Position::best_move(std::span<Move> _moves, int depth, std::atomic<bool>& s
     return best_move;
 }
 
-Move Position::best_move_easy(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit, std::optional<SearchParameters> params, bool enable_uci_info, int64_t* score_out) {
-    std::array<Move, 256> move_buf;
-    std::span<Move> moves = generate_moves(move_buf);
-    filter_moves(moves);
-    return best_move(moves, depth, should_stop, time_limit, params, enable_uci_info, score_out);
-}
-
 int64_t Position::eval_at_depth(int depth){
     std::atomic<bool> should_stop = false;
 
@@ -796,7 +788,7 @@ int64_t Position::eval_at_depth(int depth){
         .search_start = Clock::now(),
     };
 
-    return pruned_negamax(s, depth, 1, true, -INF, INF, NULL_MOVE, 0, depth, nullptr);
+    return negamax(s, depth, 1, true, -INF, INF, NULL_MOVE, 0, depth, nullptr);
 }
 
 bool SearchContext::out_of_time() const {
@@ -828,7 +820,7 @@ Move Position::think(int depth, std::atomic<bool>& should_stop, std::optional<do
         return move;
     } else {
 
-        Move best = best_move_easy(depth, should_stop, time_limit, params_in, enable_uci_info);
+        Move best = best_move(depth, should_stop, time_limit, params_in, enable_uci_info);
         assert(best != NULL_MOVE);
     
         return best;

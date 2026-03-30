@@ -12,7 +12,7 @@
 
 #include "common.h"
 
-#define USE_NNUE
+//#define USE_NNUE
 
 constexpr size_t ACCUMULATOR_SIZE = 512;
 
@@ -149,25 +149,25 @@ struct TTCluster {
 
 #ifdef USE_NNUE
 struct SearchParameters {
-    float lmr_rate_base = 0.51091f;
-    float lmr_rate_divisor = 0.77976f;
-    float singular_margin_factor = 2.1651f;
-    int rfp_margin_factor = 82;
-    int rfp_improving_bonus = 23;
-    int fp_margin_factor = 943;
-    int lmr_history_bonus_threshold = 1867;
-    float history_bonus_factor = 1.24317f;
-    float history_malus_factor = 1.07621f;
-    float cont_history_bonus_factor = 0.381102f;
-    float cont_history_malus_factor = 0.548828f;
-    int qsearch_big_delta = 1088;
-    int qsearch_delta_margin = 260;
-    int asp_initial_window_size = 19;
-    float asp_window_growth_factor = 4.56238f;
-    float nmp_r_base = 1.43495f;
-    float nmp_r_divisor = 6.41747f;
-    float lmp_index_base = 3.5142f;
-    float lmp_index_factor = 2.74838f;
+    float lmr_rate_base = 0.745546f;
+    float lmr_rate_divisor = 1.22021f;
+    float singular_margin_factor = 2.33643f;
+    int rfp_margin_factor = 162;
+    int rfp_improving_bonus = 27;
+    int fp_margin_factor = 919;
+    int lmr_history_bonus_threshold = 1913;
+    float history_bonus_factor = 1.2681f;
+    float history_malus_factor = 1.24323f;
+    float cont_history_bonus_factor = 0.373663f;
+    float cont_history_malus_factor = 0.873309f;
+    int qsearch_big_delta = 1204;
+    int qsearch_delta_margin = 273;
+    int asp_initial_window_size = 26;
+    float asp_window_growth_factor = 6.26217f;
+    float nmp_r_base = 1.83196f;
+    float nmp_r_divisor = 7.98059f;
+    float lmp_index_base = 3.10985f;
+    float lmp_index_factor = 1.94811f;
 };
 #else
 struct SearchParameters {
@@ -280,6 +280,31 @@ struct PolyglotEntry {
 };
 #pragma pack(pop)
 
+struct MoveList {
+    Move data[256];
+    int count;
+
+    struct Iterator {
+        Move* ptr;
+
+        bool operator!=(const Iterator& other) const {
+            return ptr != other.ptr;
+        }
+
+        Iterator& operator++() {
+            ptr++;
+            return *this;
+        }
+
+        Move& operator*() {
+            return *ptr;
+        }
+    };
+
+    Iterator begin() { return { .ptr = data }; }
+    Iterator end() { return { .ptr = data + count }; }
+};
+
 struct Position {
     Side sides[2];
     int to_move;
@@ -325,8 +350,8 @@ struct Position {
 
     std::array<uint64_t, 12> to_bitboards() const;
 
-    std::span<Move> generate_moves(std::span<Move> move_buf) const;
-    std::span<Move> generate_captures(std::span<Move> move_buf) const;
+    MoveList generate_moves() const;
+    MoveList generate_captures() const;
 
     std::unordered_map<std::string, Move> name_moves(std::span<Move> moves);
 
@@ -348,7 +373,7 @@ struct Position {
     int lowest_value_defender(int defender_side, int sq, uint64_t occupancy) const;
     int see(Move m) const;
 
-    void filter_moves(std::span<Move>& moves);
+    void filter_moves(MoveList& moves);
 
     void verify_integrity() const;
 
@@ -363,16 +388,15 @@ struct Position {
     void update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side, int sign=1);
     void update_is_checked();
 
-    int64_t pruned_negamax(SearchContext& s, int depth, int ply, bool allow_null, int64_t alpha, int64_t beta, Move excluded_move, int extensions_so_far, int root_depth, ContinuationTable* cont);
+    int64_t negamax(SearchContext& s, int depth, int ply, bool allow_null, int64_t alpha, int64_t beta, Move excluded_move, int extensions_so_far, int root_depth, ContinuationTable* cont);
     int64_t quiescence(SearchContext& s, int ply, int64_t alpha, int64_t beta);
 
     int64_t eval_at_depth(int depth);
 
     int32_t mvv_lva_score(Move mv, int32_t offset) const;
 
-    std::pair<Move, int64_t> best_move_internal(SearchContext& s, std::span<Move> moves, int depth, Move last_best_move, int64_t alpha, int64_t beta);
-    Move best_move(std::span<Move> moves, int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt, bool enable_uci_info=false, int64_t* score_out=nullptr);
-    Move best_move_easy(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt, bool enable_uci_info=false, int64_t* score_out=nullptr);
+    std::pair<Move, int64_t> best_move_internal(SearchContext& s, MoveList& moves, int depth, Move last_best_move, int64_t alpha, int64_t beta);
+    Move best_move(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt, bool enable_uci_info=false, int64_t* score_out=nullptr);
     
     bool is_move_legal_slow(Move move);
 

@@ -85,11 +85,8 @@ static void benchmark_pos_method(const std::string& name, int start_depth, int m
 
 static void benchmark_best_move() {
     benchmark_pos_method("Best-move", 7, 18, [](Position& pos, int depth){
-        std::array<Move, 256> move_buf;
-        std::span<Move> moves = pos.generate_moves(move_buf);
-        pos.filter_moves(moves);
         std::atomic<bool> should_stop = false;
-        pos.best_move(moves, depth, should_stop);
+        pos.best_move(depth, should_stop);
     });
 }
 

@@ -16,8 +16,7 @@ void eval_search(int depth, Position& position) {
     if (depth == 0) {
         return;
     } else {
-        std::array<Move, 256> move_buffer;
-        std::span<Move> moves = position.generate_moves(move_buffer);
+        MoveList moves = position.generate_moves();
 
         for (Move move : moves) {
             position.make_move(move);

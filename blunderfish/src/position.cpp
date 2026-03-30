@@ -410,15 +410,14 @@ int Position::get_king_sq(int side) const {
 }
 
 std::optional<int> Position::game_result() {
-    std::array<Move, 256> move_buf;
-    std::span<Move> moves = generate_moves(move_buf);
+    MoveList moves = generate_moves();
     filter_moves(moves);
 
     if (is_threefold_repetition()) {
         return 0;
     }
 
-    if (moves.size() != 0) {
+    if (moves.count != 0) {
         return std::nullopt;
     }
 

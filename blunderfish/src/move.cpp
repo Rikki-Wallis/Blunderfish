@@ -264,13 +264,14 @@ static bool illegal_pin_move(int from, int to, int king_sq, uint64_t pin_mask) {
     return pinned(from, pin_mask) && ((sq_to_bb(to) & line[from][king_sq]) == 0);
 }
 
-std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
-    Move* next = move_buf.data();
+#define new_move(from, to, type, end_piece) do { \
+    int sq = get_captured_square(to, type, to_move); \
+    moves.data[moves.count++] = encode_move(from, to, type, end_piece, to_move, (Piece)piece_at[sq]); \
+} while (false)
 
-    #define new_move(from, to, type, end_piece) do { \
-        int sq = get_captured_square(to, type, to_move); \
-        *(next++) = encode_move(from, to, type, end_piece, to_move, (Piece)piece_at[sq]); \
-    } while (false)
+MoveList Position::generate_moves() const {
+    MoveList moves;
+    moves.count = 0;
 
     int opp = opponent(to_move);
     uint64_t opps = sides[opp].all();
@@ -434,11 +435,12 @@ std::span<Move> Position::generate_moves(std::span<Move> move_buf) const {
         }
     }
 
-    return move_buf.subspan(0, next-move_buf.data());
+    return moves;
 }
 
-std::span<Move> Position::generate_captures(std::span<Move> move_buf) const {
-    Move* next = move_buf.data();
+MoveList Position::generate_captures() const {
+    MoveList moves;
+    moves.count = 0;
 
     int opp = opponent(to_move);
     uint64_t opps = sides[opp].all();
@@ -535,16 +537,16 @@ std::span<Move> Position::generate_captures(std::span<Move> move_buf) const {
         }
     }
 
-    return move_buf.subspan(0, next-move_buf.data());
+    return moves;
 }
 
-void Position::filter_moves(std::span<Move>& moves) {
+void Position::filter_moves(MoveList& moves) {
     int side = to_move;
 
-    for (int i = (int)moves.size()-1; i >= 0; --i) {
+    for (int i = moves.count-1; i >= 0; --i) {
         bool illegal = false;
 
-        make_move(moves[i]);
+        make_move(moves.data[i]);
 
         if (is_checked[side]) {
             illegal = true;
@@ -553,8 +555,7 @@ void Position::filter_moves(std::span<Move>& moves) {
         unmake_move();
 
         if (illegal) {
-            moves[i] = moves.back();
-            moves = moves.subspan(0, moves.size()-1);
+            moves.data[i] = moves.data[--moves.count];
         }
     }
 }
@@ -616,10 +617,9 @@ std::unordered_map<std::string, Move> Position::name_moves(std::span<Move> moves
 
             make_move(m);
             if (is_checked[to_move]) {
-                std::array<Move, 256> temp;
-                auto new_moves = generate_moves(temp);
+                MoveList new_moves = generate_moves();
                 filter_moves(new_moves);
-                if (new_moves.size() == 0) {
+                if (new_moves.count == 0) {
                     check_suffix = "#";
                 }
                 else {
@@ -968,8 +968,7 @@ std::string to_uci_move(Move move) {
 }
 
 bool Position::is_move_legal_slow(Move move) {
-    std::array<Move, 256> move_buf;
-    std::span<Move> moves = generate_moves(move_buf);
+    MoveList moves = generate_moves();
     filter_moves(moves);
 
     for (Move mv : moves) {
@@ -986,9 +985,8 @@ bool Position::is_quiescent() {
         return false;
     }
 
-    std::array<Move, 256> move_buf;
-    std::span<Move> captures = generate_captures(move_buf);
+    MoveList captures = generate_captures();
     filter_moves(captures);
 
-    return captures.size() == 0;
+    return captures.count == 0;
 }
