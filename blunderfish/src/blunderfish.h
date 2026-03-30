@@ -12,7 +12,7 @@
 
 #include "common.h"
 
-//#define USE_NNUE
+#define USE_NNUE
 
 constexpr size_t ACCUMULATOR_SIZE = 512;
 
@@ -147,7 +147,7 @@ struct TTCluster {
     TTEntry entries[4];
 };
 
-#ifdef USE_NNUE
+#ifndef USE_NNUE
 struct SearchParameters {
     float lmr_rate_base = 0.745546f;
     float lmr_rate_divisor = 1.22021f;
@@ -304,6 +304,10 @@ struct MoveList {
     Iterator begin() { return { .ptr = data }; }
     Iterator end() { return { .ptr = data + count }; }
 };
+
+//struct Accumulator {
+//    alignas(32) int16_t data[ACCUMULATOR_SIZE];
+//};
 
 struct Position {
     Side sides[2];

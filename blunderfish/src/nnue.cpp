@@ -76,11 +76,16 @@ static ActiveIndices get_king_perspective_indices(std::span<uint64_t> bbs, int k
 }
 
 static void feed_l1(std::span<int16_t> a0, const ActiveIndices& set_indices) {
+    // initialize with bias
     for (size_t i = 0; i < std::size(a0); ++i) {
         a0[i] = nnue_b0[i];
+    }
 
-        for (int ji = 0; ji < set_indices.count; ++ji) {
-            int j = set_indices.data[ji];
+    // add weights
+    for (int ji = 0; ji < set_indices.count; ++ji) {
+        int j = set_indices.data[ji];
+
+        for (size_t i = 0; i < std::size(a0); ++i) {
             a0[i] += nnue_w0[j][i];
         }
     }
