@@ -48,12 +48,12 @@ static void test_capture_gen(Position& pos, int depth) {
 }
 
 TEST_CASE("Generate-Captures Equals Captures from Generate-Moves") {
-    auto pos = *Position::decode_fen_string("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -");
+    auto pos = *Position::parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -");
     test_capture_gen(pos, 4); 
 }
 
 static void test_pin_case(const std::string& fen, const std::unordered_set<int>& white_pins, const std::unordered_set<int>& black_pins) {
-    auto pos = *Position::decode_fen_string(fen);
+    auto pos = *Position::parse_fen(fen);
 
     uint64_t white_mask = pos.generate_pin_mask(WHITE);
     uint64_t black_mask = pos.generate_pin_mask(BLACK);

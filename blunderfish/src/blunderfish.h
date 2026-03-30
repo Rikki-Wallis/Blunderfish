@@ -345,7 +345,7 @@ struct Position {
     }
 
     void display(bool display_metadata=false) const;
-    static std::optional<Position> decode_fen_string(const std::string& fen);
+    static std::optional<Position> parse_fen(const std::string& fen);
     std::string fen() const;
 
     std::array<uint64_t, 12> to_bitboards() const;

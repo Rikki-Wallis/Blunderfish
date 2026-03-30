@@ -19,7 +19,7 @@ static uint64_t run_and_time(Func&& func) {
 }
 
 static void benchmark_perft() {
-    Position pos = *Position::decode_fen_string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    Position pos = *Position::parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 
     std::vector<uint64_t> times;
 
@@ -51,7 +51,7 @@ static void benchmark_pos_method(const std::string& name, int start_depth, int m
 
         const char* fen = "1nbq1bnr/3kp2p/1p2Q1p1/r2B2B1/3PP3/p4N2/PPP2PPP/R3K2R b KQ - 5 14";
         //const char* fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-        Position pos = *Position::decode_fen_string(fen);
+        Position pos = *Position::parse_fen(fen);
 
         pos.reset_benchmarking_statistics();
         std::forward<Func>(func)(pos, depth);

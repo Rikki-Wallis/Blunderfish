@@ -8,7 +8,7 @@ int main(int argc, const char** argv) {
 
     const char* fen = argv[1];
 
-    auto res = Position::decode_fen_string(fen);
+    auto res = Position::parse_fen(fen);
 
     if (!res) {
         print("Invalid fen '{}'\n", fen);

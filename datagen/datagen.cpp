@@ -22,7 +22,7 @@ struct Record {
 };
 
 static int run_match(FILE* file) {
-    Position pos = *Position::decode_fen_string(START_FEN);
+    Position pos = *Position::parse_fen(START_FEN);
 
     std::vector<Record> records;
 

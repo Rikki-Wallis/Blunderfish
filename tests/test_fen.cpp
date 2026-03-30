@@ -4,7 +4,7 @@
 
 static void test_fen(Position& pos, int depth) {
     std::string fen = pos.fen();
-    auto maybe_pos = Position::decode_fen_string(fen);
+    auto maybe_pos = Position::parse_fen(fen);
 
     REQUIRE(maybe_pos.has_value());
     auto pos2 = std::move(*maybe_pos);
@@ -32,6 +32,6 @@ static void test_fen(Position& pos, int depth) {
 }
 
 TEST_CASE("FEN encode and decode is correct") {
-    Position pos = *Position::decode_fen_string("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -");
+    Position pos = *Position::parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -");
     test_fen(pos, 3);
 }

@@ -144,7 +144,7 @@ static int run_double_sided_game(size_t game_index, const char* opening, const S
     int results[2];
 
     for (int round = 0; round < 2; ++round) { // play two rounds, switching sides with the opening
-        Position pos = *Position::decode_fen_string(opening);
+        Position pos = *Position::parse_fen(opening);
 
         std::optional<int> result;
 

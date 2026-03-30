@@ -45,11 +45,11 @@ void eval_search(int depth, Position& position) {
 }
 
 TEST_CASE("Eval - increment_eval equals eval | STARTING POSITION") {
-    Position pos = *Position::decode_fen_string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    Position pos = *Position::parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     eval_search(3, pos);
 }
 
 TEST_CASE("Eval - increment_eval equals eval | KIWIPETE_POSITION") {
-    Position pos = *Position::decode_fen_string("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -");
+    Position pos = *Position::parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -");
     eval_search(3, pos);
 }

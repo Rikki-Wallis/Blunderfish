@@ -85,11 +85,11 @@ static void parse_position(const std::string& line, Position* pos) {
     std::string moves_part = (moves_start != std::string::npos) ? line.substr(moves_start + strlen(moves_string)) : "";
 
     if (pos_part.find("startpos") != std::string::npos) {
-        *pos = *Position::decode_fen_string(START_FEN);
+        *pos = *Position::parse_fen(START_FEN);
     }
     else if (pos_part.find("fen") != std::string::npos) {
         std::string fen = pos_part.substr(pos_part.find("fen") + 4);
-        auto pos_result = Position::decode_fen_string(fen);
+        auto pos_result = Position::parse_fen(fen);
         if (!pos_result.has_value()) {
             std::cout << "Invalid FEN " << fen << "\n";
             return;
@@ -198,7 +198,7 @@ int main() {
     std::thread thread;
     std::atomic<bool> should_stop = false;
 
-    Position position = *Position::decode_fen_string(START_FEN);
+    Position position = *Position::parse_fen(START_FEN);
     
     while (std::getline(std::cin, line)) {
         if (line == "uci") {
@@ -210,7 +210,7 @@ int main() {
             std::cout << "readyok\n";
         }
         else if (line == "ucinewgame") {
-            position = *Position::decode_fen_string(START_FEN);
+            position = *Position::parse_fen(START_FEN);
         }
         else if (line.starts_with("position")) {
             parse_position(line, &position);

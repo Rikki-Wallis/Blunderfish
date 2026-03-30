@@ -44,11 +44,11 @@ void zobrist_search(int depth, Position& position) {
 }
 
 TEST_CASE("Zobrist - incremental zobrist equals compute_zobrist | STARTING POSITION") {
-    Position pos = *Position::decode_fen_string("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    Position pos = *Position::parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     zobrist_search(5, pos);
 }
 
 TEST_CASE("Zobrist - incremental zobrist equals compute_zobrist | KIWIPETE POSITION") {
-    Position pos = *Position::decode_fen_string("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -");
+    Position pos = *Position::parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -");
     zobrist_search(5, pos);
 }

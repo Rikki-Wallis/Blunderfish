@@ -78,7 +78,7 @@ void Position::display(bool display_metadata) const {
     print("To move: {}\n", to_move == WHITE ? "white" : "black");
 }
 
-std::optional<Position> Position::decode_fen_string(const std::string& fen) {
+std::optional<Position> Position::parse_fen(const std::string& fen) {
     size_t cursor = 0;
 
     Position pos;
