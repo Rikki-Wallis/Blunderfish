@@ -13,7 +13,7 @@ std::uniform_int_distribution<int> twin_dist(0, 1);
 std::uniform_int_distribution<size_t> opening_dist(0, std::size(openings)-1);
 
 constexpr double time_limit_per_move = 0.05f; 
-constexpr int ngames = 32;
+constexpr int ngames = 16;
 
 struct Param {
     float value;
@@ -28,25 +28,25 @@ float perturb_amount(const Param& param, int iteration) {
 // These are continuously updated but rounded to integers in most cases
 struct Params {
     std::map<std::string, Param> params = {
-        { "lmr_rate_base", { 0.470197f, 0.0f, 3.0f }},
-        { "lmr_rate_divisor", { 1.29521f, 0.5f, 5.0f }},
-        { "singular_margin_factor", { 2.20687f, 0.5f, 5.0f }},
-        { "rfp_margin_factor", { 141.0f, 10.0f, 1000.0f }},
-        { "rfp_improving_bonus", { 24.0f, 0.0f, 1000.0f }},
-        { "fp_margin_factor", { 802.0f, 10.0f, 1000.0f }},
-        { "lmr_history_bonus_threshold", { 1690.0f, 100.0f, 5000.0f }},
-        { "history_bonus_factor", { 1.14571f, 0.1f, 5.0f }},
-        { "history_malus_factor", { 1.115529f, 0.1f, 5.0f }},
-        { "cont_history_bonus_factor", { 0.194441f, 0.1f, 5.0f }},
-        { "cont_history_malus_factor", { 0.709553f, 0.1f, 5.0f }},
-        { "qsearch_big_delta", { 1125.0f, 400.0f, 2000.0f }},
-        { "qsearch_delta_margin", { 217.0f, 50.0f, 1000.0f }},
-        { "asp_initial_window_size", { 27.0f, 10.0f, 100.0f }},
-        { "asp_window_growth_factor", { 4.09563f, 1.1f, 100.0f }},
-        { "nmp_r_base", { 1.64159f, 1.0f, 6.0f }},
-        { "nmp_r_divisor", { 7.7872f, 1.0f, 12.0f }},
-        { "lmp_index_base", { 3.50929f, 1.0f, 5.0f }},
-        { "lmp_index_factor", { 2.31756f, 0.5f, 5.0f }},
+        { "lmr_rate_base", { 0.609352f, 0.0f, 3.0f }},
+        { "lmr_rate_divisor", { 1.786544f, 0.5f, 5.0f }},
+        { "singular_margin_factor", { 1.94709f, 0.5f, 5.0f }},
+        { "rfp_margin_factor", { 132.0f, 10.0f, 1000.0f }},
+        { "rfp_improving_bonus", { 28.0f, 0.0f, 1000.0f }},
+        { "fp_margin_factor", { 828.0f, 10.0f, 1000.0f }},
+        { "lmr_history_bonus_threshold", { 1594.0f, 100.0f, 5000.0f }},
+        { "history_bonus_factor", { 1.02898f, 0.1f, 5.0f }},
+        { "history_malus_factor", { 0.95008f, 0.1f, 5.0f }},
+        { "cont_history_bonus_factor", { 0.46919f, 0.1f, 5.0f }},
+        { "cont_history_malus_factor", { 0.48449f, 0.1f, 5.0f }},
+        { "qsearch_big_delta", { 1223.0f, 400.0f, 2000.0f }},
+        { "qsearch_delta_margin", { 70.0f, 50.0f, 1000.0f }},
+        { "asp_initial_window_size", { 12.0f, 10.0f, 100.0f }},
+        { "asp_window_growth_factor", { 5.39f, 1.1f, 100.0f }},
+        { "nmp_r_base", { 2.4091f, 1.0f, 6.0f }},
+        { "nmp_r_divisor", { 7.25516f, 1.0f, 12.0f }},
+        { "lmp_index_base", { 3.44978f, 1.0f, 5.0f }},
+        { "lmp_index_factor", { 2.32816f, 0.5f, 5.0f }},
     };
 
     void dump() {
