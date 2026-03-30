@@ -43,7 +43,6 @@ add_custom_command(
 )
 
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp)
-list(FILTER SOURCES EXCLUDE REGEX ".*engine_module\\.cpp$")
 
 add_library(blunderfish STATIC ${SOURCES} ${MOVE_TABLES_HPP} ${BOOK_HPP} ${NNUE_HPP})
 target_include_directories(blunderfish PUBLIC ${CMAKE_CURRENT_LIST_DIR}/src)
