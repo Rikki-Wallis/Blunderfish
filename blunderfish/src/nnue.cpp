@@ -3,6 +3,10 @@
 #include <algorithm>
 #include <bit>
 
+#ifdef __AVX2__
+#include <immintrin.h>
+#endif
+
 #include "blunderfish.h"
 #include "nnue_embed.h"
 
@@ -25,9 +29,13 @@ inline B scaled_crelu(A x, A q) {
     return B(std::clamp(sx, lo, hi));
 }
 
+inline float sigmoid(float x) {
+    return 1.0f/(1+std::exp(-x));
+}
+
 inline float scaled_sigmoid(int32_t x, int32_t q) {
     float xf = float(x)/float(q);
-    return 1.0f / (1.0f + std::exp(-xf));
+    return sigmoid(xf);
 }
 
 inline int flip_sq(int sq) {
@@ -100,11 +108,32 @@ static float forward_accumulator(int16_t* RESTRICT accumulator) {
     alignas(32) uint8_t a1[std::size(nnue_b1)];
 
     for (size_t i = 0; i < std::size(a1); ++i) {
+#if defined(__AVX2__) && true
+        __m256i ones = _mm256_set1_epi16(1);
+        __m256i sum  = _mm256_setzero_si256();  // int32 accumulator
+
+        for (size_t j = 0; j < std::size(a0); j += 32) {
+            __m256i act = _mm256_load_si256((const __m256i*)&a0[j]);      // uint8
+            __m256i w   = _mm256_load_si256((const __m256i*)&nnue_w1[i][j]); // int8
+
+            __m256i prod = _mm256_maddubs_epi16(act, w);  // uint8*int8 → int16 (saturating), 32 pairs
+            __m256i wide = _mm256_madd_epi16(prod, ones); // int16*1 → int32, 16 pairs summed
+            sum = _mm256_add_epi32(sum, wide);
+        }
+
+        __m128i lo  = _mm256_castsi256_si128(sum);
+        __m128i hi  = _mm256_extracti128_si256(sum, 1);
+        __m128i s   = _mm_add_epi32(lo, hi);
+        s = _mm_add_epi32(s, _mm_shuffle_epi32(s, _MM_SHUFFLE(1,0,3,2)));
+        s = _mm_add_epi32(s, _mm_shuffle_epi32(s, _MM_SHUFFLE(2,3,0,1)));
+        int32_t value = _mm_cvtsi128_si32(s) + nnue_b1[i];
+#else
         int32_t value = nnue_b1[i];
 
         for (size_t j = 0; j < std::size(a0); ++j) {
             value += int16_t(nnue_w1[i][j]) * int16_t(a0[j]);
         }
+#endif
 
         a1[i] = scaled_crelu<int32_t, uint8_t, 255>(value, 64*255);
     }
