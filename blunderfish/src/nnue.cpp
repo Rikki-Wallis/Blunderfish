@@ -6,24 +6,23 @@
 #include "blunderfish.h"
 #include "nnue_embed.h"
 
-//static int16_t nnue_w0[10][10];
+//static int8_t nnue_w0[10][10];
 //static int16_t nnue_b0[10];
-//static int16_t nnue_w1[10][10];
+//static int8_t nnue_w1[10][10];
 //static int32_t nnue_b1[10];
 //static int16_t nnue_w2[10][10];
 //static int32_t nnue_b2[10];
 
-static constexpr int32_t RELU_Q = 127;
 static constexpr int NNUE_INPUT_FEAUTURES = 64*10*64;
 
 static_assert(ACCUMULATOR_SIZE == NNUE_ACCUMULATOR_SIZE);
 
-template<typename T>
-inline T scaled_crelu(T x, T q) {
-    T sx = x*T(RELU_Q)/q;
-    T lo = 0;
-    T hi = RELU_Q;
-    return std::clamp(sx, lo, hi);
+template<typename A, typename B, size_t OUT_Q>
+inline B scaled_crelu(A x, A q) {
+    A sx = x*A(OUT_Q)/q;
+    A lo = 0;
+    A hi = OUT_Q;
+    return B(std::clamp(sx, lo, hi));
 }
 
 inline float scaled_sigmoid(int32_t x, int32_t q) {
@@ -86,37 +85,37 @@ static void feed_l1(int16_t* RESTRICT a0, int* RESTRICT indices, int index_count
         int j = indices[ji];
 
         for (size_t i = 0; i < N; ++i) {
-            a0[i] += nnue_w0[j][i];
+            a0[i] += int16_t(nnue_w0[j][i]);
         }
     }
 }
 
 static float forward_accumulator(int16_t* RESTRICT accumulator) {
-    alignas(32) int16_t a0[std::size(nnue_b0)*2];
+    alignas(32) uint8_t a0[std::size(nnue_b0)*2];
 
     for (size_t i = 0; i < std::size(a0); ++i) {
-        a0[i] = scaled_crelu(accumulator[i], int16_t(64));
+        a0[i] = scaled_crelu<int16_t, uint8_t, 255>(accumulator[i], int16_t(64));
     }
 
-    int32_t a1[std::size(nnue_b1)];
+    alignas(32) uint8_t a1[std::size(nnue_b1)];
 
     for (size_t i = 0; i < std::size(a1); ++i) {
-        a1[i] = nnue_b1[i];
+        int32_t value = nnue_b1[i];
 
         for (size_t j = 0; j < std::size(a0); ++j) {
-            a1[i] += nnue_w1[i][j] * a0[j];
+            value += int16_t(nnue_w1[i][j]) * int16_t(a0[j]);
         }
 
-        a1[i] = scaled_crelu(a1[i], 64*127);
+        a1[i] = scaled_crelu<int32_t, uint8_t, 255>(value, 64*255);
     }
 
     int32_t out = nnue_b2[0];
 
     for (size_t j = 0; j < std::size(a1); ++j) {
-        out += int32_t(nnue_w2[0][j]) * int32_t(a1[j]);
+        out += int16_t(nnue_w2[0][j]) * int16_t(a1[j]);
     }
 
-    return scaled_sigmoid(out, 64*127);
+    return scaled_sigmoid(out, 64*255);
 }
 
 
@@ -174,8 +173,8 @@ static void move_piece_in_accumulator(int16_t* RESTRICT accumulator_half, size_t
     size_t N = ACCUMULATOR_SIZE / 2;
 
     for (size_t i = 0; i < N; ++i) {
-        accumulator_half[i] += nnue_w0[add_feature][i];
-        accumulator_half[i] -= nnue_w0[remove_feature][i];
+        accumulator_half[i] += int16_t(nnue_w0[add_feature][i]);
+        accumulator_half[i] -= int16_t(nnue_w0[remove_feature][i]);
     }
 }
 
@@ -214,10 +213,10 @@ static void update_accumulator_from_king_perspective(int16_t* RESTRICT accumulat
     if (captured_piece != PIECE_NONE) {
         for (size_t i = 0; i < ACCUMULATOR_SIZE/2; i++) {
             if (sign == -1) {
-                accumulator_half[i] += nnue_w0[feature(captured_piece, captured_pos, opponent(side))][i];
+                accumulator_half[i] += int16_t(nnue_w0[feature(captured_piece, captured_pos, opponent(side))][i]);
             }
             else {
-                accumulator_half[i] -= nnue_w0[feature(captured_piece, captured_pos, opponent(side))][i];
+                accumulator_half[i] -= int16_t(nnue_w0[feature(captured_piece, captured_pos, opponent(side))][i]);
             }
         }
     }

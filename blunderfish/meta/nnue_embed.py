@@ -52,24 +52,22 @@ w0_t = transpose(w0)
 
 # quantize the weights
 
-def quantize_matrix(m, q, bitwidth):
+def quantize_matrix(m, q):
     qm = [[int(round(q*x)) for x in row] for row in m]
-    assert all(abs(x) <= (1 << bitwidth)-2 for row in qm for x in row)
     return qm
 
-def quantize_vector(v, q, bitwidth):
+def quantize_vector(v, q):
     qv = [int(round(q*x)) for x in v]
-    assert all(abs(x) <= (1 << bitwidth)-2 for x in qv)
     return qv
 
-w0_t = quantize_matrix(w0_t, 64, 16)
-b0 = quantize_vector(b0, 64, 32)
+w0_t = quantize_matrix(w0_t, 64)
+b0   = quantize_vector(b0, 64)
 
-w1 = quantize_matrix(w1, 64, 16)
-b1 = quantize_vector(b1, 64*127, 32)
+w1   = quantize_matrix(w1, 64)
+b1   = quantize_vector(b1, 64*255)
 
-w2 = quantize_matrix(w2, 64, 16)
-b2 = quantize_vector(b2, 64*127, 32)
+w2   = quantize_matrix(w2, 64)
+b2   = quantize_vector(b2, 64*255)
 
 # write the header
 
@@ -111,9 +109,9 @@ def write_vector(v, name, type):
     out.write("\n")
     out.write("};\n\n");
 
-write_matrix(w0_t, "w0", "int16_t")
+write_matrix(w0_t, "w0", "int8_t")
 write_vector(b0,   "b0", "int16_t")
-write_matrix(w1,   "w1", "int16_t")
+write_matrix(w1,   "w1", "int8_t")
 write_vector(b1,   "b1", "int32_t")
 write_matrix(w2,   "w2", "int16_t")
 write_vector(b2,   "b2", "int32_t")
