@@ -524,7 +524,7 @@ int64_t Position::negamax(SearchContext& s, int depth, int ply, bool allow_null,
     }
 
     if (half_move_clock == 100) {
-        best_score = 0;
+        return 0; // we don't want to store this in the TT
     }
 
     TTEntry& target = find_entry(s.tt, zobrist);
