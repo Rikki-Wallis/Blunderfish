@@ -14,7 +14,7 @@ if(MSVC)
     )
 else()
     add_compile_options(
-        -Wall -Wextra -Wpedantic -Werror -Wimplicit-int-conversion -Wno-unused-const-variable -march=native
+        -Wall -Wextra -Wpedantic -Werror -Wimplicit-int-conversion -Wno-unused-const-variable -march=native -Wno-c2y-extensions
     )
 endif()
 
