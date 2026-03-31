@@ -310,6 +310,18 @@ struct MoveList {
 //    alignas(32) int16_t data[ACCUMULATOR_SIZE];
 //};
 
+enum GameResultReason {
+    GAME_RESULT_CHECKMATE,
+    GAME_RESULT_STALEMATE,
+    GAME_RESULT_3_FOLD_REPETITION,
+    GAME_RESULT_50_MOVE_RULE
+};
+
+struct GameResult {
+    int result;
+    GameResultReason reason;
+};
+
 struct Position {
     Side sides[2];
     int to_move;
@@ -407,7 +419,7 @@ struct Position {
     
     bool is_move_legal_slow(Move move);
 
-    std::optional<int> game_result();
+    std::optional<GameResult> game_result();
     Move think(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params_in = std::nullopt, bool enable_uci_info = false);
 
     uint64_t compute_zobrist() const;

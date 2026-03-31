@@ -141,12 +141,10 @@ static int run_double_sided_game(size_t game_index, const char* opening, const S
 
     int aggregate = 0;
 
-    int results[2];
-
     for (int round = 0; round < 2; ++round) { // play two rounds, switching sides with the opening
         Position pos = *Position::parse_fen(opening);
 
-        std::optional<int> result;
+        std::optional<GameResult> result = std::nullopt;
 
         for (;;) {
             result = pos.game_result();
@@ -160,35 +158,44 @@ static int run_double_sided_game(size_t game_index, const char* opening, const S
             pos.make_move(move);
         }
 
-        if (!result) {
-            int64_t eval = pos.eval_at_depth(10);
+        const char* reason = "";
 
-            if (eval > 200) {
-                result = pos.to_move == WHITE ? 1 : -1;
-            }
-            else if (eval < -200) {
-                result = pos.to_move == WHITE ? -1 : 1;
-            }
-            else {
-                result = 0;
-            }
+        switch (result->reason) {
+            case GAME_RESULT_CHECKMATE:
+                if (result->result == 1)  {
+                    reason = "White mates";
+                }
+                else{
+                    reason = "Black mates";
+                }
+                break;
+
+            case GAME_RESULT_STALEMATE:
+                reason = "Stalemate";
+                break;
+            
+            case GAME_RESULT_50_MOVE_RULE:
+                reason = "50 move rule";
+                break;
+
+            case GAME_RESULT_3_FOLD_REPETITION:
+                reason = "Three-fold repetition";
+                break;
         }
 
-        results[round] = *result;
+        {
+            std::lock_guard<std::mutex> lock(print_mutex);
+            print("Game {} round {}: {} ({})\n", game_index, round+1, result->result, reason);
+        }
 
         if (round == 0) {
-            aggregate += *result;
+            aggregate += result->result;
         }
         else {
-            aggregate -= *result;
+            aggregate -= result->result;
         }
 
         std::swap(sides[0], sides[1]);
-    }
-
-    {
-        std::lock_guard<std::mutex> lock(print_mutex);
-        print("Game {}: ({} {})\n", game_index, results[0], results[1]);
     }
 
     return aggregate;

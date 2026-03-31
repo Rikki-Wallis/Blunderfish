@@ -21,18 +21,17 @@ struct Record {
     int32_t score;
 };
 
-static int run_match(FILE* file) {
+static GameResult run_match(FILE* file) {
     Position pos = *Position::parse_fen(START_FEN);
 
     std::vector<Record> records;
 
-    int result = 67;
+    std::optional<GameResult> gr = std::nullopt;
 
     for (int hm = 0;;++hm) {
-        std::optional<int> gr = pos.game_result();
+        gr = pos.game_result();
 
-        if (gr) {
-            result = *gr;
+        if (gr.has_value()) {
             break;
         }
 
@@ -69,7 +68,7 @@ static int run_match(FILE* file) {
 
     assert(result != 67);
 
-    int32_t outcome = int32_t(result);
+    int32_t outcome = int32_t(gr->result);
 
     {
         std::lock_guard g(io_mutex);
@@ -80,7 +79,7 @@ static int run_match(FILE* file) {
         }
     }
 
-    return result;
+    return *gr;
 }
 
 int main() {
@@ -103,11 +102,36 @@ int main() {
                         break;
                     }
 
-                    int result = run_match(file);
+                    GameResult result = run_match(file);
+
+                    const char* reason = "";
+
+                    switch (result.reason) {
+                        case GAME_RESULT_CHECKMATE:
+                            if (result.result == 1)  {
+                                reason = "White mates";
+                            }
+                            else{
+                                reason = "Black mates";
+                            }
+                            break;
+
+                        case GAME_RESULT_STALEMATE:
+                            reason = "Stalemate";
+                            break;
+                        
+                        case GAME_RESULT_50_MOVE_RULE:
+                            reason = "50 move rule";
+                            break;
+
+                        case GAME_RESULT_3_FOLD_REPETITION:
+                            reason = "Three-fold repetition";
+                            break;
+                    }
 
                     {
                         std::lock_guard guard(io_mutex);
-                        print("Batch {}/{}: Game {}/{}: {}\n", iter+1, NUM_ITERATIONS, mid+1, NUM_MATCHES, result);
+                        print("Batch {}/{}: Game {}/{}: {} ({})\n", iter+1, NUM_ITERATIONS, mid+1, NUM_MATCHES, result.result, reason);
                     }
                 }
             }));

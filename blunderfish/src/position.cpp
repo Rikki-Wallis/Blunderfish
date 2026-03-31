@@ -425,25 +425,37 @@ int Position::get_king_sq(int side) const {
     return std::countr_zero(sides[side].bb[PIECE_KING]);
 }
 
-std::optional<int> Position::game_result() {
+std::optional<GameResult> Position::game_result() {
     MoveList moves = generate_moves();
     filter_moves(moves);
 
     if (moves.count == 0) {
         if (is_checked[to_move]) {
-            return to_move == WHITE ? -1 : 1;
+            return GameResult {
+                .result = to_move == WHITE ? -1 : 1,
+                .reason = GAME_RESULT_CHECKMATE
+            };
         }
         else {
-            return 0;
+            return GameResult {
+                .result = 0,
+                .reason = GAME_RESULT_STALEMATE
+            };
         }
     }
 
     if (half_move_clock == 100) {
-        return 0;
+        return GameResult {
+            .result = 0,
+            .reason = GAME_RESULT_50_MOVE_RULE
+        };
     }
 
     if (is_threefold_repetition()) {
-        return 0;
+        return GameResult {
+            .result = 0,
+            .reason= GAME_RESULT_3_FOLD_REPETITION
+        };
     }
 
     return std::nullopt;
