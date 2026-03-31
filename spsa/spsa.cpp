@@ -148,7 +148,7 @@ static int run_double_sided_game(size_t game_index, const char* opening, const S
 
         std::optional<int> result;
 
-        for (int hm = 0; hm < 200; ++hm) {
+        for (;;) {
             result = pos.game_result();
 
             if (result.has_value()) { // game over

@@ -694,6 +694,7 @@ void Position::make_move(Move move) {
     // Update eval
     uint64_t initial_zobrist = zobrist;
     int64_t initial_eval = get_eval();
+    int initial_half_move_clock = half_move_clock;
 
     // First, check for a capture and remove the piece
     Piece captured_piece = move_captured_piece(move);
@@ -715,7 +716,8 @@ void Position::make_move(Move move) {
         .is_checked = {
             is_checked[0],
             is_checked[1]
-        }
+        },
+        .half_move_clock = initial_half_move_clock,
     };
 
     assert(undo_count < MAX_DEPTH);
@@ -804,6 +806,18 @@ void Position::make_move(Move move) {
 #endif
 
     update_is_checked();
+
+    // update half-move clock
+
+    bool is_capture = captured_piece != PIECE_NONE;
+    bool is_pawn_move = start_piece == PIECE_PAWN;
+
+    if (is_capture || is_pawn_move) {
+        half_move_clock = 0;
+    }
+    else {
+        half_move_clock++;
+    }
 }
 
 void Position::update_is_checked() {
@@ -867,6 +881,7 @@ void Position::unmake_move() {
     flags = undo.flags;
     en_passant_sq = undo.en_passant_sq;
     zobrist = undo.zobrist;
+    half_move_clock = undo.half_move_clock;
 }
 
 void Position::make_null_move() {
@@ -880,7 +895,8 @@ void Position::make_null_move() {
         .is_checked = {
             is_checked[0],
             is_checked[1]
-        }
+        },
+        .half_move_clock = half_move_clock
     };
 
     update_en_passant_sq(NULL_SQUARE);
@@ -902,6 +918,7 @@ void Position::unmake_null_move(){
     flags = undo.flags;
     en_passant_sq = undo.en_passant_sq;
     zobrist = undo.zobrist;
+    half_move_clock = undo.half_move_clock;
 }
 
 uint64_t Position::generate_pin_mask(int side) const {

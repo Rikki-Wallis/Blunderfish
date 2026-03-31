@@ -238,10 +238,24 @@ std::optional<Position> Position::parse_fen(const std::string& fen) {
         next();
     }
 
+    // Half-move clock
+
+    skip_whitespace();
+    if (cursor >= fen.size()) return std::nullopt;
+
+    int half_move_clock = 0;
+
+    while (cursor < fen.size() && isdigit(peek())) {
+        char c = next();
+        half_move_clock *= 10;
+        half_move_clock += c - '0';
+    }
+
     pos.zobrist = pos.compute_zobrist();
     pos.update_is_checked();
     pos.reset_nnue_accumulator();
     pos.eval_cache = std::nullopt;
+    pos.half_move_clock = half_move_clock;
 
     return pos;
 }
@@ -335,7 +349,9 @@ std::string Position::fen() const {
     }
 
     result.push_back(' ');
-    result.push_back(to_move == WHITE ? '2' : '3');
+
+    result += std::format("{}", half_move_clock);
+
     result.push_back(' ');
     result.push_back('1');
 
@@ -413,20 +429,24 @@ std::optional<int> Position::game_result() {
     MoveList moves = generate_moves();
     filter_moves(moves);
 
+    if (moves.count == 0) {
+        if (is_checked[to_move]) {
+            return to_move == WHITE ? -1 : 1;
+        }
+        else {
+            return 0;
+        }
+    }
+
+    if (half_move_clock == 100) {
+        return 0;
+    }
+
     if (is_threefold_repetition()) {
         return 0;
     }
 
-    if (moves.count != 0) {
-        return std::nullopt;
-    }
-
-    if (is_checked[to_move]) {
-        return to_move == WHITE ? -1 : 1;
-    }
-    else {
-        return 0;
-    }
+    return std::nullopt;
 }
 
 bool Position::is_threefold_repetition() const {

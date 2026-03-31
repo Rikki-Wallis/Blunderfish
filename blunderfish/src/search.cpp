@@ -523,6 +523,10 @@ int64_t Position::negamax(SearchContext& s, int depth, int ply, bool allow_null,
         }
     }
 
+    if (half_move_clock == 100) {
+        best_score = 0;
+    }
+
     TTEntry& target = find_entry(s.tt, zobrist);
     update_tt_entry(target, zobrist, depth, best_score, ply, alpha_original, beta_original, best_move);
 
@@ -637,6 +641,10 @@ int64_t Position::quiescence(SearchContext& s, int ply, int64_t alpha, int64_t b
 
     if (currently_checked && !legal_found) {
         return -MATE_SCORE + ply; // checkmate
+    }
+
+    if (half_move_clock == 100) {
+        return 0;
     }
 
     return best_score;

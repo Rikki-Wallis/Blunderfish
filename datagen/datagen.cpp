@@ -36,11 +36,6 @@ static int run_match(FILE* file) {
             break;
         }
 
-        if (hm == 200) {
-            result = 0; // draw
-            break;
-        }
-        
         if (hm < RANDOM_HALF_MOVES) { // For the first n moves, play random moves, to diversify the position
             MoveList moves = pos.generate_moves();
             pos.filter_moves(moves);

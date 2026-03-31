@@ -132,6 +132,7 @@ struct Undo {
     int64_t incremental_eval;
     uint64_t zobrist;
     bool is_checked[2];
+    int half_move_clock;
 };
 
 struct TTEntry {
@@ -316,6 +317,8 @@ struct Position {
     uint8_t piece_at[64];
     uint32_t flags;
 
+    int half_move_clock;
+
     bool is_checked[2];
 
     uint64_t zobrist;
@@ -339,7 +342,7 @@ struct Position {
     std::optional<int64_t> eval_cache;
 
     Position()
-        : to_move(WHITE), en_passant_sq(NULL_SQUARE), flags(0), undo_count(0), eval_cache(std::nullopt)
+        : to_move(WHITE), en_passant_sq(NULL_SQUARE), flags(0), half_move_clock(0), undo_count(0), eval_cache(std::nullopt)
     {
         memset(sides, 0, sizeof(sides));
         memset(piece_at, 0, sizeof(piece_at));
