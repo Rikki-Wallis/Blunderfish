@@ -14,7 +14,7 @@ TEST_CASE("Perft - Starting Position") {
 }
 
 TEST_CASE("Perft - Kiwipete Position") {    
-    Position pos = *Position::parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -");
+    Position pos = *Position::parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
 
     REQUIRE(perft_search(1, pos) == 48);
     REQUIRE(perft_search(2, pos) == 2039);

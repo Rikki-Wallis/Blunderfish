@@ -50,6 +50,6 @@ TEST_CASE("Eval - increment_eval equals eval | STARTING POSITION") {
 }
 
 TEST_CASE("Eval - increment_eval equals eval | KIWIPETE_POSITION") {
-    Position pos = *Position::parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -");
+    Position pos = *Position::parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
     eval_search(3, pos);
 }

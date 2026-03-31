@@ -15,8 +15,7 @@ static void test_fen(Position& pos, int depth) {
         return;
     }
 
-    std::array<Move, 256> move_buf;
-    std::span<Move> moves = pos.generate_moves(move_buf);
+    MoveList moves = pos.generate_moves();
 
     int my_side = pos.to_move;
 
@@ -32,6 +31,6 @@ static void test_fen(Position& pos, int depth) {
 }
 
 TEST_CASE("FEN encode and decode is correct") {
-    Position pos = *Position::parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -");
+    Position pos = *Position::parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
     test_fen(pos, 3);
 }
