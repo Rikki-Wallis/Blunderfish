@@ -73,7 +73,7 @@ static ActiveIndices get_king_perspective_indices(std::span<uint64_t> bbs, int k
                 int rel_sq = king_side == BLACK ? flip_sq(sq) : sq;
                 int idx = int(king_sq*64*10+(rel_side*5+piece)*64 + rel_sq);
 
-                assert(indices.count < std::size(indices.data));
+                assert(size_t(indices.count) < std::size(indices.data));
                 indices.data[indices.count++] = idx;
             }
         }
