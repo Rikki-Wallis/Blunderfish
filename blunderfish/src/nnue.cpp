@@ -6,7 +6,7 @@
 #ifdef __AVX2__
 #include <immintrin.h>
 #else
-#error "No intrinsics supported for NNUE"
+//#error "No intrinsics supported for NNUE"
 #endif
 
 #include "blunderfish.h"
@@ -130,7 +130,6 @@ static float forward_accumulator(int16_t* RESTRICT accumulator) {
         s = _mm_add_epi32(s, _mm_shuffle_epi32(s, _MM_SHUFFLE(2,3,0,1)));
         int32_t value = _mm_cvtsi128_si32(s) + nnue_b1[i];
 #else
-#error "No intrinsics"
         int32_t value = nnue_b1[i];
 
         for (size_t j = 0; j < std::size(a0); ++j) {
