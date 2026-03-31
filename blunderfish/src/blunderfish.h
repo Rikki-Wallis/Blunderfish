@@ -26,7 +26,7 @@ using TimePoint = std::chrono::time_point<Clock>;
 #define ZOBRIST_INCLUDE_EN_PASSANT_SQ
 #define ZOBRIST_INCLUDE_SIDE
 
-#define MAX_DEPTH 512
+#define MAX_DEPTH 255
 
 constexpr int64_t INF        = 400000000;
 constexpr int64_t MATE_SCORE = 32000; // just shy of int16 bounds
@@ -347,18 +347,16 @@ struct Position {
     int reduced_searches;
     int reduced_fail_high;
 
-    std::array<Undo, MAX_DEPTH> undo_stack;
-    int undo_count;
+    std::vector<Undo> undo_stack;
 
     alignas(32) int16_t accumulator[ACCUMULATOR_SIZE];
     std::optional<int64_t> eval_cache;
 
     Position()
-        : to_move(WHITE), en_passant_sq(NULL_SQUARE), flags(0), half_move_clock(0), undo_count(0), eval_cache(std::nullopt)
+        : to_move(WHITE), en_passant_sq(NULL_SQUARE), flags(0), half_move_clock(0), eval_cache(std::nullopt)
     {
         memset(sides, 0, sizeof(sides));
         memset(piece_at, 0, sizeof(piece_at));
-        memset(undo_stack.data(), 0, sizeof(MAX_DEPTH * sizeof(Undo)));
         zobrist = compute_zobrist();
         reset_benchmarking_statistics();
     }

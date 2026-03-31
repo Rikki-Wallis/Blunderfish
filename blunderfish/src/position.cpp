@@ -464,7 +464,7 @@ std::optional<GameResult> Position::game_result() {
 bool Position::is_threefold_repetition() const {
     int count = 0;
 
-    for (int i = undo_count-2; i >= 0; i -= 2) {
+    for (int i = int(undo_stack.size())-2; i >= 0; i -= 2) {
         const Undo& undo = undo_stack[i];
 
         if (undo.zobrist == zobrist) {

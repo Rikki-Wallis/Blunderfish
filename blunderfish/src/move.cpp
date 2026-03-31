@@ -720,8 +720,7 @@ void Position::make_move(Move move) {
         .half_move_clock = initial_half_move_clock,
     };
 
-    assert(undo_count < MAX_DEPTH);
-    undo_stack[undo_count++] = undo;
+    undo_stack.push_back(undo);
 
     // remove the captured piece
     uint64_t capture_mask = bool_to_mask<uint64_t>(captured_piece != PIECE_NONE) & sq_to_bb(captured_pos);
@@ -828,8 +827,8 @@ void Position::update_is_checked() {
 }
 
 void Position::unmake_move() {
-    assert(undo_count > 0);
-    Undo undo = undo_stack[--undo_count];
+    Undo undo = undo_stack.back();
+    undo_stack.pop_back();
 
     assert(undo.move != NULL_MOVE);
 
@@ -885,8 +884,7 @@ void Position::unmake_move() {
 }
 
 void Position::make_null_move() {
-    assert(undo_count < MAX_DEPTH);
-    undo_stack[undo_count++] = Undo {
+    undo_stack.push_back(Undo {
         .flags = flags,
         .move = NULL_MOVE,
         .en_passant_sq = en_passant_sq,
@@ -897,7 +895,7 @@ void Position::make_null_move() {
             is_checked[1]
         },
         .half_move_clock = half_move_clock
-    };
+    });
 
     update_en_passant_sq(NULL_SQUARE);
     to_move = opponent(to_move);
@@ -911,8 +909,8 @@ void Position::make_null_move() {
 void Position::unmake_null_move(){
     to_move = opponent(to_move);
 
-    assert(undo_count > 0);
-    Undo undo = undo_stack[--undo_count];
+    Undo undo = undo_stack.back();
+    undo_stack.pop_back();
 
     eval_cache = undo.incremental_eval;
     flags = undo.flags;
