@@ -28,6 +28,8 @@ static GameResult run_match(FILE* file) {
 
     std::optional<GameResult> gr = std::nullopt;
 
+    int n_random = std::uniform_int_distribution<int>(RANDOM_HALF_MOVES, RANDOM_HALF_MOVES+5)(rng);
+
     for (int hm = 0;;++hm) {
         gr = pos.game_result();
 
@@ -35,7 +37,7 @@ static GameResult run_match(FILE* file) {
             break;
         }
 
-        if (hm < RANDOM_HALF_MOVES) { // For the first n moves, play random moves, to diversify the position
+        if (hm < n_random) { // For the first n moves, play random moves, to diversify the position
             MoveList moves = pos.generate_moves();
             pos.filter_moves(moves);
 
@@ -66,8 +68,6 @@ static GameResult run_match(FILE* file) {
         }
     }
 
-    assert(result != 67);
-
     int32_t outcome = int32_t(gr->result);
 
     {
@@ -93,8 +93,10 @@ int main() {
 
         std::vector<std::thread> threads;
 
+        std::atomic<int64_t> result_total = 0;
+
         for (int t = 0; t < nthreads; ++t) {
-            threads.push_back(std::thread([&match_count, file, iter](){
+            threads.push_back(std::thread([&result_total, &match_count, file, iter](){
                 for (;;) {
                     int mid = match_count.fetch_add(1);
 
@@ -103,6 +105,8 @@ int main() {
                     }
 
                     GameResult result = run_match(file);
+
+                    auto old_total = result_total.fetch_add(result.result);
 
                     const char* reason = "";
 
@@ -131,7 +135,7 @@ int main() {
 
                     {
                         std::lock_guard guard(io_mutex);
-                        print("Batch {}/{}: Game {}/{}: {} ({})\n", iter+1, NUM_ITERATIONS, mid+1, NUM_MATCHES, result.result, reason);
+                        print("Batch {}/{}: Game {}/{}: {} ({}) (ot: {})\n", iter+1, NUM_ITERATIONS, mid+1, NUM_MATCHES, result.result, reason, old_total);
                     }
                 }
             }));
@@ -140,6 +144,9 @@ int main() {
         for (auto& t : threads) {
             t.join();
         }
+
+        auto x = result_total.load();
+        print("Result total: {}\n", x);
 
         fclose(file);
     }

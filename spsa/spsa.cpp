@@ -28,26 +28,54 @@ float perturb_amount(const Param& param, int iteration) {
 // These are continuously updated but rounded to integers in most cases
 struct Params {
     std::map<std::string, Param> params = {
-        { "lmr_rate_base", { 0.609352f, 0.0f, 3.0f }},
-        { "lmr_rate_divisor", { 1.786544f, 0.5f, 5.0f }},
-        { "singular_margin_factor", { 1.94709f, 0.5f, 5.0f }},
-        { "rfp_margin_factor", { 132.0f, 10.0f, 1000.0f }},
-        { "rfp_improving_bonus", { 28.0f, 0.0f, 1000.0f }},
-        { "fp_margin_factor", { 828.0f, 10.0f, 1000.0f }},
-        { "lmr_history_bonus_threshold", { 1594.0f, 100.0f, 5000.0f }},
-        { "history_bonus_factor", { 1.02898f, 0.1f, 5.0f }},
-        { "history_malus_factor", { 0.95008f, 0.1f, 5.0f }},
-        { "cont_history_bonus_factor", { 0.46919f, 0.1f, 5.0f }},
-        { "cont_history_malus_factor", { 0.48449f, 0.1f, 5.0f }},
-        { "qsearch_big_delta", { 1223.0f, 400.0f, 2000.0f }},
-        { "qsearch_delta_margin", { 70.0f, 50.0f, 1000.0f }},
-        { "asp_initial_window_size", { 12.0f, 10.0f, 100.0f }},
-        { "asp_window_growth_factor", { 5.39f, 1.1f, 100.0f }},
-        { "nmp_r_base", { 2.4091f, 1.0f, 6.0f }},
-        { "nmp_r_divisor", { 7.25516f, 1.0f, 12.0f }},
-        { "lmp_index_base", { 3.44978f, 1.0f, 5.0f }},
-        { "lmp_index_factor", { 2.32816f, 0.5f, 5.0f }},
+        { "lmr_rate_base", { 0.0f, 0.0f, 3.0f }},
+        { "lmr_rate_divisor", { 0.0f, 0.5f, 5.0f }},
+        { "singular_margin_factor", { 0.0f, 0.5f, 5.0f }},
+        { "rfp_margin_factor", { 0.0f, 10.0f, 1000.0f }},
+        { "rfp_improving_bonus", { 0.0f, 0.0f, 1000.0f }},
+        { "fp_margin_factor", { 0.0f, 10.0f, 1000.0f }},
+        { "lmr_history_bonus_threshold", { 0.0f, 100.0f, 5000.0f }},
+        { "history_bonus_factor", { 0.0f, 0.1f, 5.0f }},
+        { "history_malus_factor", { 0.0f, 0.1f, 5.0f }},
+        { "cont_history_bonus_factor", { 0.0f, 0.1f, 5.0f }},
+        { "cont_history_malus_factor", { 0.0f, 0.1f, 5.0f }},
+        { "qsearch_big_delta", { 0.0f, 400.0f, 2000.0f }},
+        { "qsearch_delta_margin", { 0.0f, 50.0f, 1000.0f }},
+        { "asp_initial_window_size", { 0.0f, 10.0f, 100.0f }},
+        { "asp_window_growth_factor", { 0.0f, 1.1f, 100.0f }},
+        { "nmp_r_base", { 0.0f, 1.0f, 6.0f }},
+        { "nmp_r_divisor", { 0.0f, 1.0f, 12.0f }},
+        { "lmp_index_base", { 0.0f, 1.0f, 5.0f }},
+        { "lmp_index_factor", { 0.0f, 0.5f, 5.0f }},
     };
+
+    void load_from_checkpoint(const char* path) {
+        std::ifstream file(path);
+
+        std::string line;
+        while(std::getline(file, line)) {
+            if (line.empty()) {
+                continue;
+            }
+
+            std::istringstream iss(line);
+
+            std::string attrib;
+            float value;
+
+            if (!(iss >> attrib >> value)) {
+                print("Failed to parse checkpoint.\n");
+                exit(1);
+            }
+
+            if (!params.contains(attrib)) {
+                print("Unknown attribute {}\n", attrib);
+                exit(1);
+            }
+
+            params.at(attrib).value = value;
+        }
+    }
 
     void dump() {
         print("Params:\n");
@@ -203,6 +231,7 @@ static int run_double_sided_game(size_t game_index, const char* opening, const S
 
 int main() {
     Params params{};
+    params.load_from_checkpoint("params_checkpoint.txt");
 
     std::vector<Params> history{params};
 

@@ -148,7 +148,7 @@ struct TTCluster {
     TTEntry entries[4];
 };
 
-#ifdef USE_NNUE
+#if defined(USE_NNUE) && true
 struct SearchParameters {
     float lmr_rate_base = 0.575023f;
     float lmr_rate_divisor = 2.0215f;
