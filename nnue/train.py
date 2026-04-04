@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 total = os.path.getsize("aggregate.bin") // RECORD_SIZE
-#total = 100000
+#total = 200
 split = int(total * 0.9)
 
 train = NNUEDataset("aggregate.bin", 0, split)
@@ -45,9 +45,9 @@ val_loader = DataLoader(val, batch_size=1024, num_workers=12,persistent_workers=
 model = NNUE()
 #model = torch.compile(model)
 model = model.to(device)
-#model.load_state_dict(torch.load("model_epoch1_val0.491991.pt"))
+#model.load_state_dict(torch.load("new.pt"))
 
-num_epochs = 30
+num_epochs = 1000
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
@@ -103,6 +103,7 @@ for epoch in range(num_epochs):
     print(f"Epoch {epoch+1} train: {train_loss:.6f} val: {val_loss:.6f} lr: {optimizer.param_groups[0]['lr']}")
     model.train()
 
-    torch.save(model.state_dict(), f"model_epoch{epoch+1}_val{val_loss:.6f}.pt")
+    if epoch % 100 == 0:
+        torch.save(model.state_dict(), f"model_epoch{epoch+1}_val{val_loss:.6f}.pt")
 
     scheduler.step()
