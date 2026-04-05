@@ -1,6 +1,7 @@
 import struct
 import mmap
 import os
+import random
 
 import torch
 import torch.nn as nn
@@ -9,7 +10,7 @@ import torch.nn.functional as F
 
 torch.set_float32_matmul_precision('high')
 
-RECORD_FORMAT = "=12Qii"
+RECORD_FORMAT = "=12Qibb"
 RECORD_SIZE = struct.calcsize(RECORD_FORMAT)
 
 def lsb(x: int):
@@ -78,13 +79,17 @@ class NNUEDataset(Dataset):
 
         bitboards = fields[:12]
         score = fields[12]
-        outcome = fields[13] * 0.5 + 0.5
+        max_ply = fields[13]
+        outcome = fields[14] * 0.5 + 0.5
 
         white = bitboards_to_indices(bitboards, 0)
         black = bitboards_to_indices(bitboards, 1)
 
         wdl_score = torch.sigmoid(torch.tensor(score, dtype=torch.float32).div_(400.0))
-        target = 0.7 * wdl_score + 0.3 * outcome
+
+        w = torch.sigmoid(torch.tensor(abs(score)/400)).item()
+        w += random.uniform(-0.05, 0.05)
+        target = w * wdl_score + (1-w) * outcome
 
         return torch.tensor(white, dtype=torch.int32), torch.tensor(black, dtype=torch.int32), target
 

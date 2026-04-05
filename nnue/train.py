@@ -47,7 +47,7 @@ model = NNUE()
 model = model.to(device)
 #model.load_state_dict(torch.load("new.pt"))
 
-num_epochs = 1000
+num_epochs = 10
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
@@ -103,7 +103,6 @@ for epoch in range(num_epochs):
     print(f"Epoch {epoch+1} train: {train_loss:.6f} val: {val_loss:.6f} lr: {optimizer.param_groups[0]['lr']}")
     model.train()
 
-    if epoch % 100 == 0:
-        torch.save(model.state_dict(), f"model_epoch{epoch+1}_val{val_loss:.6f}.pt")
+    torch.save(model.state_dict(), f"model_epoch{epoch+1}_val{val_loss:.6f}.pt")
 
     scheduler.step()

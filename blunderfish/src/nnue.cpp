@@ -305,6 +305,7 @@ static void update_accumulator_from_king_perspective(int16_t* RESTRICT accumulat
     }
 }
 
+#ifdef USE_NNUE
 void Position::update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side, int sign) {
     (void)captured_piece;
     (void)captured_pos;
@@ -317,7 +318,6 @@ void Position::update_eval(Piece captured_piece, int captured_pos, Piece moving_
     (void)side;
     (void)sign;
 
-#ifdef USE_NNUE
     int white_king_sq = std::countr_zero(sides[WHITE].bb[PIECE_KING]);
     int black_king_sq = std::countr_zero(sides[BLACK].bb[PIECE_KING]);
 
@@ -333,31 +333,16 @@ void Position::update_eval(Piece captured_piece, int captured_pos, Piece moving_
         update_accumulator_from_king_perspective(accumulator, captured_piece, captured_pos, moving_piece_start, moving_piece_end, move_from, move_to, rook_from, rook_to, side, sign, white_king_sq, WHITE);
         update_accumulator_from_king_perspective(accumulator, captured_piece, captured_pos, moving_piece_start, moving_piece_end, move_from, move_to, rook_from, rook_to, side, sign, black_king_sq, BLACK);
     }
-#else
-    //// NOTE: if rook_from == rook_to there is NO castle
-    //// ensure that if that is the case, your castling operations have a NET ZERO
-
-    //incremental_eval -= piece_delta(captured_piece, captured_pos, opponent(side));
-
-    //incremental_eval -= piece_delta(moving_piece_start, move_from, side);
-    //incremental_eval += piece_delta(moving_piece_end, move_to, side);
-
-    //// since these are symmetric, should have net zero when rook_from == rook_to
-    //incremental_eval -= piece_delta(PIECE_ROOK, rook_from, to_move);
-    //incremental_eval += piece_delta(PIECE_ROOK, rook_to, to_move);
-#endif
 }
-
-int64_t Position::get_eval() {
-    if (eval_cache.has_value()) {
-        return *eval_cache;
-    }
+#endif
 
 #ifdef USE_NNUE
-    float x = forward_accumulator(accumulator);
-    eval_cache = wdl_to_centipawns(x);
-#else
-    eval_cache = compute_eval();
-#endif
+int64_t Position::get_eval() {
+    if (!eval_cache.has_value()) {
+        float x = forward_accumulator(accumulator);
+        eval_cache = wdl_to_centipawns(x);
+    }
+
     return *eval_cache;
 }
+#endif

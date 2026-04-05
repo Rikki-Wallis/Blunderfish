@@ -184,8 +184,10 @@ int64_t Position::compute_eval() const {
     #ifdef USE_NNUE
         return nnue_eval();
     #else
+
     int64_t value = sides[WHITE].material_value() - sides[BLACK].material_value();
 
+    /*
     // Compute phase
     int phase = 0;
     phase += std::popcount(sides[WHITE].bb[PIECE_KNIGHT] | sides[BLACK].bb[PIECE_KNIGHT]) * 1;
@@ -229,6 +231,17 @@ int64_t Position::compute_eval() const {
     value += mobility(WHITE);
     value += mobility(BLACK);
     value += bishop_imbalance();
+    */
+
+    for (int p = PIECE_PAWN; p < NUM_PIECE_TYPES; ++p) {
+        for (int sq : set_bits(sides[WHITE].bb[p])) {
+            value += mg_unsigned_pst_value((Piece)p, sq, WHITE);
+        }
+
+        for (int sq : set_bits(sides[BLACK].bb[p])) {
+            value -= mg_unsigned_pst_value((Piece)p, sq, BLACK);
+        }
+    }
     
     return value;
 #endif
@@ -467,3 +480,39 @@ inline int32_t piece_delta(Piece piece, int sq, int side) {
     value += sign * piece_value_table[piece];
     return value;
 }
+
+#ifndef USE_NNUE
+void Position::update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side, int sign) {
+    (void)captured_piece;
+    (void)captured_pos;
+    (void)moving_piece_start;
+    (void)moving_piece_end;
+    (void)move_from;
+    (void)move_to;
+    (void)rook_from;
+    (void)rook_to;
+    (void)side;
+    (void)sign;
+    // NOTE: if rook_from == rook_to there is NO castle
+    // ensure that if that is the case, your castling operations have a NET ZERO
+
+    hce -= sign * piece_delta(captured_piece, captured_pos, opponent(side));
+
+    hce -= sign * piece_delta(moving_piece_start, move_from, side);
+    hce += sign * piece_delta(moving_piece_end, move_to, side);
+
+    // since these are symmetric, should have net zero when rook_from == rook_to
+    hce -= sign * piece_delta(PIECE_ROOK, rook_from, to_move);
+    hce += sign * piece_delta(PIECE_ROOK, rook_to, to_move);
+}
+#endif
+
+#ifndef USE_NNUE
+int64_t Position::get_eval() {
+    if (!eval_cache.has_value()) {
+        eval_cache = hce;
+    }
+
+    return *eval_cache;
+}
+#endif

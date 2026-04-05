@@ -10,7 +10,7 @@ static thread_local std::mt19937 rng(std::random_device{}());
 constexpr int NUM_ITERATIONS = 100;
 constexpr int NUM_MATCHES = 10000;
 constexpr int RANDOM_HALF_MOVES = 10;
-constexpr int SEARCH_DEPTH = 6;
+constexpr int NODE_BUDGET = 5000;
 
 static const char* START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -19,6 +19,7 @@ static std::mutex io_mutex;
 struct Record {
     std::array<uint64_t, 12> bbs;
     int32_t score;
+    int8_t max_ply;
 };
 
 static GameResult run_match(FILE* file) {
@@ -50,17 +51,23 @@ static GameResult run_match(FILE* file) {
 
             std::atomic<bool> should_stop = false;
 
-            int64_t score = 0;
-            Move mv = pos.best_move(SEARCH_DEPTH, should_stop, std::nullopt, std::nullopt, false, &score);
+            NodeBudgeter budgeter(NODE_BUDGET);
+
+            int64_t score= 0;
+            Move mv= pos.best_move(20, should_stop, &budgeter, {}, false, &score);
 
             if (pos.to_move == BLACK) {
                 score *= -1;
             }
 
-            if (pos.is_quiescent() && std::abs(score) < (MATE_SCORE - 1000)) { // filter out mate scores
+            bool not_mate = std::abs(score) < (MATE_SCORE - 1000);
+            bool quiet = pos.is_quiescent();
+
+            if (quiet && not_mate) {
                 Record r;
                 r.score = int32_t(score);
                 r.bbs = pos.to_bitboards();
+                r.max_ply = int8_t(pos.max_ply);
                 records.push_back(r);
             }
 
@@ -68,13 +75,14 @@ static GameResult run_match(FILE* file) {
         }
     }
 
-    int32_t outcome = int32_t(gr->result);
+    int8_t outcome = int8_t(gr->result);
 
     {
         std::lock_guard g(io_mutex);
         for (Record& r : records) {
             fwrite(r.bbs.data(), r.bbs.size() * sizeof(uint64_t), 1, file);
             fwrite(&r.score, sizeof(r.score), 1, file);
+            fwrite(&r.max_ply, sizeof(r.max_ply), 1, file);
             fwrite(&outcome, sizeof(outcome), 1, file);
         }
     }

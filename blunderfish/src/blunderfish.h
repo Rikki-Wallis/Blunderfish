@@ -12,7 +12,7 @@
 
 #include "common.h"
 
-#define USE_NNUE
+//#define USE_NNUE
 
 constexpr size_t ACCUMULATOR_SIZE = 512;
 
@@ -150,25 +150,25 @@ struct TTCluster {
 
 #if defined(USE_NNUE) && true
 struct SearchParameters {
-    float lmr_rate_base = 1.2663f;
-    float lmr_rate_divisor = 2.02408f;
-    float singular_margin_factor = 1.11562f;
-    int rfp_margin_factor = 137;
-    int rfp_improving_bonus = 48;
-    int fp_margin_factor = 996;
-    int lmr_history_bonus_threshold = 1369;
-    float history_bonus_factor = 1.86069f;
-    float history_malus_factor = 1.24664f;
-    float cont_history_bonus_factor = 0.53912f;
-    float cont_history_malus_factor = 0.232593f;
-    int qsearch_big_delta = 1052;
-    int qsearch_delta_margin = 383;
-    int asp_initial_window_size = 27;
-    float asp_window_growth_factor = 7.89678f;
-    float nmp_r_base = 1.77299f;
-    float nmp_r_divisor = 7.86221f;
-    float lmp_index_base = 2.37733f;
-    float lmp_index_factor = 2.19539f;
+    float lmr_rate_base = 0.575023f;
+    float lmr_rate_divisor = 2.0215f;
+    float singular_margin_factor = 2.01f;
+    int rfp_margin_factor = 82;
+    int rfp_improving_bonus = 9;
+    int fp_margin_factor = 983;
+    int lmr_history_bonus_threshold = 2022;
+    float history_bonus_factor = 1.90172f;
+    float history_malus_factor = 1.11097f;
+    float cont_history_bonus_factor = 0.676f;
+    float cont_history_malus_factor = 0.512f;
+    int qsearch_big_delta = 1339;
+    int qsearch_delta_margin = 195;
+    int asp_initial_window_size = 14;
+    float asp_window_growth_factor = 5.97f;
+    float nmp_r_base = 2.14718f;
+    float nmp_r_divisor = 7.62869f;
+    float lmp_index_base = 3.28302f;
+    float lmp_index_factor = 2.382f;
 };
 #else
 struct SearchParameters {
@@ -264,11 +264,7 @@ struct SearchContext {
     SearchParameters params;
 
     std::atomic<bool>& should_stop;
-    std::optional<double> time_limit;
-    TimePoint search_start;
-
-    bool out_of_time() const;
-    double elapsed_time() const;
+    class Budgeter* budgeter;
 };
 
 // Pack as exactly 16 bytes
@@ -322,6 +318,20 @@ struct GameResult {
     GameResultReason reason;
 };
 
+class Budgeter {
+public:
+    virtual ~Budgeter() = default;
+    virtual void init() {}
+    virtual bool should_exit(struct Position& pos) const = 0;
+};
+
+class NullBudgeter : public Budgeter {
+public:
+    virtual bool should_exit(struct Position& pos) const override;
+};
+
+extern NullBudgeter null_budgeter;
+
 struct Position {
     Side sides[2];
     int to_move;
@@ -349,7 +359,11 @@ struct Position {
 
     std::vector<Undo> undo_stack;
 
+    #ifdef USE_NNUE
     alignas(32) int16_t accumulator[ACCUMULATOR_SIZE];
+    #else
+    int64_t hce;
+    #endif
     std::optional<int64_t> eval_cache;
 
     Position()
@@ -408,17 +422,15 @@ struct Position {
     int64_t negamax(SearchContext& s, int depth, int ply, bool allow_null, int64_t alpha, int64_t beta, Move excluded_move, int extensions_so_far, int root_depth, ContinuationTable* cont);
     int64_t quiescence(SearchContext& s, int ply, int64_t alpha, int64_t beta);
 
-    int64_t eval_at_depth(int depth);
-
     int32_t mvv_lva_score(Move mv, int32_t offset) const;
 
     std::pair<Move, int64_t> best_move_internal(SearchContext& s, MoveList& moves, int depth, Move last_best_move, int64_t alpha, int64_t beta);
-    Move best_move(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params = std::nullopt, bool enable_uci_info=false, int64_t* score_out=nullptr);
+    Move best_move(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter = &null_budgeter, const SearchParameters& params = {}, bool enable_uci_info=false, int64_t* score_out=nullptr);
     
     bool is_move_legal_slow(Move move);
 
     std::optional<GameResult> game_result();
-    Move think(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit = std::nullopt, std::optional<SearchParameters> params_in = std::nullopt, bool enable_uci_info = false);
+    Move think(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter = &null_budgeter, const SearchParameters& params_in = {}, bool enable_uci_info = false);
 
     uint64_t compute_zobrist() const;
 
@@ -538,3 +550,39 @@ static T bool_to_mask(bool x) {
 }
 
 std::string to_uci_move(Move move);
+
+class TimeBudgeter : public Budgeter {
+public:
+    TimeBudgeter(double limit_seconds)
+        : _limit(limit_seconds)
+    {}
+
+    virtual void init() override {
+        _start = Clock::now();
+    }
+
+    virtual bool should_exit(Position& pos) const override {
+        (void)pos;
+        int64_t ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - _start).count();
+        double s = double(ms)/1000.0;
+        return s >= _limit;
+    }
+
+private:
+    double _limit;
+    TimePoint _start;
+};
+
+class NodeBudgeter : public Budgeter {
+public:
+    NodeBudgeter(int count)
+        : _limit(count)
+    {}
+
+    virtual bool should_exit(Position& pos) const override {
+        return pos.node_count >= _limit;
+    }
+
+private:
+    int _limit;
+};

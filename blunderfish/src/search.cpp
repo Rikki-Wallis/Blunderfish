@@ -180,7 +180,7 @@ static TTEntry& find_entry(TranspositionTable& tt, uint64_t zobrist) {
 
 int64_t Position::negamax(SearchContext& s, int depth, int ply, bool allow_null, int64_t alpha, int64_t beta, Move excluded_move, int extensions_so_far, int root_depth, ContinuationTable* cont) {
     if ((node_count & 4095) == 0) {
-        if (s.out_of_time()) {
+        if (s.budgeter->should_exit(*this)) {
             s.should_stop = true;
         }
     }
@@ -535,7 +535,7 @@ int64_t Position::negamax(SearchContext& s, int depth, int ply, bool allow_null,
 
 int64_t Position::quiescence(SearchContext& s, int ply, int64_t alpha, int64_t beta) {
     if ((node_count & 4095) == 0) {
-        if (s.out_of_time()) {
+        if (s.budgeter->should_exit(*this)) {
             s.should_stop = true;
         }
     }
@@ -690,7 +690,7 @@ std::pair<Move, int64_t> Position::best_move_internal(SearchContext& s, MoveList
     return {best_move, best_score};
 }
 
-Move Position::best_move(int depth, std::atomic<bool>& should_stop, std::optional<double> limit, std::optional<SearchParameters> params_in, bool enable_uci_info, int64_t* score_out) {
+Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter, const SearchParameters& params_in, bool enable_uci_info, int64_t* score_out) {
     reset_benchmarking_statistics();
 
     MoveList moves = generate_moves();
@@ -706,11 +706,13 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, std::optiona
         .history = {},
         .eval_history = {},
         .cont_history = {},
-        .params = params_in.value_or(SearchParameters{}),
+        .params = params_in,
         .should_stop = should_stop,
-        .time_limit = limit,
-        .search_start = Clock::now(),
+        .budgeter = budgeter,
     };
+
+    TimePoint start_time = Clock::now();
+    budgeter->init();
 
     Move best_move = moves.data[0]; // have at least one move
     int64_t best_score = 0;
@@ -753,7 +755,7 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, std::optiona
         // UCI output
 
         if (enable_uci_info) {
-            double elapsed = s.elapsed_time();
+            double elapsed = double(std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count())/1000.0;
             int nps = int(double(node_count)/elapsed);
 
             std::string score_str;
@@ -781,43 +783,10 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, std::optiona
     return best_move;
 }
 
-int64_t Position::eval_at_depth(int depth){
-    std::atomic<bool> should_stop = false;
-
-    SearchContext s = {
-        .tt = {},
-        .killers {},
-        .history = {},
-        .eval_history = {},
-        .cont_history = {},
-        .params = {},
-        .should_stop = should_stop,
-        .time_limit = std::nullopt,
-        .search_start = Clock::now(),
-    };
-
-    return negamax(s, depth, 1, true, -INF, INF, NULL_MOVE, 0, depth, nullptr);
-}
-
-bool SearchContext::out_of_time() const {
-    if (time_limit) {
-        return elapsed_time() > *time_limit;
-    }
-    else {
-        return false;
-    }
-}
-
-double SearchContext::elapsed_time() const {
-    auto now = Clock::now();
-    auto elapsed_nano = now - search_start;
-    return double(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed_nano).count())/1000.0;
-}
-
 /**
     Chooses between an opening move and searching for best move
  */
-Move Position::think(int depth, std::atomic<bool>& should_stop, std::optional<double> time_limit, std::optional<SearchParameters> params_in, bool enable_uci_info) {
+Move Position::think(int depth, std::atomic<bool>& should_stop, Budgeter* budgeter, const SearchParameters& params_in, bool enable_uci_info) {
     uint64_t hash = encode_polyglot();
     std::vector<PolyglotEntry> p_moves = probe_book(hash);
 
@@ -828,7 +797,7 @@ Move Position::think(int depth, std::atomic<bool>& should_stop, std::optional<do
         return move;
     } else {
 
-        Move best = best_move(depth, should_stop, time_limit, params_in, enable_uci_info);
+        Move best = best_move(depth, should_stop, budgeter, params_in, enable_uci_info);
         assert(best != NULL_MOVE);
     
         return best;

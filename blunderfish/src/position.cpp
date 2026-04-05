@@ -4,6 +4,8 @@
 #include "blunderfish.h"
 #include "common.h"
 
+NullBudgeter null_budgeter = NullBudgeter();
+
 enum SideFlags {
     SIDE_FLAG_NONE = 0,
     SIDE_FLAG_CAN_CASTLE_KINGSIDE  = (1 << 0),
@@ -257,6 +259,10 @@ std::optional<Position> Position::parse_fen(const std::string& fen) {
     pos.eval_cache = std::nullopt;
     pos.half_move_clock = half_move_clock;
 
+    #ifndef USE_NNUE
+    pos.hce = pos.compute_eval();
+    #endif
+
     return pos;
 }
 
@@ -500,4 +506,9 @@ std::array<uint64_t, 12> Position::to_bitboards() const {
     }
 
     return bbs;
+}
+
+bool NullBudgeter::should_exit(struct Position& pos) const {
+    (void)pos;
+    return false;
 }

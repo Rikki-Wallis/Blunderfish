@@ -9,7 +9,7 @@ import seaborn as sns
 
 from scipy.stats import spearmanr
 
-RECORD_FORMAT = "=12Qii"
+RECORD_FORMAT = "=12Qibb"
 RECORD_SIZE = struct.calcsize(RECORD_FORMAT)
 
 def load_model(path):
@@ -120,7 +120,8 @@ class Dataset:
 
         bbs = fields[:12]
         score = fields[12]
-        outcome = fields[13]
+        max_ply = fields[13]
+        outcome = fields[14]
 
         return bbs, score, outcome
 
