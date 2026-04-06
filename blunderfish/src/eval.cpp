@@ -470,7 +470,7 @@ int64_t Position::mobility(int colour) const {
 
 int64_t Position::signed_eval() {
     int64_t sign = to_move == WHITE ? 1 : -1;
-    return get_eval() * sign;
+    return incr_eval * sign;
 }
  
 inline int32_t piece_delta(Piece piece, int sq, int side) {
@@ -496,23 +496,13 @@ void Position::update_eval(Piece captured_piece, int captured_pos, Piece moving_
     // NOTE: if rook_from == rook_to there is NO castle
     // ensure that if that is the case, your castling operations have a NET ZERO
 
-    hce -= sign * piece_delta(captured_piece, captured_pos, opponent(side));
+    incr_eval -= sign * piece_delta(captured_piece, captured_pos, opponent(side));
 
-    hce -= sign * piece_delta(moving_piece_start, move_from, side);
-    hce += sign * piece_delta(moving_piece_end, move_to, side);
+    incr_eval -= sign * piece_delta(moving_piece_start, move_from, side);
+    incr_eval += sign * piece_delta(moving_piece_end, move_to, side);
 
     // since these are symmetric, should have net zero when rook_from == rook_to
-    hce -= sign * piece_delta(PIECE_ROOK, rook_from, to_move);
-    hce += sign * piece_delta(PIECE_ROOK, rook_to, to_move);
-}
-#endif
-
-#ifndef USE_NNUE
-int64_t Position::get_eval() {
-    if (!eval_cache.has_value()) {
-        eval_cache = hce;
-    }
-
-    return *eval_cache;
+    incr_eval -= sign * piece_delta(PIECE_ROOK, rook_from, to_move);
+    incr_eval += sign * piece_delta(PIECE_ROOK, rook_to, to_move);
 }
 #endif

@@ -1,7 +1,5 @@
 import argparse
 import struct
-import math
-import random
 
 parser = argparse.ArgumentParser(description="Embed NNUE model into a C++ header")
 parser.add_argument("model_bin_path", help="Path to the model binary file")
@@ -20,8 +18,8 @@ def read_floats(n):
 def read_float_matrix(rows, cols):
     return [read_floats(cols) for _ in range(rows)]
 
-num_inputs = 64*64*10
-l1_output = 256
+num_inputs = 2*6*64
+l1_output = 64
 l2_input = l1_output*2
 l3_input = 32
 
@@ -52,22 +50,29 @@ w0_t = transpose(w0)
 
 # quantize the weights
 
-def quantize_matrix(m, q):
-    qm = [[int(round(q*x)) for x in row] for row in m]
+def clamp(x, lo, hi):
+    return min(max(x, lo), hi)
+
+def quantize_matrix(m, q, bitwidth):
+    lo = -(1 << (bitwidth-1))
+    hi = (1 << (bitwidth-1))-1
+    qm = [[clamp(int(round(q*x)), lo, hi) for x in row] for row in m]
     return qm
 
-def quantize_vector(v, q):
-    qv = [int(round(q*x)) for x in v]
+def quantize_vector(v, q, bitwidth):
+    lo = -(1 << (bitwidth-1))
+    hi = (1 << (bitwidth-1))-1
+    qv = [clamp(int(round(q*x)), lo, hi) for x in v]
     return qv
 
-w0_t = quantize_matrix(w0_t, 64)
-b0   = quantize_vector(b0, 64)
+w0_t = quantize_matrix(w0_t, 64, 8)
+b0   = quantize_vector(b0, 64, 16)
 
-w1   = quantize_matrix(w1, 64)
-b1   = quantize_vector(b1, 64*255)
+w1   = quantize_matrix(w1, 64, 8)
+b1   = quantize_vector(b1, 64*255, 32)
 
-w2   = quantize_matrix(w2, 64)
-b2   = quantize_vector(b2, 64*255)
+w2   = quantize_matrix(w2, 64, 16)
+b2   = quantize_vector(b2, 64*255, 32)
 
 # write the header
 
@@ -75,7 +80,7 @@ out = open(header_path, "w")
 
 out.write("#pragma once\n\n")
 out.write(f"constexpr size_t NNUE_INPUT_FEATURES = {num_inputs};\n")
-out.write(f"constexpr size_t NNUE_ACCUMULATOR_SIZE = {l2_input};\n\n")
+out.write(f"constexpr size_t NNUE_ACCUMULATOR_PERSP_SIZE = {l1_output};\n\n")
 
 def write_matrix(m, name, type):
     global out

@@ -1,12 +1,12 @@
 import os
 import glob
+import numpy as np
 
-out = open("aggregate.bin", "wb")
+struct_size = 12*8+4+1+1
 
-struct_size = 12*8+2*4
-
-for path in glob.glob(os.path.join("dataset", "*.bin")):
-    with open(path, "rb") as f:
-        data = f.read()
-        assert len(data)%struct_size == 0
-        out.write(data)
+with open("aggregate.bin", "wb") as out:
+    for path in glob.glob(os.path.join("dataset", "*.bin")):
+        data = np.fromfile(path, dtype=np.uint8).reshape(-1, struct_size)
+        np.random.shuffle(data)
+        out.write(data.tobytes())
+        print(f"Wrote {path} ({len(data)} records)")

@@ -12,9 +12,9 @@
 
 #include "common.h"
 
-//#define USE_NNUE
+#define USE_NNUE
 
-constexpr size_t ACCUMULATOR_SIZE = 512;
+constexpr size_t _ACCUMULATOR_PERSP_SIZE = 64;
 
 float nnue_infer(std::span<uint64_t> bbs);
 
@@ -148,7 +148,7 @@ struct TTCluster {
     TTEntry entries[4];
 };
 
-#if defined(USE_NNUE) && true
+#if defined(USE_NNUE) && false
 struct SearchParameters {
     float lmr_rate_base = 0.575023f;
     float lmr_rate_divisor = 2.0215f;
@@ -302,10 +302,6 @@ struct MoveList {
     Iterator end() { return { .ptr = data + count }; }
 };
 
-//struct Accumulator {
-//    alignas(32) int16_t data[ACCUMULATOR_SIZE];
-//};
-
 enum GameResultReason {
     GAME_RESULT_CHECKMATE,
     GAME_RESULT_STALEMATE,
@@ -331,6 +327,13 @@ public:
 };
 
 extern NullBudgeter null_budgeter;
+
+struct Accumulator {
+    alignas(32) int16_t data[2][_ACCUMULATOR_PERSP_SIZE];
+
+    int16_t* half(int persp) { return data[persp]; }
+    int16_t* ptr() { return data[0]; }
+};
 
 struct Position {
     Side sides[2];
@@ -359,20 +362,21 @@ struct Position {
 
     std::vector<Undo> undo_stack;
 
-    #ifdef USE_NNUE
-    alignas(32) int16_t accumulator[ACCUMULATOR_SIZE];
-    #else
-    int64_t hce;
-    #endif
-    std::optional<int64_t> eval_cache;
+#ifdef USE_NNUE
+    std::vector<Accumulator> accumulator_stack;
+#endif
+    int64_t incr_eval;
 
     Position()
-        : to_move(WHITE), en_passant_sq(NULL_SQUARE), flags(0), half_move_clock(0), eval_cache(std::nullopt)
+        : to_move(WHITE), en_passant_sq(NULL_SQUARE), flags(0), half_move_clock(0)
     {
         memset(sides, 0, sizeof(sides));
         memset(piece_at, 0, sizeof(piece_at));
         zobrist = compute_zobrist();
         reset_benchmarking_statistics();
+        #ifdef USE_NNUE
+        accumulator_stack.push_back({});
+        #endif
     }
 
     void display(bool display_metadata=false) const;
@@ -411,8 +415,6 @@ struct Position {
     int64_t compute_eval() const;
     int64_t nnue_eval() const;
 
-    int64_t get_eval();
-
     int64_t signed_eval();
 
     // @note if no castle, make rook_from == rook_ro
@@ -450,7 +452,12 @@ struct Position {
     bool is_threefold_repetition() const;
     int64_t mobility(int colour) const;
 
-    void reset_nnue_accumulator();
+    #ifdef USE_NNUE
+    void init_nnue_accumulator();
+    inline Accumulator& acc() {
+        return accumulator_stack.back();
+    }
+    #endif
 
     // polygot encoding & decoding
     uint64_t encode_polyglot();

@@ -1,7 +1,7 @@
 import struct
 import mmap
 import os
-import random
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -13,41 +13,28 @@ torch.set_float32_matmul_precision('high')
 RECORD_FORMAT = "=12Qibb"
 RECORD_SIZE = struct.calcsize(RECORD_FORMAT)
 
-def lsb(x: int):
-    assert x != 0
-    return (x & -x).bit_length() - 1
+def bb_to_squares(bb: int) -> np.ndarray:
+    arr = np.array([bb], dtype=np.uint64).view(np.uint8)  # 8 bytes
+    bits = np.unpackbits(arr, bitorder='little')           # 64 bits, LSB first
+    return np.where(bits)[0]      
 
-def flip_sq(sq):
-    return sq ^ 56
-
-def bitboards_to_indices(bitboards: list[int], king_side:int):
-    WHITE = 0
-    BLACK = 1
-
-    king_bb_idx = [
-        5, 11
-    ]
-
-    king_sq = lsb(bitboards[king_bb_idx[king_side]])
-    king_sq = flip_sq(king_sq) if king_side == BLACK else king_sq
-
+def bitboards_to_indices(bitboards: list[int], persp:int):
     indices = []
 
-    for piece_side in [WHITE, BLACK]:
-        rel_side = 1-piece_side if king_side == BLACK else piece_side
-
-        for piece in range(5):
+    for piece_side in range(2):
+        for piece in range(6):
             bb = bitboards[piece_side*6+piece]
 
-            while bb:
-                sq = lsb(bb)
-                sq = flip_sq(sq) if king_side == BLACK else sq
+            if not bb: continue
 
-                indices.append(king_sq*64*10 + (rel_side*5+piece)*64 + sq)
+            sqs = bb_to_squares(bb);
 
-                bb &= bb-1
+            rel_sq = sqs ^ 56 if persp == 1 else sqs
+            rel_side = (1-piece_side) if persp == 1 else piece_side
 
-    return indices
+            indices.append(rel_side * 6 * 64 + piece * 64 + rel_sq)
+
+    return np.concatenate(indices) if indices else np.array([], dtype=np.int32)
 
 class NNUEDataset(Dataset):
     def __init__(self, path, start=0, end=None):
@@ -72,49 +59,36 @@ class NNUEDataset(Dataset):
 
     def __getitem__(self, idx):
         self._ensure_open()
-
         offset = (idx+self.start) * RECORD_SIZE
-        raw = self.mm[offset : offset + RECORD_SIZE]
-        fields = struct.unpack_from(RECORD_FORMAT, raw)
+        return bytes(self.mm[offset : offset + RECORD_SIZE])
 
-        bitboards = fields[:12]
-        score = fields[12]
-        max_ply = fields[13]
-        outcome = fields[14] * 0.5 + 0.5
-
-        white = bitboards_to_indices(bitboards, 0)
-        black = bitboards_to_indices(bitboards, 1)
-
-        wdl_score = torch.sigmoid(torch.tensor(score, dtype=torch.float32).div_(400.0))
-
-        w = torch.sigmoid(torch.tensor(abs(score)/400)).item()
-        w += random.uniform(-0.05, 0.05)
-        target = w * wdl_score + (1-w) * outcome
-
-        return torch.tensor(white, dtype=torch.int32), torch.tensor(black, dtype=torch.int32), target
+        white, black, wdl_score, outcome = ext.parse_record(raw);
+        target = (1-CUR_BLEND) * wdl_score + CUR_BLEND * outcome
+        return white, black, torch.tensor(target, dtype=torch.float32)
 
 class NNUE(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.l1 = nn.Linear(10*64*64, 256)
-        self.l2 = nn.Linear(512, 32)
+        self.l1 = nn.Linear(2*6*64, 64)
+        self.l2 = nn.Linear(128, 32)
         self.l3 = nn.Linear(32, 1)
 
-    def feed_l1(self, batch_size, features, indices):
+    @torch.compiler.disable
+    def feed_l1(self, features, indices):
         f = self.l1.weight[:, features].T
-        a1 = torch.zeros(batch_size, 256, device=features.device)
+        a1 = torch.zeros(indices.max()+1, 64, device=features.device)
         a1.index_add_(0, indices, f)
         return a1 + self.l1.bias
 
-    def forward(self, batch_size, white_features, white_indices, black_features, black_indices):
-        a1w = self.feed_l1(batch_size, white_features, white_indices)
-        a1b = self.feed_l1(batch_size, black_features, black_indices)
+    def forward(self, white_features, white_indices, black_features, black_indices):
+        a1w = self.feed_l1(white_features, white_indices)
+        a1b = self.feed_l1(black_features, black_indices)
 
         a1 = torch.concat([a1w, a1b], dim=1)
         a1 = F.hardtanh(a1, 0, 1)
 
         a2 = F.hardtanh(self.l2(a1), 0, 1)
-        a3 = self.l3(a2)
+        a3 = F.sigmoid(self.l3(a2))
 
         return a3.squeeze(-1)

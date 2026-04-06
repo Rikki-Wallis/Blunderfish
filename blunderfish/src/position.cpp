@@ -255,13 +255,13 @@ std::optional<Position> Position::parse_fen(const std::string& fen) {
 
     pos.zobrist = pos.compute_zobrist();
     pos.update_is_checked();
-    pos.reset_nnue_accumulator();
-    pos.eval_cache = std::nullopt;
     pos.half_move_clock = half_move_clock;
 
-    #ifndef USE_NNUE
-    pos.hce = pos.compute_eval();
-    #endif
+#ifdef USE_NNUE
+    pos.init_nnue_accumulator();
+#endif
+
+    pos.incr_eval = pos.compute_eval();
 
     return pos;
 }

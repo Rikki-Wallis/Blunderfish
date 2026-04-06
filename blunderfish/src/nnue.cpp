@@ -10,18 +10,22 @@
 #endif
 
 #include "blunderfish.h"
+
+#if 1
 #include "nnue_embed.h"
+#else
+#error "Uncomment weight inclusion"
+static int8_t nnue_w0[10][10];
+static int16_t nnue_b0[10];
+static int8_t nnue_w1[10][10];
+static int32_t nnue_b1[10];
+static int16_t nnue_w2[10][10];
+static int32_t nnue_b2[10];
+static const int NNUE_ACCUMULATOR_PERSP_SIZE = 64;
+#endif
 
-//static int8_t nnue_w0[10][10];
-//static int16_t nnue_b0[10];
-//static int8_t nnue_w1[10][10];
-//static int32_t nnue_b1[10];
-//static int16_t nnue_w2[10][10];
-//static int32_t nnue_b2[10];
-
-static constexpr int NNUE_INPUT_FEAUTURES = 64*10*64;
-
-static_assert(ACCUMULATOR_SIZE == NNUE_ACCUMULATOR_SIZE);
+static_assert(std::size(nnue_b0) == NNUE_ACCUMULATOR_PERSP_SIZE);
+static_assert(_ACCUMULATOR_PERSP_SIZE == NNUE_ACCUMULATOR_PERSP_SIZE);
 
 template<typename A, typename B, size_t OUT_Q>
 inline B scaled_crelu(A x, A q) {
@@ -40,41 +44,30 @@ inline float scaled_sigmoid(int32_t x, int32_t q) {
     return sigmoid(xf);
 }
 
-inline int flip_sq(int sq) {
-    return sq ^ 56;
-}
-
 struct ActiveIndices {
     int data[64];
     int count;
 };
 
-static ActiveIndices get_king_perspective_indices(std::span<uint64_t> bbs, int king_side) {
+static int get_feature(int persp, int piece_side, int piece_sq, int piece_id) {
+    if (persp == BLACK) {
+        piece_side = 1 - piece_side;
+        piece_sq = piece_sq ^ 56;
+    }
+
+    return piece_side*6*64 + piece_id*64 + piece_sq;
+}
+
+static ActiveIndices get_persp_indices(std::span<uint64_t> bbs, int persp) {
     ActiveIndices indices;
     indices.count = 0;
 
-    int king_index[] = {
-        5,
-        11
-    };
-
-    int king_sq = std::countr_zero(bbs[king_index[king_side]]);
-    if (king_side == BLACK) {
-        king_sq = flip_sq(king_sq);
-    }
-
     for (int piece_side = 0; piece_side < 2; ++piece_side) {
-        int rel_side = king_side == BLACK ? 1-piece_side : piece_side;
-
-        for (int piece = 0; piece < 5; ++piece) {
+        for (int piece = 0; piece < 6; ++piece) {
             uint64_t bb = bbs[piece_side*6+piece];
 
             for (int sq : set_bits(bb)) {
-                int rel_sq = king_side == BLACK ? flip_sq(sq) : sq;
-                int idx = int(king_sq*64*10+(rel_side*5+piece)*64 + rel_sq);
-
-                assert(size_t(indices.count) < std::size(indices.data));
-                indices.data[indices.count++] = idx;
+                indices.data[indices.count++] = get_feature(persp, piece_side, sq, piece);
             }
         }
     }
@@ -84,24 +77,20 @@ static ActiveIndices get_king_perspective_indices(std::span<uint64_t> bbs, int k
 
 static void feed_l1(int16_t* RESTRICT a0, int* RESTRICT indices, int index_count) {
     // initialize with bias
-    const size_t N = ACCUMULATOR_SIZE/2;
-
-    for (size_t i = 0; i < N; ++i) {
-        a0[i] = nnue_b0[i];
-    }
+    std::copy(nnue_b0, nnue_b0 + std::size(nnue_b0), a0);
 
     // add weights
     for (int ji = 0; ji < index_count; ++ji) {
         int j = indices[ji];
 
-        for (size_t i = 0; i < N; ++i) {
+        for (size_t i = 0; i < NNUE_ACCUMULATOR_PERSP_SIZE; ++i) {
             a0[i] += int16_t(nnue_w0[j][i]);
         }
     }
 }
 
 static float forward_accumulator(int16_t* RESTRICT accumulator) {
-    alignas(32) uint8_t a0[std::size(nnue_b0)*2];
+    alignas(32) uint8_t a0[NNUE_ACCUMULATOR_PERSP_SIZE*2];
 
     for (size_t i = 0; i < std::size(a0); ++i) {
         a0[i] = scaled_crelu<int16_t, uint8_t, 255>(accumulator[i], int16_t(64));
@@ -151,15 +140,15 @@ static float forward_accumulator(int16_t* RESTRICT accumulator) {
 
 
 float nnue_infer(std::span<uint64_t> bbs) {
-    std::array<int16_t, std::size(nnue_b0)*2> accumulator;
+    alignas(32) int16_t accumulator[2][NNUE_ACCUMULATOR_PERSP_SIZE];
 
-    auto white_persp = get_king_perspective_indices(bbs, WHITE);
-    auto black_persp = get_king_perspective_indices(bbs, BLACK);
+    auto white_persp = get_persp_indices(bbs, WHITE);
+    auto black_persp = get_persp_indices(bbs, BLACK);
 
-    feed_l1(accumulator.data(), white_persp.data, white_persp.count);
-    feed_l1(accumulator.data() + ACCUMULATOR_SIZE / 2, black_persp.data, black_persp.count);
+    feed_l1(accumulator[0], white_persp.data, white_persp.count);
+    feed_l1(accumulator[1], black_persp.data, black_persp.count);
 
-    return forward_accumulator(accumulator.data());
+    return forward_accumulator(accumulator[0]);
 }
 
 inline int64_t wdl_to_centipawns(float wdl) {
@@ -174,20 +163,20 @@ int64_t Position::nnue_eval() const {
     return wdl_to_centipawns(wdl);
 }
 
-void Position::reset_nnue_accumulator() {
 #ifdef USE_NNUE
+void Position::init_nnue_accumulator() {
     auto bbs = to_bitboards();
 
-    auto white_persp = get_king_perspective_indices(bbs, WHITE);
-    auto black_persp = get_king_perspective_indices(bbs, BLACK);
+    auto white_persp = get_persp_indices(bbs, WHITE);
+    auto black_persp = get_persp_indices(bbs, BLACK);
 
-    feed_l1(accumulator, white_persp.data, white_persp.count);
-    feed_l1(accumulator + ACCUMULATOR_SIZE / 2, black_persp.data, black_persp.count);
-#endif
+    feed_l1(acc().half(WHITE), white_persp.data, white_persp.count);
+    feed_l1(acc().half(BLACK), black_persp.data, black_persp.count);
 }
+#endif
 
-static const size_t bbs_piece_index[NUM_PIECE_TYPES] = {
-    0xffffffff,
+static const int piece_id_table[NUM_PIECE_TYPES] = {
+    0xffffff,
     0,
     3,
     1,
@@ -196,153 +185,58 @@ static const size_t bbs_piece_index[NUM_PIECE_TYPES] = {
     5,
 }; 
 
-template<int N_ADDS, int N_SUBS>
-ALWAYS_INLINE void update_accumulator_half(int16_t* RESTRICT accumulator_half, const size_t* adds, const size_t* subs) {
-    for (size_t i = 0; i < ACCUMULATOR_SIZE / 2; ++i) {
-        int16_t val = accumulator_half[i];
-
-        for (size_t j = 0; j < N_ADDS; ++j) {
-            val += int16_t(nnue_w0[adds[j]][i]);
-        }
-
-        for (size_t j = 0; j < N_SUBS; ++j) {
-            val -= int16_t(nnue_w0[subs[j]][i]);
-        }
-
-        accumulator_half[i] = val;
+template<int SIGN>
+ALWAYS_INLINE void update_accumulator_feature(int16_t* RESTRICT accumulator_half, int feature) {
+    for (size_t i = 0; i < NNUE_ACCUMULATOR_PERSP_SIZE; ++i) {
+        accumulator_half[i] += SIGN * nnue_w0[feature][i];
     }
 }
 
-static void update_accumulator_from_king_perspective(int16_t* RESTRICT accumulator, Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side, int sign, int king_sq, int king_side) {
-    // move the piece and castle rook moves
-
-    auto accumulator_half = king_side==BLACK ? accumulator + ACCUMULATOR_SIZE/2 : accumulator;
-
-    if (king_side == BLACK) {
-        king_sq = flip_sq(king_sq);
-    }
-
-    auto feature = [king_side, king_sq](Piece piece, int sq, int piece_side){
-        if (king_side == BLACK) {
-            sq = flip_sq(sq);
-            piece_side = opponent(piece_side);
-        }
-
-        return king_sq*64*10 + (piece_side*5+bbs_piece_index[piece])*64 + sq;
-    };
-
-
-    bool king_move = moving_piece_start == PIECE_KING;
-    bool is_castle = rook_from != rook_to;
-    bool is_capture = captured_piece != PIECE_NONE;
-
+static void update_accumulator_persp(int16_t* RESTRICT accumulator_half, Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int moving_side, int sign, int persp) {
     // moving piece
 
-    if (!king_move) {
-        if (is_capture) {
-            size_t adds[] = {
-                feature(moving_piece_end, move_to, side),
-            };
+    int feature_from = get_feature(persp, moving_side, move_from, piece_id_table[moving_piece_start]);
+    int feature_to   = get_feature(persp, moving_side, move_to, piece_id_table[moving_piece_end]);
 
-            size_t subs[] = {
-                feature(moving_piece_start, move_from, side),
-                feature(captured_piece, captured_pos, opponent(side))
-            };
+    if (sign == -1) {
+        std::swap(feature_from, feature_to);
+    }
 
-            if (sign != -1) {
-                update_accumulator_half<std::size(adds), std::size(subs)>(accumulator_half, adds, subs);
-            }
-            else {
-                update_accumulator_half<std::size(subs), std::size(adds)>(accumulator_half, subs, adds);
-            }
+    update_accumulator_feature<-1>(accumulator_half, feature_from);
+    update_accumulator_feature< 1>(accumulator_half, feature_to);
+
+    // captured piece
+
+    if (captured_piece != PIECE_NONE) {
+        int feature_cap = get_feature(persp, opponent(moving_side), captured_pos, piece_id_table[captured_piece]);
+
+        if (sign != -1) {
+            update_accumulator_feature<-1>(accumulator_half, feature_cap);
         }
         else {
-            size_t adds[] = {
-                feature(moving_piece_end, move_to, side),
-            };
-
-            size_t subs[] = {
-                feature(moving_piece_start, move_from, side),
-            };
-
-            if (sign != -1) {
-                update_accumulator_half<std::size(adds), std::size(subs)>(accumulator_half, adds, subs);
-            }
-            else {
-                update_accumulator_half<std::size(subs), std::size(adds)>(accumulator_half, subs, adds);
-            }
+            update_accumulator_feature< 1>(accumulator_half, feature_cap);
         }
     }
-    else {
-        if (is_castle) {
-            size_t adds[] = {
-                feature(PIECE_ROOK, rook_to, side)
-            };
 
-            size_t subs[] = {
-                feature(PIECE_ROOK, rook_from, side)
-            };
+    // castling
 
-            if (sign != -1) {
-                update_accumulator_half<std::size(adds), std::size(subs)>(accumulator_half, adds, subs);
-            }
-            else {
-                update_accumulator_half<std::size(subs), std::size(adds)>(accumulator_half, subs, adds);
-            }
+    if (rook_from != rook_to) {
+        int feature_rook_from = get_feature(persp, moving_side, rook_from, piece_id_table[PIECE_ROOK]);
+        int feature_rook_to   = get_feature(persp, moving_side, rook_to, piece_id_table[PIECE_ROOK]);
+
+        if (sign == -1) {
+            std::swap(feature_rook_from, feature_rook_to);
         }
-        else if (is_capture) {
-            size_t subs[] = {
-                feature(captured_piece, captured_pos, opponent(side))
-            };
 
-            if (sign != -1) {
-                update_accumulator_half<0, std::size(subs)>(accumulator_half, nullptr, subs);
-            }
-            else {
-                update_accumulator_half<std::size(subs), 0>(accumulator_half, subs, nullptr);
-            }
-        }
+        update_accumulator_feature<-1>(accumulator_half, feature_rook_from);
+        update_accumulator_feature< 1>(accumulator_half, feature_rook_to);
     }
 }
 
 #ifdef USE_NNUE
 void Position::update_eval(Piece captured_piece, int captured_pos, Piece moving_piece_start, Piece moving_piece_end, int move_from, int move_to, int rook_from, int rook_to, int side, int sign) {
-    (void)captured_piece;
-    (void)captured_pos;
-    (void)moving_piece_start;
-    (void)moving_piece_end;
-    (void)move_from;
-    (void)move_to;
-    (void)rook_from;
-    (void)rook_to;
-    (void)side;
-    (void)sign;
-
-    int white_king_sq = std::countr_zero(sides[WHITE].bb[PIECE_KING]);
-    int black_king_sq = std::countr_zero(sides[BLACK].bb[PIECE_KING]);
-
-    if (moving_piece_start == PIECE_KING) {
-        auto bbs = to_bitboards();
-
-        auto persp = get_king_perspective_indices(bbs, side);
-        feed_l1(accumulator + (side == BLACK ? ACCUMULATOR_SIZE/2 : 0), persp.data, persp.count);
-
-        update_accumulator_from_king_perspective(accumulator, captured_piece, captured_pos, moving_piece_start, moving_piece_end, move_from, move_to, rook_from, rook_to, side, sign, side == BLACK ? white_king_sq : black_king_sq, opponent(side));
-    }
-    else {
-        update_accumulator_from_king_perspective(accumulator, captured_piece, captured_pos, moving_piece_start, moving_piece_end, move_from, move_to, rook_from, rook_to, side, sign, white_king_sq, WHITE);
-        update_accumulator_from_king_perspective(accumulator, captured_piece, captured_pos, moving_piece_start, moving_piece_end, move_from, move_to, rook_from, rook_to, side, sign, black_king_sq, BLACK);
-    }
-}
-#endif
-
-#ifdef USE_NNUE
-int64_t Position::get_eval() {
-    if (!eval_cache.has_value()) {
-        float x = forward_accumulator(accumulator);
-        eval_cache = wdl_to_centipawns(x);
-    }
-
-    return *eval_cache;
+    update_accumulator_persp(acc().half(WHITE), captured_piece, captured_pos, moving_piece_start, moving_piece_end, move_from, move_to, rook_from, rook_to, side, sign, WHITE);
+    update_accumulator_persp(acc().half(BLACK), captured_piece, captured_pos, moving_piece_start, moving_piece_end, move_from, move_to, rook_from, rook_to, side, sign, BLACK);
+    incr_eval = wdl_to_centipawns(forward_accumulator(acc().ptr()));
 }
 #endif

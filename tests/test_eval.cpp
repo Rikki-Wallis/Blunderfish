@@ -4,9 +4,7 @@
 static void check_eval(Position& position) {
     int64_t new_eval = position.compute_eval();
 
-    //print("{}, {}\n", new_eval, position.get_eval());
-
-    REQUIRE(std::abs(new_eval - position.get_eval()) <= 2);
+    REQUIRE(std::abs(new_eval - position.incr_eval) <= 2);
 }
 
 void eval_search(int depth, Position& position) {

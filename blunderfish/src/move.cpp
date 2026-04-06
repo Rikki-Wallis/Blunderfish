@@ -693,7 +693,7 @@ void Position::update_en_passant_sq(int sq) {
 void Position::make_move(Move move) {
     // Update eval
     uint64_t initial_zobrist = zobrist;
-    int64_t initial_eval = get_eval();
+    int64_t initial_eval = incr_eval;
     int initial_half_move_clock = half_move_clock;
 
     // First, check for a capture and remove the piece
@@ -793,8 +793,10 @@ void Position::make_move(Move move) {
     zobrist ^= zobrist_table.piece[to_move][PIECE_ROOK][rook_to]; // if not castle, same square so net zero change
 #endif
 
+#ifdef USE_NNUE
+    accumulator_stack.emplace_back(accumulator_stack.back()); // push an accumulator onto the stack
+#endif
     update_eval(captured_piece, captured_pos, start_piece, end_piece, move_from(move), move_to(move), rook_from, rook_to, to_move);
-    eval_cache = std::nullopt;
 
     // update to_move
     
@@ -874,8 +876,10 @@ void Position::unmake_move() {
     sides[opponent(to_move)].bb[captured_piece] ^= captured_mask;
     piece_at[captured_square] = static_cast<uint8_t>(captured_piece);
 
-    update_eval(move_captured_piece(move), move_captured_square(move), start_piece, end_piece, move_from(move), move_to(move), rook_from, rook_to, move_side(move), -1);
-    eval_cache = undo.incremental_eval;
+#ifdef USE_NNUE
+    accumulator_stack.pop_back(); // restore the previous accumulator
+#endif
+    incr_eval = undo.incremental_eval;
 
     flags = undo.flags;
     en_passant_sq = undo.en_passant_sq;
@@ -888,7 +892,7 @@ void Position::make_null_move() {
         .flags = flags,
         .move = NULL_MOVE,
         .en_passant_sq = en_passant_sq,
-        .incremental_eval = get_eval(),
+        .incremental_eval = incr_eval,
         .zobrist = zobrist,
         .is_checked = {
             is_checked[0],
@@ -904,6 +908,10 @@ void Position::make_null_move() {
 #endif
 
     update_is_checked();
+
+#ifdef USE_NNUE
+    accumulator_stack.emplace_back(accumulator_stack.back()); // push an accumulator onto the stack
+#endif
 }
 
 void Position::unmake_null_move(){
@@ -912,7 +920,11 @@ void Position::unmake_null_move(){
     Undo undo = undo_stack.back();
     undo_stack.pop_back();
 
-    eval_cache = undo.incremental_eval;
+#ifdef USE_NNUE
+    accumulator_stack.pop_back(); // restore the previous accumulator
+#endif
+
+    incr_eval = undo.incremental_eval;
     flags = undo.flags;
     en_passant_sq = undo.en_passant_sq;
     zobrist = undo.zobrist;
