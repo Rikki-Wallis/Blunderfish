@@ -700,16 +700,7 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
         return NULL_MOVE;
     }
 
-    SearchContext s = {
-        .tt = {},
-        .killers {},
-        .history = {},
-        .eval_history = {},
-        .cont_history = {},
-        .params = params_in,
-        .should_stop = should_stop,
-        .budgeter = budgeter,
-    };
+    auto s = std::make_unique<SearchContext>(params_in, should_stop, budgeter);
 
     TimePoint start_time = Clock::now();
     budgeter->init();
@@ -718,28 +709,28 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
     int64_t best_score = 0;
 
     for (int i = 1; i <= depth; ++i) {
-        int64_t window = s.params.asp_initial_window_size; // start the window small
+        int64_t window = s->params.asp_initial_window_size; // start the window small
 
         int64_t alpha = best_score - window;
         int64_t beta  = best_score + window;
 
         while (true) {
-            auto [move, score] = best_move_internal(s, moves, i, best_move, alpha, beta);
+            auto [move, score] = best_move_internal(*s.get(), moves, i, best_move, alpha, beta);
 
-            if (s.should_stop) {
+            if (s->should_stop) {
                 break;
             }
 
             if (score <= alpha) {
                 // fail low
                 alpha -= window;
-                window = int64_t(float(window) * s.params.asp_window_growth_factor);
+                window = int64_t(float(window) * s->params.asp_window_growth_factor);
             }
             else if (score >= beta) {
                 // fail high
                 best_move = move;
                 beta += window;
-                window = int64_t(float(window) * s.params.asp_window_growth_factor);
+                window = int64_t(float(window) * s->params.asp_window_growth_factor);
             }
             else {
                 best_move = move;
@@ -748,7 +739,7 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
             }
         }
 
-        if (s.should_stop) {
+        if (s->should_stop) {
             break;
         }
 

@@ -265,6 +265,11 @@ struct SearchContext {
 
     std::atomic<bool>& should_stop;
     class Budgeter* budgeter;
+
+    SearchContext(const SearchParameters& params, std::atomic<bool>& should_stop, class Budgeter* budgeter)
+        : tt({}), killers({}), history({}), eval_history({}), cont_history({}), params(params), should_stop(should_stop), budgeter(budgeter)
+    {
+    }
 };
 
 // Pack as exactly 16 bytes
