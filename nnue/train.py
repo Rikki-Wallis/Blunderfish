@@ -52,7 +52,7 @@ model.train()
 def lerp(a, b, t):
     return (1-t)*a + t*b
 
-start_blend = 0.3
+start_blend = 0.0
 end_blend = 0.5
 
 start = time.perf_counter()
