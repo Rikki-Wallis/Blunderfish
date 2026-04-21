@@ -12,7 +12,7 @@ std::mt19937 rng(std::random_device{}());
 std::uniform_int_distribution<int> twin_dist(0, 1);
 std::uniform_int_distribution<size_t> opening_dist(0, std::size(openings)-1);
 
-constexpr double time_limit_per_move = 0.05f; 
+constexpr double time_limit_per_move = 0.1f; 
 constexpr int ngames = 16;
 
 struct Param {

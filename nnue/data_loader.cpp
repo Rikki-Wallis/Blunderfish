@@ -3,6 +3,7 @@
 #include <cstring>
 #include <cmath>
 #include <vector>
+#include <iostream>
 
 struct Record {
     std::vector<int32_t> white_idx, black_idx;

@@ -1,6 +1,8 @@
 from model import *
 
 import time
+import multiprocessing
+
 from torch.utils.data import DataLoader
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -13,6 +15,8 @@ split = int(total * 0.9)
 train = NNUEDataset("aggregate.bin", 0, split)
 val   = NNUEDataset("aggregate.bin", split, total)
 
+import multiprocessing
+
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 print(f"Training on {len(train)} dataset samples")
@@ -22,10 +26,10 @@ batch_size = 16384
 from torch.utils.cpp_extension import load
 ext = load(name="data_loader_ext", sources=["data_loader.cpp"], extra_cflags=['-O3'], verbose=True)
 
-CUR_BLEND = 0.5
+CUR_BLEND = multiprocessing.Value('f', 0.5)
 
 def collate_fn(batch):
-    return ext.collate_batch(batch, CUR_BLEND)
+    return ext.collate_batch(batch, CUR_BLEND.value)
 
 train_loader = DataLoader(train, batch_size=batch_size, shuffle=False, num_workers=12,persistent_workers=True,collate_fn=collate_fn, pin_memory=True)
 val_loader = DataLoader(val, batch_size=batch_size, num_workers=12,persistent_workers=True,collate_fn=collate_fn)
@@ -35,7 +39,7 @@ model = torch.compile(model)
 model = model.to(device)
 #model.load_state_dict(torch.load("new.pt"))
 
-num_epochs = 10 
+num_epochs = 60
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=4e-3)
 
@@ -49,18 +53,18 @@ criterion = nn.MSELoss()
 
 model.train()
 
-def lerp(a, b, t):
-    return (1-t)*a + t*b
-
 start_blend = 0.0
 end_blend = 0.5
 
 start = time.perf_counter()
 
+def lerp(a, b, t):
+    return (1-t)*a + t*b
+
 for epoch in range(num_epochs):
     train_loss = 0
 
-    CUR_BLEND = lerp(start_blend, end_blend, epoch/(num_epochs-1))
+    CUR_BLEND.value = lerp(start_blend, end_blend, epoch/(num_epochs-1))
 
     for i, (white_features, white_indices, black_features, black_indices, target) in enumerate(train_loader):
 
@@ -78,6 +82,7 @@ for epoch in range(num_epochs):
 
         loss.backward()
         optimizer.step()
+        scheduler.step()
 
         train_loss += loss.item()
 
@@ -104,7 +109,7 @@ for epoch in range(num_epochs):
 
         val_loss /= len(val_loader)
 
-    print(f"Epoch {epoch+1} train: {train_loss:.6f} val: {val_loss:.6f} (wdl blend: {CUR_BLEND})")
+    print(f"Epoch {epoch+1} train: {train_loss:.6f} val: {val_loss:.6f} (wdl blend: {CUR_BLEND.value})")
     model.train()
 
     torch.save(model.state_dict(), f"model_epoch{epoch+1}_val{val_loss:.6f}.pt")

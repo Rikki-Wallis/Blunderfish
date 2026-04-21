@@ -62,10 +62,6 @@ class NNUEDataset(Dataset):
         offset = (idx+self.start) * RECORD_SIZE
         return bytes(self.mm[offset : offset + RECORD_SIZE])
 
-        white, black, wdl_score, outcome = ext.parse_record(raw);
-        target = (1-CUR_BLEND) * wdl_score + CUR_BLEND * outcome
-        return white, black, torch.tensor(target, dtype=torch.float32)
-
 class NNUE(nn.Module):
     def __init__(self):
         super().__init__()
