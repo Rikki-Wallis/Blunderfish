@@ -575,8 +575,8 @@ public:
 
     virtual bool should_exit(Position& pos) const override {
         (void)pos;
-        int64_t ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - _start).count();
-        double s = double(ms)/1000.0;
+        int64_t microseconds = std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - _start).count();
+        double s = double(microseconds)/1000000.0;
         return s >= _limit;
     }
 

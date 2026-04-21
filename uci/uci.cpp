@@ -190,6 +190,28 @@ static int calculate_move_time(const GoParams& p, int to_move) {
     return allocate_time(time, inc);
 }
 
+class UCIBudgeter : public Budgeter {
+public:
+    UCIBudgeter(int node_count, double seconds)
+        : _nodes(node_count), _seconds(seconds)
+    {}
+
+    virtual void init() override {
+        _start = Clock::now();
+    }
+
+    virtual bool should_exit(Position& pos) const override {
+        int64_t elapsed_microseconds = std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - _start).count();
+        double elapsed_s = double(elapsed_microseconds)/1000000.0;
+        return pos.node_count >= _nodes || elapsed_s >= _seconds;
+    }
+
+private:
+    int _nodes;
+    double _seconds;
+    TimePoint _start;
+};
+
 int main() {
     std::ios::sync_with_stdio(false);
     std::cout.setf(std::ios::unitbuf);
@@ -233,12 +255,13 @@ int main() {
             int time_ms = calculate_move_time(g, position.to_move);
             double time_s = double(time_ms)/1000.0*0.95;
 
+            int node_budget = g.nodes.value_or(INT_MAX);
             int depth = g.depth.value_or(40);
 
             should_stop = false;
             
-            thread = std::thread([&position, depth, &should_stop, time_s](){
-                TimeBudgeter budgeter(time_s);
+            thread = std::thread([&position, depth, &should_stop, time_s, node_budget](){
+                UCIBudgeter budgeter(node_budget, time_s);
                 Move move = position.best_move(depth, should_stop, &budgeter, {}, true);
                 std::cout << "bestmove " << to_uci_move(move) << "\n";
             });
