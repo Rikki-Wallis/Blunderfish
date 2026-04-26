@@ -66,14 +66,14 @@ class NNUE(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.l1 = nn.Linear(2*6*64, 64)
-        self.l2 = nn.Linear(128, 32)
+        self.l1 = nn.Linear(2*6*64, 128)
+        self.l2 = nn.Linear(256, 32)
         self.l3 = nn.Linear(32, 1)
 
     @torch.compiler.disable
     def feed_l1(self, features, indices):
         f = self.l1.weight[:, features].T
-        a1 = torch.zeros(indices.max()+1, 64, device=features.device)
+        a1 = torch.zeros(indices.max()+1, 128, device=features.device)
         a1.index_add_(0, indices, f)
         return a1 + self.l1.bias
 

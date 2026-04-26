@@ -263,8 +263,12 @@ int64_t Position::negamax(SearchContext& s, int depth, int ply, bool allow_null,
     // since we are so confident in this line, we can crank up LMR (which is essentially every other move)
 
     bool tt_is_singular = false;
-
-    if (depth >= 6 && tt_move != NULL_MOVE && excluded_move == NULL_MOVE && match.flag != TT_SCORE_UPPER && std::abs(match.score) < MATE_SCORE - 1000) {
+    if (depth >= 6 &&
+        tt_move != NULL_MOVE &&
+        excluded_move == NULL_MOVE &&
+        match.flag != TT_SCORE_UPPER &&
+        (std::abs(match.score) < (MATE_SCORE - 1000)) &&
+        match.depth >= depth - 3) {
         int singular_margin = int(std::round(s.params.singular_margin_factor * float(depth)));
         int singular_beta = match.score - singular_margin;
 
@@ -431,18 +435,27 @@ int64_t Position::negamax(SearchContext& s, int depth, int ply, bool allow_null,
 
             int64_t score;
 
+            int check_ext = gives_check ? 1 : 0;
+
             if (move_index == 0) {
-                int ext = m == tt_move ? (tt_is_singular && (extensions_so_far < root_depth/2)) : 0;
+                int ext = check_ext;
+
+                if (m == tt_move && tt_is_singular && (extensions_so_far < root_depth)) {
+                    ext = std::max(ext, 1);
+                }
 
                 score = -negamax(s, depth - 1 + ext, ply + 1, true, -beta, -alpha, NULL_MOVE, extensions_so_far + ext, root_depth, next_cont);
             }
             else {
                 reduced_searches += reduction > 0;
+
+                // don't extend the null-window search
                 score = -negamax(s, depth - 1 - reduction, ply + 1, true, -alpha-1, -alpha, NULL_MOVE, extensions_so_far, root_depth, next_cont); // do null-window search
 
                 if (score > alpha) { // if beats alpha do full-window
                     reduced_fail_high += reduction > 0;
-                    score = -negamax(s, depth - 1, ply + 1, true, -beta, -alpha, NULL_MOVE, extensions_so_far, root_depth, next_cont);
+                    // DO extend the research
+                    score = -negamax(s, depth - 1 + check_ext, ply + 1, true, -beta, -alpha, NULL_MOVE, extensions_so_far + check_ext, root_depth, next_cont);
                 }
             }
 
