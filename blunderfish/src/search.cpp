@@ -2,6 +2,7 @@
 #include <cmath>
 #include <iostream>
 #include <algorithm>
+#include <unordered_set>
 
 #include "blunderfish.h"
 
@@ -776,7 +777,50 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
                 nnue_score *= -1;
             }
 
-            std::cout << std::format("info depth {} seldepth {} score {} nnuescore {} nodes {} nps {} time {} pv {}\n", i, max_ply, score_str, nnue_score, node_count, nps, int(elapsed*1000.0), to_uci_move(best_move));
+            // extract pv
+            std::vector<Move> pv_list;
+            pv_list.push_back(best_move);
+            make_move(best_move);
+
+            std::unordered_set<uint64_t> seen;
+            seen.insert(zobrist);
+
+            for (int i = 0; i < 50; ++i) {
+                TTEntry& entry = find_entry(s->tt, zobrist);
+
+                if (entry.key32 != compress_zobrist(zobrist)) {
+                    break; // TT miss
+                }
+
+                if (entry.best_move == NULL_MOVE) {
+                    break; // No TT move
+                }
+
+                if (!is_move_legal_slow(entry.best_move)) {
+                    break;
+                }
+
+                pv_list.push_back(entry.best_move);
+                make_move(entry.best_move);
+
+                if (seen.count(zobrist)) { // cycle
+                    break;
+                }
+
+                seen.insert(zobrist);
+            }
+
+            std::string pv_string;
+
+            for (size_t i = 0; i < pv_list.size(); ++i) {
+                if (i > 0) {
+                    pv_string += " ";
+                }
+
+                pv_string += to_uci_move(pv_list[i]);
+            }
+
+            std::cout << std::format("info depth {} seldepth {} score {} nnuescore {} nodes {} nps {} time {} pv {}\n", i, max_ply, score_str, nnue_score, node_count, nps, int(elapsed*1000.0), pv_string);
         }
     }
 
