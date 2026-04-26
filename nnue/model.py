@@ -2,6 +2,7 @@ import struct
 import mmap
 import os
 import numpy as np
+import math
 
 import torch
 import torch.nn as nn
@@ -62,29 +63,72 @@ class NNUEDataset(Dataset):
         offset = (idx+self.start) * RECORD_SIZE
         return bytes(self.mm[offset : offset + RECORD_SIZE])
 
+N_EMBED = 256
+
+class AttentionBlock(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.query = nn.Linear(N_EMBED, N_EMBED, bias=False)
+        self.key   = nn.Linear(N_EMBED, N_EMBED, bias=False)
+        self.value = nn.Linear(N_EMBED, N_EMBED, bias=False)
+        self.norm  = nn.LayerNorm(N_EMBED)
+        self.ff    = nn.Sequential(
+            nn.Linear(N_EMBED, N_EMBED * 4),
+            nn.ReLU(),
+            nn.Linear(N_EMBED * 4, N_EMBED)
+        )
+        self.norm2  = nn.LayerNorm(N_EMBED)
+
+    def forward(self, x, mask):
+            # attention + residual
+            q, k, v = self.query(x), self.key(x), self.value(x)
+            wei = q @ k.transpose(-1, -2) / math.sqrt(N_EMBED)
+
+            if mask is not None:
+                wei = wei + mask
+
+            wei = F.softmax(wei, dim=-1)
+            x = x + wei @ v
+
+            # feedforward + residual
+            x = self.norm(x)
+            x = x + self.ff(x)
+            x = self.norm2(x)
+            return x
+
 class NNUE(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.l1 = nn.Linear(2*6*64, 64)
-        self.l2 = nn.Linear(128, 32)
-        self.l3 = nn.Linear(32, 1)
+        self.embedding_table = nn.Embedding(769, N_EMBED, padding_idx=768)
 
-    @torch.compiler.disable
-    def feed_l1(self, features, indices):
-        f = self.l1.weight[:, features].T
-        a1 = torch.zeros(indices.max()+1, 64, device=features.device)
-        a1.index_add_(0, indices, f)
-        return a1 + self.l1.bias
+        self.blocks = nn.ModuleList([AttentionBlock(), AttentionBlock(), AttentionBlock(), AttentionBlock()])
 
-    def forward(self, white_features, white_indices, black_features, black_indices):
-        a1w = self.feed_l1(white_features, white_indices)
-        a1b = self.feed_l1(black_features, black_indices)
+        self.linear = nn.Linear(N_EMBED, 1)
+        self.cls = nn.Parameter(torch.randn(1, 1, N_EMBED))
 
-        a1 = torch.concat([a1w, a1b], dim=1)
-        a1 = F.hardtanh(a1, 0, 1)
+    def forward(self, features):
+        B = features.shape[0]
 
-        a2 = F.hardtanh(self.l2(a1), 0, 1)
-        a3 = F.sigmoid(self.l3(a2))
+        is_pad = features == 768
 
-        return a3.squeeze(-1)
+        cls_is_pad = torch.zeros(B, 1, dtype=torch.bool, device=features.device)
+        full_pad_mask = torch.cat([cls_is_pad, is_pad], dim=1)
+
+        attn_mask = torch.zeros_like(full_pad_mask, dtype=torch.float32)
+        attn_mask = attn_mask.masked_fill(full_pad_mask, -1e9)
+
+        attn_mask = attn_mask.unsqueeze(1)
+
+        tokens = self.embedding_table(features) # (B, N, D)
+        cls = self.cls.expand(B, -1, -1)
+        tokens = torch.cat([cls, tokens], dim=1)
+
+        x = tokens
+        for block in self.blocks:
+            x = block(x, mask=attn_mask)
+
+        pooled = x[:, 0]
+        eval = F.sigmoid(self.linear(pooled)) # (B, 1)
+
+        return eval.squeeze(-1)

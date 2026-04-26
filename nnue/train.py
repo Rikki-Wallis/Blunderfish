@@ -2,6 +2,7 @@ from model import *
 
 import time
 import multiprocessing
+import matplotlib.pyplot as plt
 
 from torch.utils.data import DataLoader
 
@@ -21,7 +22,7 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 
 print(f"Training on {len(train)} dataset samples")
 
-batch_size = 16384
+batch_size = 256
 
 from torch.utils.cpp_extension import load
 ext = load(name="data_loader_ext", sources=["data_loader.cpp"], extra_cflags=['-O3'], verbose=True)
@@ -39,14 +40,16 @@ model = torch.compile(model)
 model = model.to(device)
 #model.load_state_dict(torch.load("new.pt"))
 
+print(f"Number of parameters: {sum(p.numel() for p in model.parameters())/1000:0.2f}K")
+
 num_epochs = 60
 
-optimizer = torch.optim.AdamW(model.parameters(), lr=4e-3)
+optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
 
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
     optimizer,
     T_max=num_epochs,        # total epochs
-    eta_min=3e-4     # final LR
+    eta_min=3e-5     # final LR
 )
 
 criterion = nn.MSELoss() 
@@ -54,43 +57,61 @@ criterion = nn.MSELoss()
 model.train()
 
 start_blend = 0.0
-end_blend = 0.5
+end_blend = 0.0
 
 start = time.perf_counter()
 
 def lerp(a, b, t):
     return (1-t)*a + t*b
 
-for epoch in range(num_epochs):
+epoch = 0
+
+if False:
+    checkpoint = torch.load("checkpoint2_val0.003116.pt")
+    model.load_state_dict(checkpoint["model"])
+    optimizer.load_state_dict(checkpoint["optimizer"])
+    scheduler.load_state_dict(checkpoint["scheduler"])
+    epoch = checkpoint["epoch"]
+
+train_losses = []
+val_losses = []
+
+fixed_lr = 5e-5
+
+if fixed_lr is not None:
+    for p in optimizer.param_groups:
+        p["lr"] = fixed_lr
+
+while epoch < num_epochs:
     train_loss = 0
 
     CUR_BLEND.value = lerp(start_blend, end_blend, epoch/(num_epochs-1))
 
-    for i, (white_features, white_indices, black_features, black_indices, target) in enumerate(train_loader):
-
+    for i, (features, target) in enumerate(train_loader):
+        features = features.to(device)
         target = target.to(device)
-        white_features = white_features.to(device)
-        white_indices  = white_indices.to(device)
-        black_features = black_features.to(device)
-        black_indices  = black_indices.to(device)
 
         optimizer.zero_grad()
 
         with torch.amp.autocast("cuda", dtype=torch.bfloat16):
-            output = model(white_features, white_indices, black_features, black_indices)
+            output = model(features)
             loss = criterion(output, target.float())
 
         loss.backward()
         optimizer.step()
-        scheduler.step()
 
         train_loss += loss.item()
+
+        train_losses.append(loss.item())
 
         if i % 20 == 0:
             elapsed = time.perf_counter() - start
             pps = batch_size * 20 / elapsed
-            print(f"Batch {i+1}: {pps} pps (loss={loss.item()})")
+            print(f"Batch {i+1}: {pps/1000:.2f}K pps (loss={loss.item()})")
             start = time.perf_counter()
+
+    if fixed_lr is not None:
+        scheduler.step()
 
     train_loss /= len(train_loader)
 
@@ -98,18 +119,39 @@ for epoch in range(num_epochs):
     with torch.no_grad():
         val_loss = 0
 
-        for wf, wi, bf, bi, tv in val_loader:
+        for fv, tv in val_loader:
+            fv = fv.to(device)
             tv = tv.to(device)
-            wf = wf.to(device)
-            wi = wi.to(device)
-            bf = bf.to(device)
-            bi = bi.to(device)
 
-            val_loss += criterion(model(wf, wi, bf, bi), tv.float()).item()
+            val_loss += criterion(model(fv), tv.float()).item()
 
         val_loss /= len(val_loader)
 
     print(f"Epoch {epoch+1} train: {train_loss:.6f} val: {val_loss:.6f} (wdl blend: {CUR_BLEND.value})")
     model.train()
 
-    torch.save(model.state_dict(), f"model_epoch{epoch+1}_val{val_loss:.6f}.pt")
+    val_losses.append(val_loss)
+
+    epoch += 1
+
+    plt.subplot(2,1,1)
+    plt.plot(train_losses, alpha=0.7)
+    plt.yscale('log')
+    plt.ylabel('loss')
+
+    plt.subplot(2,1,2)
+    plt.plot(val_losses)
+    plt.yscale('log')
+    plt.xlabel('epoch')
+    plt.ylabel('loss')
+
+    plt.tight_layout()
+    plt.savefig('loss.png')
+    plt.close()
+
+    torch.save({
+        "model": model.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "scheduler": scheduler.state_dict(),
+        "epoch": epoch
+    }, f"checkpoint{epoch+1}_val{val_loss:.6f}.pt")
