@@ -777,6 +777,9 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
                 nnue_score *= -1;
             }
 
+            uint64_t initial_zobrist = zobrist;
+            (void)initial_zobrist;
+
             // extract pv
             std::vector<Move> pv_list;
             pv_list.push_back(best_move);
@@ -811,6 +814,12 @@ Move Position::best_move(int depth, std::atomic<bool>& should_stop, Budgeter* bu
             }
 
             std::string pv_string;
+
+            for (size_t i = 0; i < pv_list.size(); ++i) {
+                unmake_move();
+            }
+
+            assert(zobrist == initial_zobrist);
 
             for (size_t i = 0; i < pv_list.size(); ++i) {
                 if (i > 0) {
