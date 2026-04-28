@@ -436,7 +436,7 @@ int64_t Position::negamax(SearchContext& s, int depth, int ply, bool allow_null,
 
             int64_t score;
 
-            int check_ext = gives_check ? 1 : 0;
+            int check_ext = gives_check && (extensions_so_far < root_depth);
 
             if (move_index == 0) {
                 int ext = check_ext;
